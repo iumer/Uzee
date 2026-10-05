@@ -14,6 +14,7 @@ Last updated: 2026-10-05
   - Run the REQUIRED NOW steps in docs/PREREQUISITES.md and paste the verification output
   - Kameti figures (240k paid vs 300k payouts)
   - Sample bank statement PDFs (one per bank) before the import milestone
+- **ENVIRONMENT:** verified 2026-10-05: macOS 27.0, Xcode 27.0 beta, Swift 6.4, iOS 26.5 + 27.0 simulators, iPhone 17 Pro Max iOS 27 (not paired yet), gh not installed, git identity not set, 20 GiB free
 - **NEXT TASK:** User review of docs/PRD.md, then Screen Inventory and User Flows
 - **BUILD ROUTE:** decided 2026-10-05: cloud-written code + GitHub Actions macOS CI for build/tests; user pulls code and installs to iPhone from local Xcode (free Apple ID, 7-day re-install). TestFlight later with paid account
 - **TOTAL TESTS:** 0 · **PASSING:** 0 · **FAILING:** 0

@@ -34,6 +34,25 @@ No database server, environment variables or backend are needed: data is stored 
 
 ---
 
+## Verified environment (checked on the Mac, 2026-10-05)
+
+| Item | Found | Status |
+|------|-------|--------|
+| Mac | MacBook Pro M1 (arm64) | OK |
+| macOS | 27.0 (26A428) | OK |
+| Xcode | 27.0 beta (27A5194q), active at /Applications/Xcode-beta.app | OK for development; a release Xcode is needed later for App Store/TestFlight uploads |
+| Swift | 6.4 | OK |
+| Simulators | iOS 26.5, iOS 27.0 | OK, no download needed |
+| iPhone | iPhone 17 Pro Max, iOS 27 | OK (Apple Intelligence supported); not yet paired with Xcode |
+| Git | 2.54.0 | Installed; global name/email not set |
+| Homebrew | installed | OK |
+| GitHub CLI (gh) | not installed | Needed before Milestone 0 to download the private repo (small install) |
+| Free disk | 20 GiB | Enough for this route |
+
+Project settings derived from this: deployment target iOS 26.0; code must compile with both Xcode 27 beta (local) and the newest Xcode on GitHub's cloud Macs.
+
+---
+
 ## REQUIRED NOW (Mac)
 
 ### 1. macOS
