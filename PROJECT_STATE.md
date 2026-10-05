@@ -3,7 +3,7 @@
 Last updated: 2026-10-05
 
 - **CURRENT VERSION:** none (no application code yet)
-- **CURRENT STAGE:** Environment & Prerequisites (discovery complete)
+- **CURRENT STAGE:** Product Requirements (PRD v0.1 drafted, awaiting review)
 - **CURRENT MILESTONE:** none (implementation not started)
 - **COMPLETED STAGES:** Requirement Discovery (docs/DISCOVERY.md)
 - **CURRENT ARCHITECTURE:** not yet defined. Direction from discovery: native SwiftUI universal iPhone + iPad app, iOS 26+, on-device storage, Apple Foundation Models for AI, built on the user's M1 Mac
@@ -14,5 +14,6 @@ Last updated: 2026-10-05
   - Run the REQUIRED NOW steps in docs/PREREQUISITES.md and paste the verification output
   - Kameti figures (240k paid vs 300k payouts)
   - Sample bank statement PDFs (one per bank) before the import milestone
-- **NEXT TASK:** Product Requirements Document (docs/PRD.md)
+- **NEXT TASK:** User review of docs/PRD.md, then Screen Inventory and User Flows
+- **BUILD ROUTE:** pending user decision (cloud builds + TestFlight recommended; hybrid: cloud code + CI tests, user installs from local Xcode)
 - **TOTAL TESTS:** 0 · **PASSING:** 0 · **FAILING:** 0
