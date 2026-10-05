@@ -1,6 +1,10 @@
 # UZee — Development Environment & Prerequisites
 
-Status: **Draft v1 (2026-10-05)**. Based on discovery decisions: native iPhone + iPad app, built on your Apple M1 Mac, personal use, data on device, Apple on-device AI.
+Status: **Draft v2 (2026-10-05)**.
+
+> **Chosen build route (2026-10-05):** Claude writes code in the cloud and pushes to GitHub; GitHub cloud Macs build and run the tests; you pull the code on your M1 MacBook Pro, run it in the simulator and install on your iPhone from Xcode with a free Apple ID. Space check done: Xcode and iOS 26.5 + 27.0 simulators are already installed; ~/Library/Developer uses 600 MB; about 15 GB free. Expected extra space: roughly 2–5 GB (build files plus iPhone support files on first connection).
+
+ Based on discovery decisions: native iPhone + iPad app, built on your Apple M1 Mac, personal use, data on device, Apple on-device AI.
 
 > Where commands run: every command below runs in **Terminal on your M1 Mac** (Applications → Utilities → Terminal) unless a step says "on iPhone".
 
@@ -16,7 +20,7 @@ Status: **Draft v1 (2026-10-05)**. Based on discovery decisions: native iPhone +
 | iOS Simulator runtime | REQUIRED NOW | Run the app without a phone |
 | Git configured with your name/email | REQUIRED NOW | Source control |
 | GitHub access from the Mac (GitHub CLI) | REQUIRED NOW | Clone and update the UZee repository |
-| ~40 GB free disk space | REQUIRED NOW | Xcode + simulators + build cache |
+| ~5 GB free disk space (Xcode already installed) | REQUIRED NOW | Build files + iPhone support files |
 | Apple ID signed into Xcode (free) | REQUIRED LATER (first on-phone build, Milestone 0) | Sign the app to install on your iPhone |
 | iPhone with iOS 26+ and Apple Intelligence | REQUIRED LATER (first on-phone build) | App minimum OS and on-device AI |
 | iPhone Developer Mode + pairing | REQUIRED LATER (first on-phone build) | Install development builds |

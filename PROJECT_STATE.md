@@ -15,5 +15,5 @@ Last updated: 2026-10-05
   - Kameti figures (240k paid vs 300k payouts)
   - Sample bank statement PDFs (one per bank) before the import milestone
 - **NEXT TASK:** User review of docs/PRD.md, then Screen Inventory and User Flows
-- **BUILD ROUTE:** pending user decision (cloud builds + TestFlight recommended; hybrid: cloud code + CI tests, user installs from local Xcode)
+- **BUILD ROUTE:** decided 2026-10-05: cloud-written code + GitHub Actions macOS CI for build/tests; user pulls code and installs to iPhone from local Xcode (free Apple ID, 7-day re-install). TestFlight later with paid account
 - **TOTAL TESTS:** 0 · **PASSING:** 0 · **FAILING:** 0
