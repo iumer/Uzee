@@ -38,6 +38,9 @@ jobs:
           xcodebuild -version
       - name: Pick simulators
         run: scripts/ci-pick-simulators.sh >> "$GITHUB_ENV"
+      - name: Start booting the iPad early
+        # A fresh iPad simulator spends ~6 min on first-boot data migration; let it run during the build.
+        run: xcrun simctl boot "$IPAD_ID" || true
       - name: Package tests
         run: |
           for pkg in UZeeCore UZeeData UZeeSystem UZeeUI; do
@@ -56,9 +59,11 @@ jobs:
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/build.log | grep -E "error:|\*\* " || (tail -60 build/build.log; exit 1)
       - name: Smoke UI tests on iPhone
         timeout-minutes: 15
-        run: scripts/ci-run-smoke.sh "$IPHONE_ID" iphone
+        run: |
+          scripts/ci-run-smoke.sh "$IPHONE_ID" iphone
+          xcrun simctl shutdown "$IPHONE_ID" || true
       - name: Smoke UI tests on iPad
-        timeout-minutes: 15
+        timeout-minutes: 25
         run: scripts/ci-run-smoke.sh "$IPAD_ID" ipad
       - name: Upload test results
         if: always()
