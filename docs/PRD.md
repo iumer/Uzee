@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2 (approved 2026-10-06; splitting revised) |
+| Version | 0.3 (2026-10-06; design audit applied) |
 | Date | 2026-10-05 |
 | Status | Draft — awaiting user review |
 | Source | docs/DISCOVERY.md (Groups 1–8) |
@@ -98,7 +98,7 @@ Priority: **M** = must have in v1, **S** = should have in v1, **C** = could have
 ### 5.5 Budgeting (BUD)
 | ID | Requirement | P |
 |----|-------------|---|
-| BUD-01 | Monthly budget per calendar month with a total limit | M |
+| BUD-01 | Monthly budget per calendar month with a total limit; optional setting to run budgets by salary cycle instead (e.g. 21st to 20th). Calendar month is the default | M |
 | BUD-02 | Optional limits per category (and subcategory) | M |
 | BUD-03 | Utilization = posted expenses in the month (PKR, converted) ÷ limit; remaining = limit − spent | M |
 | BUD-04 | Warning at configurable threshold (default 80%) and alert when exceeded | M |
@@ -138,6 +138,8 @@ Example (user's kameti, figures to confirm): 20,000 PKR/month for 12 months from
 | REC-04 | Monthly and yearly subscription cost totals | M |
 | REC-05 | Recurring income: salary $1,875 to Wise around the 21st; variable reimbursements | M |
 | REC-06 | Auto-post option per item | L |
+| REC-07 | One Bills & subscriptions hub lists all recurring items, the kameti and installment plans (KAM, LOAN-06) with their progress, income items, and paused/cancelled items, with monthly and yearly totals. Kameti and car installment have no separate screens | M |
+| REC-08 | Every due item can be marked Paid (amount editable), Skipped or Snoozed from the hub, Calendar, Home and the notification | M |
 
 ### 5.9 Shared expenses and groups (SPL), Splitwise-style
 Replaces the earlier office-only split (OFF-01…06, withdrawn 2026-10-06). The office is now just one group.
@@ -416,4 +418,5 @@ See RPT-01…09. Reports count my share of split items, currency conversion at c
 | Date | Version | Change |
 |------|---------|--------|
 | 2026-10-05 | 0.1 | First draft from discovery |
+| 2026-10-06 | 0.3 | Design audit (docs/design-audit.md) applied: BUD-01 salary-cycle option, REC-07 hub incl. kameti and car installment, REC-08 mark paid everywhere, People is a tab, money actions confirm with Undo, one sample dataset (docs/mockup-dataset.md) |
 | 2026-10-06 | 0.2 | Office split (OFF) replaced by Splitwise-style people and groups (SPL); Personal/Office sections removed |
