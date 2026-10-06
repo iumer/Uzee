@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.1 (draft for review) |
+| Version | 0.2 (approved 2026-10-06; splitting revised) |
 | Date | 2026-10-05 |
 | Status | Draft — awaiting user review |
 | Source | docs/DISCOVERY.md (Groups 1–8) |
@@ -32,7 +32,7 @@ UZee is a native iPhone and iPad app for managing personal and shared-office fin
 | Primary: Owner (iTech) | Salaried professional paid in USD via Wise, spends in PKR across many banks and wallets, shares an office and its costs 50/50 with a friend, lends to and borrows from family and friends, pays a car installment and a kameti, has many subscriptions |
 | Future: Other individuals | Similar users once the app is stable enough to share (via TestFlight or App Store) |
 
-The office partner is a **person record**, not an app user, in v1.
+Other people (family, friends, office partner) are **person records** grouped into groups, not app users, in v1.
 
 ## 4. Primary use cases
 
@@ -46,7 +46,7 @@ The office partner is a **person record**, not an app user, in v1.
 | UC-06 | Track the car installment and kameti schedules |
 | UC-07 | Track recurring bills and subscriptions; confirm payments when due |
 | UC-08 | See all money dates on a month calendar; get reminders |
-| UC-09 | Record office expenses, see month-end settlement with the partner, split office reimbursement |
+| UC-09 | Split expenses and income with people or groups (e.g. Office with a partner), see balances, settle up |
 | UC-10 | Ask "how much do I owe my mother?" or "what's my next recurring payment?" by voice |
 | UC-11 | Import past and monthly bank statements (PDF) |
 | UC-12 | View reports and the "until next salary" forecast |
@@ -70,10 +70,10 @@ Priority: **M** = must have in v1, **S** = should have in v1, **C** = could have
 | ID | Requirement | P |
 |----|-------------|---|
 | TXN-01 | Types: Expense, Income, Transfer, Refund, Adjustment | M |
-| TXN-02 | Fields: amount, currency (from account), date and time, account, category/subcategory, payee, note, tags, attachments, section (Personal/Office), status (Posted/Pending) | M |
+| TXN-02 | Fields: amount, currency (from account), date and time, account, category/subcategory, payee, note, tags, attachments, split (none, person or group, method, payer), status (Posted/Pending) | M |
 | TXN-03 | Transfer: from account, to account, amount sent, amount received; if currencies differ, implied rate shown and stored. Transfers are excluded from income/expense totals | M |
 | TXN-04 | Edit and delete any transaction; delete moves to Recently Deleted | M |
-| TXN-05 | Transaction list: grouped by day, running totals, filter by account, category, tag, type, section, date range; search by note, payee, amount | M |
+| TXN-05 | Transaction list: grouped by day, running totals, filter by account, category, tag, type, person/group, date range; search by note, payee, amount | M |
 | TXN-06 | Quick add: amount first, then category (recent/frequent first), account defaults to last used | M |
 | TXN-07 | Duplicate transaction ("repeat this") | S |
 | TXN-08 | Split a single transaction across categories | C |
@@ -104,7 +104,7 @@ Priority: **M** = must have in v1, **S** = should have in v1, **C** = could have
 | BUD-04 | Warning at configurable threshold (default 80%) and alert when exceeded | M |
 | BUD-05 | New month copies previous month's limits automatically; limits reset (no rollover) | M |
 | BUD-06 | Budget history per month and per category | M |
-| BUD-07 | Separate budgets for Personal and Office sections | M |
+| BUD-07 | Budgets count only my share of split expenses; optional budget per group (e.g. Office) | S |
 | BUD-08 | Optional rollover of unspent budget | L |
 
 ### 5.6 People, loans and debts (LOAN)
@@ -132,22 +132,31 @@ Example (user's kameti, figures to confirm): 20,000 PKR/month for 12 months from
 ### 5.8 Recurring payments and subscriptions (REC)
 | ID | Requirement | P |
 |----|-------------|---|
-| REC-01 | Recurring item: name, type (Bill, Rent, Utility, Salary payout, Insurance, Membership, Subscription, Income, Other), amount (fixed or estimated), currency, account, category, section, frequency (weekly, monthly, quarterly, yearly, custom N days/months), next due date, end date (optional) | M |
+| REC-01 | Recurring item: name, type (Bill, Rent, Utility, Salary payout, Insurance, Membership, Subscription, Income, Other), amount (fixed or estimated), currency, account, category, optional split (person or group), frequency (weekly, monthly, quarterly, yearly, custom N days/months), next due date, end date (optional) | M |
 | REC-02 | On the due date the item appears as "Due" and a reminder fires; user confirms (optionally editing amount) to post the transaction, or skips | M |
 | REC-03 | Subscriptions additionally track service, renewal date, cancellation status (Active, Cancelled, Paused), price history | M |
 | REC-04 | Monthly and yearly subscription cost totals | M |
 | REC-05 | Recurring income: salary $1,875 to Wise around the 21st; variable reimbursements | M |
 | REC-06 | Auto-post option per item | L |
 
-### 5.9 Office and shared expenses (OFF)
+### 5.9 Shared expenses and groups (SPL), Splitwise-style
+Replaces the earlier office-only split (OFF-01…06, withdrawn 2026-10-06). The office is now just one group.
+
 | ID | Requirement | P |
 |----|-------------|---|
-| OFF-01 | Every transaction belongs to a section: Personal (default) or Office | M |
-| OFF-02 | Office transactions record who paid: Me or Partner (partner configured once, e.g. the friend's name) and the split (default 50/50) | M |
-| OFF-03 | Partner-paid office expenses are recorded without touching my accounts, only my share counts toward office spending | M |
-| OFF-04 | Month-end settlement: total office spend, each person's share, who paid what, net amount owed between me and partner; "Settle" records the transfer | M |
-| OFF-05 | Office reimbursement: amount expected from the office, received amount split 50/50; my share is income, partner's share becomes owed to/from partner | M |
-| OFF-06 | Dashboard and reports can show Personal, Office or both | M |
+| SPL-01 | People (shared with Loans): one record per person; a person's balance combines loans and shared expenses | M |
+| SPL-02 | Groups: name, icon, members (me + people), default split method, optional currency; e.g. "Office", "Trip to Hunza", "Home" | M |
+| SPL-03 | Any expense can be split: with one person or a group; "Paid by" me, another member, or several payers with amounts | M |
+| SPL-04 | Split methods: equally (choose who is included), exact amounts, percentages, shares (e.g. 2:1); totals must match the expense before saving | M |
+| SPL-05 | Only my share counts as my spending in budgets and reports; the rest becomes money owed to me (or by me) | M |
+| SPL-06 | Expenses someone else paid are recorded without touching my accounts; my share is still spending, and I owe the payer | M |
+| SPL-07 | Balances: per person, per group, and overall "You are owed / You owe", always computed, never typed | M |
+| SPL-08 | Settle up: record a payment between me and a person (full or partial, any account); balance updates | M |
+| SPL-09 | Simplify debts within a group (fewest payments to settle everyone) | S |
+| SPL-10 | Shared income (e.g. office reimbursement) can be split the same way; my share is my income | M |
+| SPL-11 | Settle-up reminders per person or group (e.g. month-end for Office) | M |
+| SPL-12 | Group activity feed and group totals by month | S |
+| SPL-13 | Friends using their own UZee/Splitwise to see balances | L |
 
 ### 5.10 Calendar and reminders (CAL)
 | ID | Requirement | P |
@@ -169,7 +178,7 @@ Example (user's kameti, figures to confirm): 20,000 PKR/month for 12 months from
 | DSH-03 | Owed to me / I owe totals | M |
 | DSH-04 | "Until next salary" forecast: available balance − unpaid bills, subscriptions, installments and kameti due before the next expected salary date | M |
 | DSH-05 | Spending by category donut for the current month | M |
-| DSH-06 | Section switch: Personal / Office / All | M |
+| DSH-06 | Shared card: overall owed/owing across people and groups, top groups | M |
 | DSH-07 | Alerts: over budget, overdue items, large unexpected spend | S |
 
 ### 5.12 Reports (RPT)
@@ -180,7 +189,7 @@ Example (user's kameti, figures to confirm): 20,000 PKR/month for 12 months from
 | RPT-03 | Budget performance by month and category | M |
 | RPT-04 | Subscriptions and recurring cost (monthly and yearly) | M |
 | RPT-05 | Owed/owing summary per person | M |
-| RPT-06 | Office monthly settlement report | M |
+| RPT-06 | Group and person balance report (monthly, e.g. Office settlement) | M |
 | RPT-07 | Account balances over time and net position | S |
 | RPT-08 | Cash-flow trend (6–12 months) | S |
 | RPT-09 | Export any report as PDF | M |
@@ -238,7 +247,7 @@ Example flow (VOX-04/05/06): "I sent 20k PKR to a friend, they will return it la
 |----|-------------|---|
 | SET-01 | Optional app lock with Face ID / Touch ID and device passcode fallback; lock timeout setting | M |
 | SET-02 | Hide amounts in app switcher snapshot when lock is on | M |
-| SET-03 | Reminder defaults, exchange rate, base currency, partner name and split, salary day, budget warning threshold | M |
+| SET-03 | Reminder defaults, exchange rate, base currency, salary day, budget warning threshold | M |
 | SET-04 | Calendar export on/off and target calendar | M |
 
 ## 6. Non-functional requirements
@@ -264,7 +273,7 @@ Example flow (VOX-04/05/06): "I sent 20k PKR to a friend, they will return it la
 | US-05 | As the owner, I want to record that I lent Usama 20,000 PKR and later that he returned 5,000 | Usama shows 15,000 owed to me |
 | US-06 | As the owner, I want my car installment and kameti on the calendar with reminders | Each due date shows on the calendar and notifies at my chosen time |
 | US-07 | As the owner, I want to confirm my Netflix payment when it's due | Due item shows on the day; confirming posts the expense and moves next due date |
-| US-08 | As the owner, I want to see at month end how much my office partner owes me | Settlement screen shows totals per person and the net amount |
+| US-08 | As the owner, I want to split an office bill 50/50 with my partner and settle at month end | Office group shows the net balance; Settle up records the payment and zeroes it |
 | US-09 | As the owner, I want to ask "how much do I owe my mother?" | Voice answer matches the People screen |
 | US-10 | As the owner, I want to import my HBL statement and review it before saving | Rows appear for review; duplicates flagged; nothing saved until I confirm |
 | US-11 | As the owner, I want to restore my data on a new phone from a backup file | Restore reproduces all records and attachments |
@@ -273,7 +282,7 @@ Full user stories per milestone are written in the Milestone Plan.
 
 ## 8. Data requirements
 
-Entities (formal definitions in DATA_MODEL.md, Architecture stage): Account, Transaction, TransferLeg, Category, Payee, Tag, Budget, BudgetLimit, Person, Loan, LoanPayment, InstallmentSchedule, Kameti, KametiEvent, RecurringItem, Subscription details, PriceHistory, FinancialEvent, Reminder, ExchangeRate, Attachment, OfficeSettlement, ImportBatch, Settings.
+Entities (formal definitions in DATA_MODEL.md, Architecture stage): Account, Transaction, TransferLeg, Category, Payee, Tag, Budget, BudgetLimit, Person, Loan, LoanPayment, InstallmentSchedule, Kameti, KametiEvent, RecurringItem, Subscription details, PriceHistory, FinancialEvent, Reminder, ExchangeRate, Attachment, Group, GroupMember, SplitShare, Settlement, ImportBatch, Settings.
 
 Rules: UUID identifiers; created/updated timestamps on every entity; soft delete with 30-day purge; money as integer minor units + currency; dates stored in UTC with the user's time zone recorded for scheduling; sample data flagged.
 
@@ -324,7 +333,7 @@ Rules: UUID identifiers; created/updated timestamps on every entity; soft delete
 - Permission denial leaves in-app calendar fully working.
 
 ## 17. Reporting requirements
-See RPT-01…09. Reports respect section filter (Personal/Office/All), currency conversion at current rate (with note), and exclude transfers from income/expense.
+See RPT-01…09. Reports count my share of split items, currency conversion at current rate (with note), and exclude transfers from income/expense.
 
 ## 18. Future extensibility
 - New account types, currencies and recurring types added via configuration, not schema change.
@@ -340,7 +349,7 @@ See RPT-01…09. Reports respect section filter (Personal/Office/All), currency 
 - Max 64 pending local notifications.
 
 ## 20. Assumptions
-- AS-01 One user per device; office partner is a person record, not a user.
+- AS-01 One user per device; people and group members are records, not users.
 - AS-02 Fixed exchange rate is acceptable for totals until live rates are added.
 - AS-03 Salary expected on the 21st of each month (user said 21st–22nd).
 - AS-04 Kameti amounts will be entered by the user (current figures unconfirmed).
@@ -364,7 +373,7 @@ See RPT-01…09. Reports respect section filter (Personal/Office/All), currency 
 |---------|-------------|--------------|------------|--------------|
 | iCloud sync | Same data on iPhone and iPad | Use both devices | High | Paid developer account, CloudKit |
 | Live Wise rates | Real USD→PKR rate | Accurate totals | Medium | Network, rate source |
-| Shared partner view | Partner sees office settlement in their own app | No manual settling | High | Sync, multi-user |
+| Shared balances with friends | Friends see group balances in their own app | No manual settling | High | Sync, multi-user |
 | Budget rollover | Carry unspent budget | Envelope-style saving | Low | Budget module |
 | Repeat reminders until paid | Daily nag for overdue items | Fewer missed payments | Low | Notifications |
 | Auto-post recurring items | Post on due date without confirm | Less tapping | Low | Recurring module |
@@ -407,3 +416,4 @@ See RPT-01…09. Reports respect section filter (Personal/Office/All), currency 
 | Date | Version | Change |
 |------|---------|--------|
 | 2026-10-05 | 0.1 | First draft from discovery |
+| 2026-10-06 | 0.2 | Office split (OFF) replaced by Splitwise-style people and groups (SPL); Personal/Office sections removed |
