@@ -44,16 +44,16 @@ No database server, environment variables or backend are needed: data is stored 
 | Swift | 6.4 | OK |
 | Simulators | iOS 26.5, iOS 27.0 | OK, no download needed |
 | iPhone | iPhone 17 Pro Max, iOS 27 | OK (Apple Intelligence supported); not yet paired with Xcode |
-| Git | 2.54.0 | Installed; global name/email not set |
+| Git | 2.54.0, user iTech, default branch main | OK (set 2026-10-06) |
 | Homebrew | installed | OK |
-| GitHub CLI (gh) | not installed | Needed before Milestone 0 to download the private repo (small install) |
-| Free disk | 20 GiB | Enough for this route |
+| GitHub CLI (gh) | 2.102.0, logged in as iumer, git credential helper set | OK (2026-10-06) |
+| Free disk | 16 GiB after Xcode component install | Enough for this route |
 
 Project settings derived from this: deployment target iOS 26.0; code must compile with both Xcode 27 beta (local) and the newest Xcode on GitHub's cloud Macs.
 
 ---
 
-## REQUIRED NOW (Mac)
+## REQUIRED NOW (Mac) — COMPLETE (verified 2026-10-06)
 
 ### 1. macOS
 Apple menu → System Settings → General → Software Update → install the latest macOS your M1 supports.
