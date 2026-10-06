@@ -123,7 +123,7 @@ gh auth status         # Expected: Logged in to github.com account iumer
 ```bash
 df -h /
 ```
-Expected: at least ~40 GB available.
+Expected: at least ~5 GB available (Xcode already installed; ~40 GB only for a fresh Xcode install).
 
 ### One-shot verification
 After finishing steps 1–6, run this and paste the output into the thread:
