@@ -1,0 +1,403 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C3CCDCB272F7D33A921FA567 /* UZeeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 082C86129E838820B83F274F /* UZeeCore */; };
+		306DA2A2A9BA4B081FC09F14 /* UZeeData in Frameworks */ = {isa = PBXBuildFile; productRef = B3DA2B2456D3EFEEFC5F3328 /* UZeeData */; };
+		F15E854621AF6D0D08DA716E /* UZeeSystem in Frameworks */ = {isa = PBXBuildFile; productRef = 2D0269825975BA6D9D0D7A3B /* UZeeSystem */; };
+		B7B7AB03C702D8216F7E0117 /* UZeeUI in Frameworks */ = {isa = PBXBuildFile; productRef = 235DCE6835D1E7956E1756D8 /* UZeeUI */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		431387EB7262E1CFC79B125E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D4C91345015A4DD0A099400;
+			remoteInfo = UZee;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		81918909E83595C8F4212CCC /* UZee.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UZee.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		858E33F033846B57054E0712 /* UZeeSmokeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UZeeSmokeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F14658E33F7B2846C842FB9D /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		56137EF57AA7DD8976D75563 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		FF529D686FFC1CFF9E5F7F08 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		779827CBE7D8DCAC69F28D50 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		FDA31503C7EA89B18AA63554 /* App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = App;
+			sourceTree = "<group>";
+		};
+		EE38E7FB1100DD18CC715F16 /* UZeeSmokeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = UZeeSmokeTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0248D6DB510EB0F7E9C05175 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C3CCDCB272F7D33A921FA567 /* UZeeCore in Frameworks */,
+				306DA2A2A9BA4B081FC09F14 /* UZeeData in Frameworks */,
+				F15E854621AF6D0D08DA716E /* UZeeSystem in Frameworks */,
+				B7B7AB03C702D8216F7E0117 /* UZeeUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF4C4AD544E90164AB8FCC3D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0AE76A8769897E0D3F4D4C32 = {
+			isa = PBXGroup;
+			children = (
+				FDA31503C7EA89B18AA63554 /* App */,
+				EE38E7FB1100DD18CC715F16 /* UZeeSmokeTests */,
+				7173545D75AC56744F55E81B /* Config */,
+				1BADDC1D73C1A20F347483E1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		7173545D75AC56744F55E81B /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				F14658E33F7B2846C842FB9D /* Base.xcconfig */,
+				56137EF57AA7DD8976D75563 /* Debug.xcconfig */,
+				FF529D686FFC1CFF9E5F7F08 /* Release.xcconfig */,
+				779827CBE7D8DCAC69F28D50 /* Version.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		1BADDC1D73C1A20F347483E1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				81918909E83595C8F4212CCC /* UZee.app */,
+				858E33F033846B57054E0712 /* UZeeSmokeTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3D4C91345015A4DD0A099400 /* UZee */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5F810038CB0B407145581F3B /* Build configuration list for PBXNativeTarget "UZee" */;
+			buildPhases = (
+				DA10D9DD089DF2AFEBC5ED5A /* Sources */,
+				0248D6DB510EB0F7E9C05175 /* Frameworks */,
+				82A968CB662751220D4DFE2D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				FDA31503C7EA89B18AA63554 /* App */,
+			);
+			name = UZee;
+			packageProductDependencies = (
+				082C86129E838820B83F274F /* UZeeCore */,
+				B3DA2B2456D3EFEEFC5F3328 /* UZeeData */,
+				2D0269825975BA6D9D0D7A3B /* UZeeSystem */,
+				235DCE6835D1E7956E1756D8 /* UZeeUI */,
+			);
+			productName = UZee;
+			productReference = 81918909E83595C8F4212CCC /* UZee.app */;
+			productType = "com.apple.product-type.application";
+		};
+		DFEE19449146DDDB4DD78AD1 /* UZeeSmokeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8E0CA9F4ACB19E70E682F30A /* Build configuration list for PBXNativeTarget "UZeeSmokeTests" */;
+			buildPhases = (
+				8F11E0AE1293B031D2165BF2 /* Sources */,
+				DF4C4AD544E90164AB8FCC3D /* Frameworks */,
+				887D9852F7F2A508189160F7 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2254342BECCEAFBD04538E0A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				EE38E7FB1100DD18CC715F16 /* UZeeSmokeTests */,
+			);
+			name = UZeeSmokeTests;
+			productName = UZeeSmokeTests;
+			productReference = 858E33F033846B57054E0712 /* UZeeSmokeTests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					3D4C91345015A4DD0A099400 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					DFEE19449146DDDB4DD78AD1 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = 3D4C91345015A4DD0A099400;
+					};
+				};
+			};
+			buildConfigurationList = CBC0ACF9B7C450A44BDEEC53 /* Build configuration list for PBXProject "UZee" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 0AE76A8769897E0D3F4D4C32;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4A2381B11E94060630713172 /* XCLocalSwiftPackageReference "Packages/UZeeCore" */,
+				757523F0BF92D12D2BB5FC41 /* XCLocalSwiftPackageReference "Packages/UZeeData" */,
+				DBA0F7BBD4347B0038950053 /* XCLocalSwiftPackageReference "Packages/UZeeSystem" */,
+				EA0ACE567C8423260DB4C6C5 /* XCLocalSwiftPackageReference "Packages/UZeeUI" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 1BADDC1D73C1A20F347483E1 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3D4C91345015A4DD0A099400 /* UZee */,
+				DFEE19449146DDDB4DD78AD1 /* UZeeSmokeTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		82A968CB662751220D4DFE2D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		887D9852F7F2A508189160F7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DA10D9DD089DF2AFEBC5ED5A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8F11E0AE1293B031D2165BF2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2254342BECCEAFBD04538E0A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3D4C91345015A4DD0A099400 /* UZee */;
+			targetProxy = 431387EB7262E1CFC79B125E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		FA9139DD8B03E3F922556BF8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		FFE2104CCFAB79205AC64460 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		72FB3ED29B4639D83EC5DB14 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 56137EF57AA7DD8976D75563 /* Debug.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		191734982F22ABEBB64A1AE0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = FF529D686FFC1CFF9E5F7F08 /* Release.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		5AB3A6BF84C2901E813939E6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = app.uzee.ios.smoketests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = UZee;
+			};
+			name = Debug;
+		};
+		54ECD3B736C66C8688F6C25B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = app.uzee.ios.smoketests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = UZee;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CBC0ACF9B7C450A44BDEEC53 /* Build configuration list for PBXProject "UZee" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA9139DD8B03E3F922556BF8 /* Debug */,
+				FFE2104CCFAB79205AC64460 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5F810038CB0B407145581F3B /* Build configuration list for PBXNativeTarget "UZee" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				72FB3ED29B4639D83EC5DB14 /* Debug */,
+				191734982F22ABEBB64A1AE0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8E0CA9F4ACB19E70E682F30A /* Build configuration list for PBXNativeTarget "UZeeSmokeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5AB3A6BF84C2901E813939E6 /* Debug */,
+				54ECD3B736C66C8688F6C25B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		4A2381B11E94060630713172 /* XCLocalSwiftPackageReference "Packages/UZeeCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/UZeeCore;
+		};
+		757523F0BF92D12D2BB5FC41 /* XCLocalSwiftPackageReference "Packages/UZeeData" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/UZeeData;
+		};
+		DBA0F7BBD4347B0038950053 /* XCLocalSwiftPackageReference "Packages/UZeeSystem" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/UZeeSystem;
+		};
+		EA0ACE567C8423260DB4C6C5 /* XCLocalSwiftPackageReference "Packages/UZeeUI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/UZeeUI;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		082C86129E838820B83F274F /* UZeeCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4A2381B11E94060630713172 /* XCLocalSwiftPackageReference "Packages/UZeeCore" */;
+			productName = UZeeCore;
+		};
+		B3DA2B2456D3EFEEFC5F3328 /* UZeeData */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 757523F0BF92D12D2BB5FC41 /* XCLocalSwiftPackageReference "Packages/UZeeData" */;
+			productName = UZeeData;
+		};
+		2D0269825975BA6D9D0D7A3B /* UZeeSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DBA0F7BBD4347B0038950053 /* XCLocalSwiftPackageReference "Packages/UZeeSystem" */;
+			productName = UZeeSystem;
+		};
+		235DCE6835D1E7956E1756D8 /* UZeeUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EA0ACE567C8423260DB4C6C5 /* XCLocalSwiftPackageReference "Packages/UZeeUI" */;
+			productName = UZeeUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+}

@@ -1,0 +1,13 @@
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
+.swiftpm/
+build/
+*.xcresult
+*.ipa
+*.p12
+*.mobileprovision
+*.cer
+.env

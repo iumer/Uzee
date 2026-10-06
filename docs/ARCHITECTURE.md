@@ -110,8 +110,8 @@ Uzee/
 │   ├── AppDelegate.swift                  # UNUserNotificationCenterDelegate, BGTaskScheduler
 │   ├── UZeeShortcuts.swift                # AppShortcutsProvider (phrases)
 │   ├── Resources/  Assets.xcassets · Localizable.xcstrings · PrivacyInfo.xcprivacy
-│   ├── Info.plist · UZee.entitlements
-│   └── Config/  Base.xcconfig · Debug.xcconfig · Release.xcconfig · Version.xcconfig
+│   └── (Info.plist generated from build settings; entitlements added when needed)
+├── Config/  Base.xcconfig · Debug.xcconfig · Release.xcconfig · Version.xcconfig
 ├── Packages/
 │   ├── UZeeCore/
 │   │   ├── Package.swift                  # no dependencies; platforms iOS 26 + Linux
@@ -159,8 +159,8 @@ Uzee/
 │       │   ├── ErrorPresentation/ UserMessage.swift   # the single error → text mapping
 │       │   └── Preview/      in-memory fakes of Core ports for #Preview
 │       └── Tests/UZeeUITests/              # view-model tests with fakes
-├── UZeeUITests/                           # XCTest UI smoke tests (SMK-*)
-├── scripts/  bump-build.sh · run-core-tests-linux.sh
+├── UZeeSmokeTests/                        # XCTest UI smoke tests (SMK-*)
+├── scripts/  bump-build.sh · check-secrets.sh · ci-pick-simulators.sh · ci-test-package.sh
 ├── .github/workflows/  ci.yml
 └── docs/
 ```

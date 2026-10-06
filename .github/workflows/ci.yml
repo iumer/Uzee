@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks-linux:
+    name: Secret check (ENV-007)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-secrets.sh
+
+  core-linux:
+    name: UZeeCore tests on Linux (ENV-001)
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test --package-path Packages/UZeeCore
+
+  ios:
+    name: Build and test on iPhone and iPad simulators (ENV-002)
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select newest Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+      - name: Pick simulators
+        run: scripts/ci-pick-simulators.sh >> "$GITHUB_ENV"
+      - name: Package tests
+        run: |
+          for pkg in UZeeCore UZeeData UZeeSystem UZeeUI; do
+            echo "::group::$pkg"
+            scripts/ci-test-package.sh "$pkg" "$IPHONE_DEST"
+            echo "::endgroup::"
+          done
+      - name: App build + smoke UI tests (iPhone and iPad)
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project UZee.xcodeproj -scheme UZee -configuration Debug \
+            -destination "$IPHONE_DEST" -destination "$IPAD_DEST" \
+            -resultBundlePath build/UZee.xcresult \
+            CODE_SIGNING_ALLOWED=NO | tee build/xcodebuild.log | grep -E "error:|warning: |Test Case|Executed|\*\* "
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            build/*.xcresult
+            build/*.log
+          if-no-files-found: ignore
