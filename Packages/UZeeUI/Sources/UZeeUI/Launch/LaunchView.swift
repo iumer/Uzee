@@ -30,6 +30,9 @@ public struct LaunchView: View {
             Label(statusText, systemImage: status == .ready ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.subheadline)
                 .foregroundStyle(status == .ready ? Color.green : Color.orange)
+                // One accessibility element, so VoiceOver reads the status once and tests find one match.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(statusText)
                 .accessibilityIdentifier("launch.database")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

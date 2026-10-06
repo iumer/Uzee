@@ -23,9 +23,9 @@ final class SmokeTests: XCTestCase {
     /// SMK-004 Database initializes
     func testSMK004_databaseInitializes() {
         let app = launchApp()
-        let status = app.descendants(matching: .any)["launch.database"]
+        let status = app.descendants(matching: .any)["launch.database"].firstMatch
         XCTAssertTrue(status.waitForExistence(timeout: 10))
-        XCTAssertTrue(status.label.contains("Database ready"), "Got: \(status.label)")
+        XCTAssertEqual(status.label, "Database ready")
     }
 
     /// ENV-006 Version display matches Info.plist
