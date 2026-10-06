@@ -452,7 +452,7 @@ Triggers: push to `feature/*`, PRs to `development` and `main`. A red build bloc
 | Debug | Development on simulator and the Mac-attached phone | `-Onone`, assertions, `SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG`, bundle id `…uzee.dev`, display name "UZee Dev" so test data never mixes with the real install |
 | Release | The build the owner uses daily; later TestFlight | `-O`, whole-module, dead-code stripping, bundle id `…uzee`, no debug menu |
 
-- Settings live in `App/Config/*.xcconfig`, not the project file, so diffs are readable.
+- Settings live in `Config/*.xcconfig`, not the project file, so diffs are readable.
 - **Sample data** has two switches: (1) the user-facing "Explore with sample data" mode (DATA-04, in Release too), which seeds flagged records and shows a "Sample data" banner; (2) launch arguments for tests/screenshots: `-UZeeSeedSample YES` (seed on launch) and `-UZeeInMemoryStore YES` (never touch the real file). A `DEBUG`-only Developer menu adds "Reset database" and "Fire test notification".
 - Signing: free Apple ID personal team for now (7-day expiry, rebuild weekly from the Mac); paid account later for TestFlight. Capabilities used in v1 avoid ones a free team cannot sign (no iCloud, no push).
 - Info.plist usage strings: Face ID, Calendars (write-only and full), Camera, Photos, Speech Recognition, Microphone — each requested only on first use (PRV-03).
@@ -486,7 +486,7 @@ There are no servers, keys or environments in v1 (SEC-05). "Environment" means t
 | Item | Rule |
 |---|---|
 | App version | `MARKETING_VERSION` = `0.MILESTONE.PATCH` (e.g. 0.3.1 = milestone 3, second fix build); 1.0.0 when v1 scope is complete. |
-| Build number | `CURRENT_PROJECT_VERSION`, a single monotonically increasing integer in `App/Config/Version.xcconfig`, bumped by `scripts/bump-build.sh` for every installed build and logged in the build history. |
+| Build number | `CURRENT_PROJECT_VERSION`, a single monotonically increasing integer in `Config/Version.xcconfig`, bumped by `scripts/bump-build.sh` for every installed build and logged in the build history. |
 | Schema version | Name of the last applied GRDB migration (`v1_baseline`, `v2_…`); written into backups. |
 | Backup format | `formatVersion` in the file header; readers support all older versions. |
 | Parser versions | Each bank parser has its own `version`, stored on ImportBatch. |
