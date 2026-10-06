@@ -15,3 +15,10 @@
 - Branches: main (stable), development (integration), feature/* branches. Current docs branch claude/project-thread-m75ycs will be merged into development when the repo is initialised.
 - Errors and logging: typed errors per layer, user-facing messages from one place, os.Logger with privacy redaction; never log amounts, names or notes.
 - Process: master prompt (thread root) rules apply: milestones need acceptance criteria, test cases, DoD; bug regression policy; build history; honest test reporting.
+
+## Decisions settled while writing the plan (2026-10-06, lead defaults; user can override)
+- PKR displays whole rupees everywhere (display rounding only); amounts are stored in paisa.
+- Category limits adding up to more than the total budget: warn, never block (BUD-011).
+- Switching budget period (calendar month ↔ salary cycle) takes effect from the next period; the current period is not split (BUD-020).
+- iOS Calendar: write-only access by default; full access is requested only if the user turns on "Keep iOS Calendar in sync" (edits/deletes and choosing a calendar, CAL-06, SET-04).
+- People tab gets a search field when the list is long (spec only, not in mockups).
