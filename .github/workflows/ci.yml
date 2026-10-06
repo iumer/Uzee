@@ -45,14 +45,21 @@ jobs:
             scripts/ci-test-package.sh "$pkg" "$IPHONE_DEST"
             echo "::endgroup::"
           done
-      - name: App build + smoke UI tests (iPhone and iPad)
+      - name: Build app for testing
+        timeout-minutes: 20
         run: |
           set -o pipefail
-          xcodebuild test \
+          mkdir -p build
+          xcodebuild build-for-testing \
             -project UZee.xcodeproj -scheme UZee -configuration Debug \
-            -destination "$IPHONE_DEST" -destination "$IPAD_DEST" \
-            -resultBundlePath build/UZee.xcresult \
-            CODE_SIGNING_ALLOWED=NO | tee build/xcodebuild.log | grep -E "error:|warning: |Test Case|Executed|\*\* "
+            -destination "generic/platform=iOS Simulator" -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/build.log | grep -E "error:|\*\* " || (tail -60 build/build.log; exit 1)
+      - name: Smoke UI tests on iPhone
+        timeout-minutes: 15
+        run: scripts/ci-run-smoke.sh "$IPHONE_ID" iphone
+      - name: Smoke UI tests on iPad
+        timeout-minutes: 15
+        run: scripts/ci-run-smoke.sh "$IPAD_ID" ipad
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

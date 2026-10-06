@@ -19,5 +19,8 @@ if not best: sys.exit("no "+kind+" simulator")
 print(best[1]); print(best[2]+" iOS %d.%d"%best[0], file=sys.stderr)
 ' "$1"
 }
-echo "IPHONE_DEST=platform=iOS Simulator,id=$(pick iPhone)"
-echo "IPAD_DEST=platform=iOS Simulator,id=$(pick iPad)"
+iphone=$(pick iPhone); ipad=$(pick iPad)
+echo "IPHONE_ID=$iphone"
+echo "IPAD_ID=$ipad"
+echo "IPHONE_DEST=platform=iOS Simulator,id=$iphone"
+echo "IPAD_DEST=platform=iOS Simulator,id=$ipad"
