@@ -36,6 +36,8 @@ public final class AppDatabase: Sendable {
                 t.column("updated_at", .integer).notNull()
             }
         }
+        // M2: money engine tables (DATA_MODEL §3.3–3.9).
+        migrator.registerMigration("v3_money") { db in try MoneySchema.create(db) }
         return migrator
     }
 

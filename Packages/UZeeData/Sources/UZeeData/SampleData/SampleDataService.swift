@@ -5,8 +5,8 @@ import GRDB
 /// and removes it again in one transaction without touching real rows.
 public struct SampleDataService: Sendable {
     /// Tables that carry `is_sample`, children before parents so deletes are FK-safe.
-    /// Each milestone that adds a user-content table appends it here (M2: accounts, transactions, …).
-    public static let defaultTables: [String] = []
+    /// Each milestone that adds a user-content table appends it here.
+    public static let defaultTables: [String] = ["transaction_leg", "txn", "payee", "account"]
 
     let database: AppDatabase
     let tables: [String]
@@ -16,9 +16,11 @@ public struct SampleDataService: Sendable {
         self.tables = tables
     }
 
-    /// Turns sample mode on. Seeding the fixture rows arrives with the tables (M2 onwards).
+    /// Turns sample mode on and seeds the mockup dataset once, all in one transaction.
     public func load() throws {
         try database.writer.write { db in
+            let seeded = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM account WHERE is_sample = 1") ?? 0
+            if seeded == 0 { try SampleFixture.insert(db) }
             try DeviceSettingsStore.setSampleModeActive(true, db)
         }
     }
