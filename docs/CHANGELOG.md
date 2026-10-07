@@ -6,7 +6,25 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 ## [Unreleased]
 
-Milestone 2 (accounts and money engine) in progress.
+Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
+
+## [0.6.0] build 7 — 2026-10-07 — Milestones 6–8 Bills, Calendar, Home and Reports (Mac UI tests pending)
+
+### Added
+- Bills & subscriptions: monthly and yearly commitments with a mix bar, due now, upcoming with "due before salary", kameti and car installment plan cards, subscriptions, group bills, income, paused / cancelled.
+- Item detail: next due with Mark paid, price history, billing details, installment schedule, kameti payouts with the "check figures with the committee" warning, pause / cancel / delete. Add and edit form.
+- Mark paid sheet with Skip this time and Snooze 1 day; Undo on every action. Mark paid posts the transaction once and splits group bills equally.
+- Calendar: month grid with markers, due-before-salary card, loans due back, day list and agenda.
+- Home: overdue strip, budget left, spent vs the same point last month, until next salary, next 7 days, people balances, where it went, insights.
+- Reports: income, spending and net; spending by category; six months of income vs spending; budget kept; subscriptions; people and account balances.
+- Sample data: 17 recurring items from the mockup dataset.
+
+### Fixed
+- GitHub Mac CI compiler crash (a method passed as a Binding setter in Categories).
+
+## [0.5.0] build 6 — 2026-10-07 — Milestone 5 People, loans and splitting
+
+## [0.4.0] build 5 — 2026-10-07 — Milestone 4 Budget
 
 ## [0.1.0] build 2 — 2026-10-07 — Milestone 1 Navigation shell & design system
 
