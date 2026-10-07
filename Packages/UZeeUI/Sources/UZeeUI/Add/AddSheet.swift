@@ -59,6 +59,9 @@ struct AddSheet: View {
                     Section {
                         Label(problem, systemImage: "exclamationmark.circle.fill")
                             .foregroundStyle(UZColor.negative)
+                            // Some toolchains read the symbol name as the label; say the message itself.
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(problem)
                             .accessibilityIdentifier("add.problem")
                     }
                 }
