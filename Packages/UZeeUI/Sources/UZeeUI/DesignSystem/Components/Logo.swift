@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The UZee mark: a "U" with sparkles, the same drawing as the app icon (docs/brand/uzee-icon.svg).
+/// The UZee mark: a smiling "U" with two eyes and sparkles, the same drawing as the app icon (docs/brand/uzee-icon.svg).
 /// Coordinates are in the icon's 1024-point space and scaled to the frame.
 struct LogoU: Shape {
     func path(in rect: CGRect) -> Path {
@@ -38,7 +38,19 @@ struct LogoSparkle: Shape {
     }
 }
 
-/// Animated UZee logo: the U draws itself in, its colours drift, and the sparkles twinkle.
+/// A round eye centred at (`x`, `y`) with radius `r`, in icon space.
+struct LogoEye: Shape {
+    var x: CGFloat
+    var y: CGFloat
+    var r: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let s = min(rect.width, rect.height) / 1024
+        return Path(ellipseIn: CGRect(x: rect.minX + (x - r) * s, y: rect.minY + (y - r) * s, width: 2 * r * s, height: 2 * r * s))
+    }
+}
+
+/// Animated UZee logo: the U draws itself in, its colours drift, the sparkles twinkle and the eyes blink.
 /// With Reduce Motion on it is shown still.
 struct UZeeLogo: View {
     var size: CGFloat = 64
@@ -83,9 +95,25 @@ struct UZeeLogo: View {
                 .opacity(pulse)
             LogoU().trim(from: 0, to: drawn)
                 .stroke(gradient(t), style: StrokeStyle(lineWidth: line, lineCap: .round))
+            eye(LogoEye(x: 448, y: 452, r: 44), t: t)
+            eye(LogoEye(x: 576, y: 452, r: 44), t: t)
             sparkle(LogoSparkle(x: 694, y: 246, r: 124), t: t, phase: 0)
             sparkle(LogoSparkle(x: 838, y: 392, r: 52), t: t, phase: 1.7)
         }
+    }
+
+    /// Eyes pop in after the U and blink every few seconds (open and still with Reduce Motion).
+    private func eye(_ shape: LogoEye, t: Double) -> some View {
+        let period = 3.6, closing = 0.18
+        let phase = t.truncatingRemainder(dividingBy: period)
+        let blink = phase < closing ? 1 - 0.9 * sin(phase / closing * .pi) : 1
+        let anchor = UnitPoint(x: shape.x / 1024, y: shape.y / 1024)
+        let shown = max(0, min(1, (drawn - 0.6) / 0.4))
+        return shape
+            .fill(Color(red: 0.88, green: 0.97, blue: 1))
+            .shadow(color: .white.opacity(0.6), radius: size * 0.02)
+            .scaleEffect(x: shown, y: shown * CGFloat(blink), anchor: anchor)
+            .opacity(Double(shown))
     }
 
     private func sparkle(_ shape: LogoSparkle, t: Double, phase: Double) -> some View {

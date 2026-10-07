@@ -9,6 +9,8 @@
  <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C4B5FD"/></linearGradient>
 <filter id="blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="38"/></filter><g id="mark">
 <path d="M330,300 V560 A182,182 0 0 0 694,560 V455" fill="none" stroke="url(#u)" stroke-width="150" stroke-linecap="round"/>
+<circle cx="448" cy="452" r="44" fill="#E0F7FF"/>
+<circle cx="576" cy="452" r="44" fill="#E0F7FF"/>
 <path d="M694,122 C713.84,226.16 713.84,226.16 818,246 C713.84,265.84 713.84,265.84 694,370 C674.16,265.84 674.16,265.84 570,246 C674.16,226.16 674.16,226.16 694,122 Z" fill="url(#s)"/>
 <path d="M838,340 C846.32,383.68 846.32,383.68 890,392 C846.32,400.32 846.32,400.32 838,444 C829.68,400.32 829.68,400.32 786,392 C829.68,383.68 829.68,383.68 838,340 Z" fill="url(#s)" opacity="0.9"/>
 </g></defs><rect width="1024" height="1024" fill="#0A0A1F"/>

@@ -2,7 +2,7 @@ import sys
 def svg(variant):
     if variant == "tinted":
         bg = '<rect width="1024" height="1024" fill="#000"/>'
-        stroke = '#FFFFFF'; spark = '#FFFFFF'; glow = ''
+        stroke = '#FFFFFF'; spark = '#FFFFFF'; glow = ''; eye = '#FFFFFF'
         grad = ''
     else:
         base = "#0A0A1F" if variant == "light" else "#05050F"
@@ -10,7 +10,7 @@ def svg(variant):
 <circle cx="260" cy="230" r="560" fill="url(#g1)"/>
 <circle cx="860" cy="900" r="620" fill="url(#g2)"/>
 <circle cx="900" cy="160" r="420" fill="url(#g3)"/>'''
-        stroke = 'url(#u)'; spark = 'url(#s)'
+        stroke = 'url(#u)'; spark = 'url(#s)'; eye = '#E0F7FF'
         glow = '<use href="#mark" filter="url(#blur)" opacity="0.85"/>'
     grad = '''
 <radialGradient id="g1"><stop offset="0" stop-color="#7C3AED" stop-opacity="0.75"/><stop offset="1" stop-color="#7C3AED" stop-opacity="0"/></radialGradient>
@@ -29,6 +29,8 @@ def svg(variant):
                 f'C{cx-k},{cy-k} {cx-k},{cy-k} {cx},{cy-r} Z')
     mark = f'''<g id="mark">
 <path d="M330,300 V560 A182,182 0 0 0 694,560 V455" fill="none" stroke="{stroke}" stroke-width="150" stroke-linecap="round"/>
+<circle cx="448" cy="452" r="44" fill="{eye}"/>
+<circle cx="576" cy="452" r="44" fill="{eye}"/>
 <path d="{star(694,246,124)}" fill="{spark}"/>
 <path d="{star(838,392,52)}" fill="{spark}" opacity="0.9"/>
 </g>'''

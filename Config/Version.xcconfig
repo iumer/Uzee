@@ -1,4 +1,4 @@
 // The only place the version is set. Bump CURRENT_PROJECT_VERSION for every distributable build
 // (scripts/bump-build.sh) and record it in docs/BUILD_HISTORY.md.
-MARKETING_VERSION = 0.9.1
-CURRENT_PROJECT_VERSION = 10
+MARKETING_VERSION = 0.9.2
+CURRENT_PROJECT_VERSION = 11

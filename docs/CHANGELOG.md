@@ -8,6 +8,11 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
+## [0.9.2] build 11 — 2026-10-07 — Smiley logo
+
+### Changed
+- The icon's U is now a smile with two eyes. In the animated logo the eyes pop in after the U draws and blink every few seconds (open and still with Reduce Motion).
+
 ## [0.9.1] build 10 — 2026-10-07 — New app icon and animated logo
 
 ### Added
