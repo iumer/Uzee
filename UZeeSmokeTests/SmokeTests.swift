@@ -82,7 +82,7 @@ final class SmokeTests: XCTestCase {
     /// SMK-005 Main navigation loads · UI-001 Tab order
     func testSMK005_UI001_tabsInOrderAndOpen() {
         if app.tabBars.firstMatch.waitForExistence(timeout: 5) {
-            let labels = app.tabBars.firstMatch.buttons.allElementsBoundByIndex.map(\.label)
+            let labels = app.tabBars.firstMatch.buttons.allElementsBoundByIndex.map { $0.label }
             XCTAssertEqual(Array(labels.prefix(5)), tabs, "Tab order")
         }
         for tab in tabs {

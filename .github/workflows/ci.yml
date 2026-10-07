@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    # Docs-only pushes don't need the 25-minute simulator run.
+    paths-ignore: ['docs/**', '**/*.md']
   pull_request:
   workflow_dispatch:
 
@@ -43,7 +45,8 @@ jobs:
         run: xcrun simctl boot "$IPAD_ID" || true
       - name: Package tests
         run: |
-          for pkg in UZeeCore UZeeData UZeeSystem UZeeUI; do
+          # UZeeCore is pure Swift and already tested in core-linux.
+          for pkg in UZeeData UZeeSystem UZeeUI; do
             echo "::group::$pkg"
             scripts/ci-test-package.sh "$pkg" "$IPHONE_DEST"
             echo "::endgroup::"
