@@ -39,4 +39,7 @@ public enum Route: Hashable, Sendable {
     case account(UUID)
     case transaction(UUID)
     case exchangeRate
+    case recentlyDeleted
+    case categories
+    case tags
 }

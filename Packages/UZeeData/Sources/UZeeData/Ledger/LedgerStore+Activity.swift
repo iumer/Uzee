@@ -35,7 +35,7 @@ extension LedgerStore {
             if let ids {
                 guard !ids.isEmpty else { return [] }
                 condition += " AND id IN (\(Array(repeating: "?", count: ids.count).joined(separator: ",")))"
-                arguments = ids.map(\.uuidString)
+                arguments = ids.map { $0.uuidString }
             } else {
                 condition += " AND deleted_at <= ?"
                 arguments = [Timestamp.from(RecentlyDeleted.cutoff(now: now))]

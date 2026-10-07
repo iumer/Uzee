@@ -17,6 +17,9 @@ struct AddSheet: View {
     @State private var toAccountID: UUID?
     @State private var categoryID: UUID?
     @State private var payee = ""
+    /// The category filled in from the payee; replaced while the user hasn't picked another (CAT-007/008).
+    @State private var suggestedCategoryID: UUID?
+    @State private var remembered: [String: UUID]?
     @State private var note = ""
     @State private var date = Date()
     @State private var isPending = false
@@ -148,7 +151,17 @@ struct AddSheet: View {
             TextField(kind == .income ? "From (payer)" : "Paid to (payee)", text: $payee)
                 .textInputAutocapitalization(.words)
                 .accessibilityIdentifier("add.payee")
+                .onChange(of: payee) { _, newPayee in suggestCategory(for: newPayee) }
         }
+    }
+
+    private func suggestCategory(for payee: String) {
+        guard categoryID == nil || categoryID == suggestedCategoryID else { return }
+        if remembered == nil { remembered = (try? session.activity.rememberedCategories()) ?? [:] }
+        let pickable = ledger.categories.filter { $0.type == categoryType(for: kind) }
+        let suggestion = CategorySuggester.suggest(payee: payee, remembered: remembered ?? [:], categories: pickable)
+        categoryID = suggestion
+        suggestedCategoryID = suggestion
     }
 
     private var transferSection: some View {

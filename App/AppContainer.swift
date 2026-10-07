@@ -14,12 +14,18 @@ final class AppContainer {
     let database: AppDatabase?
     let session: AppSession
 
-    init(info: AppInfo, database: AppDatabase?) {
+    init(info: AppInfo, database: AppDatabase?, files: AttachmentStore? = nil) {
         self.info = info
         self.database = database
+        var activity = ActivityClient.unavailable
+        if let database, let files {
+            Self.cleanUp(database, files)
+            activity = Self.activityClient(database, files)
+        }
         session = AppSession(info: info, isDatabaseReady: database != nil,
                              sampleData: database.map(Self.sampleDataActions) ?? .unavailable,
-                             ledger: database.map(Self.ledgerClient) ?? .unavailable)
+                             ledger: database.map(Self.ledgerClient) ?? .unavailable,
+                             activity: activity)
     }
 
     static func live() -> AppContainer {
@@ -27,10 +33,12 @@ final class AppContainer {
         let arguments = ProcessInfo.processInfo.arguments
         do {
             // UI tests pass -uzee-in-memory so they never touch a real database.
-            let database = arguments.contains("-uzee-in-memory") ? try AppDatabase.inMemory() : try AppDatabase.onDisk()
+            let inMemory = arguments.contains("-uzee-in-memory")
+            let database = inMemory ? try AppDatabase.inMemory() : try AppDatabase.onDisk()
             let upToDate = try database.isUpToDate()
             Log.data.info("Database opened, migrations up to date: \(upToDate, privacy: .public)")
-            return AppContainer(info: info, database: database)
+            let files = inMemory ? try AttachmentStore.temporary() : try AttachmentStore.onDisk()
+            return AppContainer(info: info, database: database, files: files)
         } catch {
             Log.data.error("Database failed to open: \(String(describing: error), privacy: .private)")
             return AppContainer(info: info, database: nil)
@@ -74,6 +82,52 @@ final class AppContainer {
             deleteAccount: { try store.deleteAccount(id: $0) },
             hasTransactions: { try store.hasTransactions(accountID: $0) },
             setRate: { rate, currency in try store.setRate(rate, for: currency) }
+        )
+    }
+
+    /// Launch housekeeping: purge Recently Deleted items older than 30 days and stray receipt files (DATA-012).
+    private static func cleanUp(_ database: AppDatabase, _ files: AttachmentStore) {
+        let store = LedgerStore(database: database)
+        do {
+            files.remove(try store.purgeDeleted())
+            files.removeOrphans(keeping: try store.attachmentFileNames())
+        } catch {
+            Log.data.error("Launch clean-up failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    private static func activityClient(_ database: AppDatabase, _ files: AttachmentStore) -> ActivityClient {
+        let store = LedgerStore(database: database)
+        return ActivityClient(
+            deletedTransactions: { try store.deletedTransactions() },
+            restore: { try store.restore(transactionID: $0) },
+            purge: { ids in files.remove(try store.purgeDeleted(only: ids)) },
+            createCategory: { name, parent in try store.createCategory(name: name, parentID: parent) },
+            renameCategory: { id, name in try store.renameCategory(id: id, to: name) },
+            setCategoryHidden: { hidden, id in try store.setCategoryHidden(hidden, id: id) },
+            reorderCategories: { try store.reorderCategories($0) },
+            deleteCategory: { try store.deleteCategory(id: $0) },
+            mergeCategory: { source, target in try store.mergeCategory(source, into: target) },
+            categoryUsage: { try store.categoryUsage() },
+            rememberedCategories: { try store.rememberedCategories() },
+            tags: { try store.tags() },
+            createTag: { try store.createTag(name: $0) },
+            deleteTag: { try store.deleteTag(id: $0) },
+            tagMap: { try store.tagMap() },
+            setTags: { tags, id in try store.setTags(tags, transactionID: id) },
+            attachments: { try store.attachments(transactionID: $0) },
+            withAttachments: { try store.transactionsWithAttachments() },
+            addAttachment: { transactionID, kind, data in
+                let name = try files.write(data, kind: kind)
+                let file = ReceiptFile(transactionID: transactionID, kind: kind, fileName: name, byteCount: Int64(data.count))
+                do { try store.addAttachment(file) } catch { files.remove([name]); throw error }
+                Log.data.info("Receipt attached: \(kind.rawValue, privacy: .public)")
+                return file
+            },
+            removeAttachment: { id in
+                if let name = try store.removeAttachment(id: id) { files.remove([name]) }
+            },
+            fileURL: { files.url(for: $0.fileName) }
         )
     }
 

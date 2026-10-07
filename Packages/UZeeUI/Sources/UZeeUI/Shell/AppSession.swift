@@ -43,15 +43,25 @@ public final class AppSession {
     public private(set) var ledger: LedgerSnapshot = .empty()
     /// Non-deleted transactions, newest first.
     public private(set) var transactions: [MoneyTransaction] = []
+    /// All tags, and each transaction's tags (CAT-006).
+    public private(set) var tags: [MoneyTag] = []
+    public private(set) var tagMap: [UUID: Set<UUID>] = [:]
+    /// Transactions with a receipt, for the paperclip on rows.
+    public private(set) var withReceipts: Set<UUID> = []
+    /// Activity search and filters survive tab switches.
+    public var activityFilter = ActivityFilter()
 
     private let sampleData: SampleDataActions
     public let client: LedgerClient
+    public let activity: ActivityClient
 
-    public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable) {
+    public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
+                activity: ActivityClient = .unavailable) {
         self.info = info
         self.isDatabaseReady = isDatabaseReady
         self.sampleData = sampleData
         self.client = ledger
+        self.activity = activity
         isSampleMode = (try? sampleData.isActive()) ?? false
         reload()
     }
@@ -61,6 +71,9 @@ public final class AppSession {
         do {
             ledger = try client.snapshot()
             transactions = try client.transactions()
+            tags = try activity.tags()
+            tagMap = try activity.tagMap()
+            withReceipts = try activity.withAttachments()
         } catch {
             errorMessage = "Couldn't read your accounts. Close UZee and open it again."
         }
@@ -95,7 +108,7 @@ public final class AppSession {
         return true
     }
 
-    /// Soft delete; the row can come back from Recently Deleted (TXN-008, M3).
+    /// Soft delete; the row can come back from Recently Deleted (TXN-008, DATA-011).
     public func delete(_ transaction: MoneyTransaction) {
         do {
             try client.delete(transaction.id)
@@ -105,11 +118,14 @@ public final class AppSession {
         }
         reload()
         toasts.show("Deleted") { [weak self] in
-            guard let self else { return }
-            var restored = transaction
-            restored.deletedAt = nil
-            try? self.client.save(restored)
-            self.reload()
+            self?.restore(transaction.id, announce: false)
+        }
+    }
+
+    /// Brings a deleted transaction back with its legs, tags and receipts.
+    public func restore(_ id: UUID, announce: Bool = true) {
+        if perform("Couldn't restore. Try again.", { try activity.restore(id) }), announce {
+            toasts.show("Restored")
         }
     }
 

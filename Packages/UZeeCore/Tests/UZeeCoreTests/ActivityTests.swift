@@ -16,8 +16,8 @@ struct ActivityTests {
 
     func account(_ name: String) -> Account { accounts.first { $0.name == name }! }
 
-    func txn(_ day: Int, _ hour: Int, _ kind: TransactionKind = .expense, _ payee: String, _ category: UUID?, _ account: String,
-             _ amount: Money, share: Money? = nil, note: String? = nil) -> MoneyTransaction {
+    func txn(_ day: Int, _ hour: Int, _ payee: String, _ category: UUID?, _ account: String,
+             _ amount: Money, kind: TransactionKind = .expense, share: Money? = nil, note: String? = nil) -> MoneyTransaction {
         let date = Date(timeIntervalSince1970: 1_790_000_000 + Double(day * 86_400 + hour * 3_600))
         let leg = TransactionLeg(accountID: self.account(account).id, amount: kind == .income ? amount : try! amount.negated(), role: .main)
         return MoneyTransaction(kind: kind, occurredAt: date, localDate: LocalDate(year: 2026, month: 10, day: day),
@@ -32,7 +32,7 @@ struct ActivityTests {
             txn(5, 21, "Kababjees", cats[3].id, "SadaPay", rs(4_350)),
             txn(3, 13, "Careem", cats[4].id, "Easypaisa", rs(1_850)),
             txn(6, 9, "Shell, Gulberg", nil, "HBL", rs(14_517), note: "Full tank"),
-            txn(6, 12, .loanOut, "Usama", nil, "Easypaisa", rs(20_000))
+            txn(6, 12, "Usama", nil, "Easypaisa", rs(20_000), kind: .loanOut)
         ]
         var snapshot = LedgerSnapshot.empty()
         snapshot.accounts = accounts
@@ -102,7 +102,7 @@ struct ActivityTests {
     func rowText() {
         let rent = txn(1, 10, "Office rent", nil, "HBL", rs(60_000), share: rs(30_000))
         #expect(ActivityText.detail(rent) == "You paid Rs 60,000 · your share Rs 30,000")
-        #expect(ActivityText.detail(txn(6, 12, .loanOut, "Usama", nil, "Easypaisa", rs(20_000))) == "not spending")
+        #expect(ActivityText.detail(txn(6, 12, "Usama", nil, "Easypaisa", rs(20_000), kind: .loanOut)) == "not spending")
         #expect(ActivityText.detail(txn(5, 13, "Imtiaz", nil, "NayaPay", rs(8_940))) == nil)
     }
 

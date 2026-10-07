@@ -83,12 +83,20 @@ struct TransactionRow: View {
     let ledger: LedgerSnapshot
     /// When shown inside an account, the amount is this account's leg.
     var accountID: UUID?
+    /// Shows a paperclip when a receipt is attached.
+    var hasReceipt = false
 
     var body: some View {
         HStack(spacing: UZSpacing.l) {
             CategoryTile(group)
             VStack(alignment: .leading, spacing: UZSpacing.xxs) {
-                Text(title).font(.body).lineLimit(1)
+                HStack(spacing: UZSpacing.xs) {
+                    Text(title).font(.body).lineLimit(1)
+                    if hasReceipt {
+                        Image(systemName: "paperclip").font(.footnote).foregroundStyle(UZColor.label2)
+                            .accessibilityLabel("Receipt attached")
+                    }
+                }
                 Text(subtitle).font(.footnote).foregroundStyle(UZColor.label2).lineLimit(2)
             }
             Spacer(minLength: UZSpacing.m)
@@ -124,8 +132,9 @@ struct TransactionRow: View {
         } else if let path = ledger.categoryPath(transaction.categoryID), transaction.payeeName != nil {
             parts.append(path)
         }
-        if transaction.myShare != transaction.amount {
-            parts.append("your share " + MoneyFormatter.string(transaction.myShare))
+        if transaction.myShare != transaction.amount, let detail = ActivityText.detail(transaction) {
+            // "You paid Rs 60,000 · your share Rs 30,000" (TXN-021).
+            parts.append(detail)
         }
         if transaction.status == .pending { parts.append("Pending") }
         if accountID == nil, transaction.kind != .transfer,

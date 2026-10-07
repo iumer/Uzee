@@ -201,3 +201,20 @@ struct ActivityStoreTests {
         #expect(try store.transactions().isEmpty)
     }
 }
+
+@Suite("Attachment files")
+struct AttachmentFileTests {
+    @Test("ATT-003 files are written, found and removed with their rows")
+    func files() throws {
+        let files = try AttachmentStore.temporary()
+        let name = try files.write(Data([1, 2, 3]), kind: .pdf)
+        #expect(name.hasSuffix(".pdf"))
+        #expect(FileManager.default.fileExists(atPath: files.url(for: name).path))
+        let stray = try files.write(Data([9]), kind: .photo)
+        files.removeOrphans(keeping: [name])
+        #expect(!FileManager.default.fileExists(atPath: files.url(for: stray).path))
+        files.remove([name])
+        #expect(!FileManager.default.fileExists(atPath: files.url(for: name).path))
+        #expect(throws: AttachmentStore.Problem.empty) { try files.write(Data(), kind: .photo) }
+    }
+}

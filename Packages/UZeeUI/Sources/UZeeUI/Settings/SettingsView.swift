@@ -21,6 +21,18 @@ struct SettingsView: View {
                     }
                 }
                 .accessibilityIdentifier("settings.rate")
+                NavigationLink(value: Route.categories) {
+                    SettingsLabel("Categories", symbol: "square.grid.2x2", color: Color(uiColor: .systemOrange))
+                }
+                .accessibilityIdentifier("settings.categories")
+                NavigationLink(value: Route.tags) {
+                    SettingsLabel("Tags", symbol: "number", color: Color(uiColor: .systemTeal))
+                }
+                .accessibilityIdentifier("settings.tags")
+                NavigationLink(value: Route.recentlyDeleted) {
+                    SettingsLabel("Recently Deleted", symbol: "trash", color: Color(uiColor: .systemGray))
+                }
+                .accessibilityIdentifier("settings.deleted")
             }
             Section {
                 if session.isSampleMode {

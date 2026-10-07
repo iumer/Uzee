@@ -84,6 +84,9 @@ struct TabRoot: View {
                     case .account(let id): AccountDetailView(session: session, accountID: id)
                     case .transaction(let id): TransactionDetailView(session: session, transactionID: id)
                     case .exchangeRate: ExchangeRateView(session: session)
+                    case .recentlyDeleted: RecentlyDeletedView(session: session)
+                    case .categories: CategoriesView(session: session)
+                    case .tags: TagsView(session: session)
                     }
                 }
         }
