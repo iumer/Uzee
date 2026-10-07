@@ -150,7 +150,7 @@ struct TransactionEngineTests {
         return calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour))!
     }
 
-    func save(_ draft: TransactionDraft) throws -> Transaction {
+    func save(_ draft: TransactionDraft) throws -> MoneyTransaction {
         try TransactionValidator.build(draft, accounts: accounts, now: date(6))
     }
 

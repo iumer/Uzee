@@ -3,7 +3,7 @@ import Foundation
 /// Balances are derived, never typed or stored (ACC-03, DATA_MODEL §6).
 public enum BalanceCalculator {
     /// Opening balance plus every effective leg on this account dated on or after the opening date.
-    public static func balance(of account: Account, transactions: some Sequence<Transaction>) throws(MoneyError) -> Money {
+    public static func balance(of account: Account, transactions: some Sequence<MoneyTransaction>) throws(MoneyError) -> Money {
         var total = account.openingBalance
         for transaction in transactions where transaction.isEffective && transaction.localDate >= account.openingDate {
             for leg in transaction.legs where leg.accountID == account.id {
@@ -14,7 +14,7 @@ public enum BalanceCalculator {
     }
 
     /// Balance of every account, keyed by id.
-    public static func balances(of accounts: [Account], transactions: [Transaction]) throws(MoneyError) -> [UUID: Money] {
+    public static func balances(of accounts: [Account], transactions: [MoneyTransaction]) throws(MoneyError) -> [UUID: Money] {
         var result: [UUID: Money] = [:]
         for account in accounts { result[account.id] = account.openingBalance }
         for transaction in transactions where transaction.isEffective {
@@ -74,7 +74,7 @@ public struct PeriodTotals: Equatable, Sendable {
         self.income = income
     }
 
-    public static func compute(_ transactions: some Sequence<Transaction>, from start: LocalDate, through end: LocalDate,
+    public static func compute(_ transactions: some Sequence<MoneyTransaction>, from start: LocalDate, through end: LocalDate,
                                base: Currency, rates: [String: Decimal]) throws(MoneyError) -> PeriodTotals {
         var spending = Money.zero(base)
         var income = Money.zero(base)

@@ -21,8 +21,8 @@ struct AddSheet: View {
     @State private var date = Date()
     @State private var isPending = false
     @State private var problem: String?
-    @State private var review: Transaction?
-    @State private var editing: Transaction?
+    @State private var review: MoneyTransaction?
+    @State private var editing: MoneyTransaction?
     @State private var didLoad = false
     @FocusState private var amountFocused: Bool
 
@@ -257,7 +257,7 @@ struct AddSheet: View {
         return active.first?.id
     }
 
-    private func fill(from transaction: Transaction, keepDate: Bool) {
+    private func fill(from transaction: MoneyTransaction, keepDate: Bool) {
         let draft = TransactionValidator.draft(from: transaction)
         kind = Self.kinds.contains(draft.kind) ? draft.kind : .expense
         amountText = draft.amount.map(plainNumber) ?? ""
@@ -303,7 +303,7 @@ struct AddSheet: View {
         }
     }
 
-    private func confirmRows(_ transaction: Transaction) -> [ConfirmSheet.Row] {
+    private func confirmRows(_ transaction: MoneyTransaction) -> [ConfirmSheet.Row] {
         var rows: [ConfirmSheet.Row] = []
         if transaction.kind == .transfer {
             if let out = transaction.legs.first(where: { $0.role == .transferOut }), let from = ledger.account(out.accountID) {

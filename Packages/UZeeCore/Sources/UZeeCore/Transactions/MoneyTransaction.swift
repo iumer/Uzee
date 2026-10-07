@@ -19,7 +19,7 @@ public struct TransactionLeg: Hashable, Sendable {
 }
 
 /// A saved transaction with its legs (DATA_MODEL §3.6).
-public struct Transaction: Hashable, Sendable, Identifiable {
+public struct MoneyTransaction: Hashable, Sendable, Identifiable {
     public var id: UUID
     public var kind: TransactionKind
     public var status: TransactionStatus

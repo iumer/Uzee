@@ -24,9 +24,9 @@ public struct LedgerClient: Sendable {
     }
 
     public var snapshot: @Sendable () throws -> LedgerSnapshot
-    public var transactions: @Sendable () throws -> [Transaction]
+    public var transactions: @Sendable () throws -> [MoneyTransaction]
     public var lastUsedAccountID: @Sendable () throws -> UUID?
-    public var save: @Sendable (Transaction) throws -> Void
+    public var save: @Sendable (MoneyTransaction) throws -> Void
     public var delete: @Sendable (UUID) throws -> Void
     /// Undo right after saving: removes the row for good (TXN-013).
     public var discard: @Sendable (UUID) throws -> Void
@@ -38,9 +38,9 @@ public struct LedgerClient: Sendable {
     public var setRate: @Sendable (Decimal, Currency) throws -> Void
 
     public init(snapshot: @escaping @Sendable () throws -> LedgerSnapshot,
-                transactions: @escaping @Sendable () throws -> [Transaction],
+                transactions: @escaping @Sendable () throws -> [MoneyTransaction],
                 lastUsedAccountID: @escaping @Sendable () throws -> UUID?,
-                save: @escaping @Sendable (Transaction) throws -> Void,
+                save: @escaping @Sendable (MoneyTransaction) throws -> Void,
                 delete: @escaping @Sendable (UUID) throws -> Void,
                 discard: @escaping @Sendable (UUID) throws -> Void,
                 createAccount: @escaping @Sendable (NewAccount) throws -> Account,

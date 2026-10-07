@@ -48,11 +48,11 @@ public struct LedgerStore: Sendable {
     }
 
     /// Non-deleted transactions, newest first, optionally limited to a date range.
-    public func transactions(from start: LocalDate? = nil, through end: LocalDate? = nil) throws -> [Transaction] {
+    public func transactions(from start: LocalDate? = nil, through end: LocalDate? = nil) throws -> [MoneyTransaction] {
         try database.writer.read { db in try Self.fetchTransactions(db, from: start, through: end) }
     }
 
-    public func transaction(id: UUID) throws -> Transaction? {
+    public func transaction(id: UUID) throws -> MoneyTransaction? {
         try database.writer.read { db in try Self.fetchTransactions(db, from: nil, through: nil, id: id).first }
     }
 
@@ -138,7 +138,7 @@ public struct LedgerStore: Sendable {
 
     /// Inserts or replaces a transaction and its legs atomically (TXN-012).
     /// A transaction touching a sample account is itself sample, so removal never orphans it (PRV-04).
-    public func save(_ transaction: Transaction) throws {
+    public func save(_ transaction: MoneyTransaction) throws {
         try database.writer.write { db in try Self.save(transaction, db) }
     }
 
@@ -215,7 +215,7 @@ extension LedgerStore {
         return rates
     }
 
-    static func fetchTransactions(_ db: Database, from start: LocalDate?, through end: LocalDate?, id: UUID? = nil) throws -> [Transaction] {
+    static func fetchTransactions(_ db: Database, from start: LocalDate?, through end: LocalDate?, id: UUID? = nil) throws -> [MoneyTransaction] {
         var conditions = ["t.deleted_at IS NULL"]
         var arguments: [(any DatabaseValueConvertible)?] = []
         if let start { conditions.append("t.local_date >= ?"); arguments.append(start.description) }
@@ -245,7 +245,7 @@ extension LedgerStore {
             let rate: String? = row["fx_rate"]
             let deleted: Int64? = row["deleted_at"]
             let legs = (legsByTxn[row["id"]] ?? []).sorted { order($0.role) < order($1.role) }
-            return Transaction(
+            return MoneyTransaction(
                 id: id, kind: TransactionKind(rawValue: row["kind"]) ?? .expense,
                 status: TransactionStatus(rawValue: row["status"]) ?? .posted,
                 occurredAt: Timestamp.date(row["occurred_at"]), localDate: localDate, timeZoneID: row["time_zone_id"],
@@ -279,7 +279,7 @@ extension LedgerStore {
                              account.colorHex, account.sortOrder, account.archivedAt.map(Timestamp.from)])
     }
 
-    static func save(_ transaction: Transaction, _ db: Database) throws {
+    static func save(_ transaction: MoneyTransaction, _ db: Database) throws {
         var transaction = transaction
         let legAccounts = transaction.legs.map(\.accountID.uuidString)
         if !legAccounts.isEmpty {
@@ -322,7 +322,7 @@ extension LedgerStore {
         }
     }
 
-    private static func upsertPayee(_ name: String, transaction: Transaction, _ db: Database) throws -> String {
+    private static func upsertPayee(_ name: String, transaction: MoneyTransaction, _ db: Database) throws -> String {
         let key = NameKey.make(name)
         let account = transaction.legs.first?.accountID.uuidString
         if let existing = try String.fetchOne(db, sql: "SELECT id FROM payee WHERE name_key = ? AND is_sample = ? AND deleted_at IS NULL",

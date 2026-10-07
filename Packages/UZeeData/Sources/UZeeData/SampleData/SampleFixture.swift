@@ -105,7 +105,7 @@ enum SampleFixture {
                 legs.append(TransactionLeg(accountID: toID, amount: received, role: .transferIn))
                 fxRate = try TransferRate(foreign: seed.amount, base: received, tableRate: 280).rate
             }
-            let transaction = Transaction(
+            let transaction = MoneyTransaction(
                 kind: seed.kind, occurredAt: when, localDate: LocalDate(when, in: timeZone), timeZoneID: timeZone.identifier,
                 amount: seed.amount, myShare: seed.myShare, categoryID: seed.category.flatMap { categoryIDs[$0] },
                 payeeName: seed.payee, note: seed.note, fxRate: fxRate, source: .sample, legs: legs,

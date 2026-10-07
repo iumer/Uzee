@@ -1,3 +1,5 @@
+import Foundation
+
 /// The five tabs in order (SCREEN_INVENTORY §1.1), plus the detached "+" item.
 public enum AppTab: String, CaseIterable, Hashable, Sendable {
     case home, activity, budget, calendar, people

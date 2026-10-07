@@ -8,7 +8,7 @@ import UZeeCore
 @MainActor
 struct LedgerSessionTests {
     final class FakeLedger: @unchecked Sendable {
-        var saved: [UUID: Transaction] = [:]
+        var saved: [UUID: MoneyTransaction] = [:]
         var discarded: [UUID] = []
     }
 
@@ -23,8 +23,8 @@ struct LedgerSessionTests {
                           sampleData: .unavailable, ledger: client)
     }
 
-    func expense(_ amount: Int64) -> Transaction {
-        Transaction(kind: .expense, occurredAt: Date(), localDate: LocalDate(Date(), in: .current), timeZoneID: "Asia/Karachi",
+    func expense(_ amount: Int64) -> MoneyTransaction {
+        MoneyTransaction(kind: .expense, occurredAt: Date(), localDate: LocalDate(Date(), in: .current), timeZoneID: "Asia/Karachi",
                     amount: Money(major: amount, .pkr), legs: [TransactionLeg(accountID: UUID(), amount: Money(major: -amount, .pkr), role: .main)])
     }
 

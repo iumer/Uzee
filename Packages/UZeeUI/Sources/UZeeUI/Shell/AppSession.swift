@@ -42,7 +42,7 @@ public final class AppSession {
     /// Accounts, balances, categories and rates as of the last change.
     public private(set) var ledger: LedgerSnapshot = .empty()
     /// Non-deleted transactions, newest first.
-    public private(set) var transactions: [Transaction] = []
+    public private(set) var transactions: [MoneyTransaction] = []
 
     private let sampleData: SampleDataActions
     public let client: LedgerClient
@@ -74,7 +74,7 @@ public final class AppSession {
 
     /// Saves a new or edited transaction, then offers Undo for 5 seconds (AUD-13, TXN-013).
     @discardableResult
-    public func save(_ transaction: Transaction, isNew: Bool) -> Bool {
+    public func save(_ transaction: MoneyTransaction, isNew: Bool) -> Bool {
         let previous = isNew ? nil : transactions.first { $0.id == transaction.id }
         do {
             try client.save(transaction)
@@ -96,7 +96,7 @@ public final class AppSession {
     }
 
     /// Soft delete; the row can come back from Recently Deleted (TXN-008, M3).
-    public func delete(_ transaction: Transaction) {
+    public func delete(_ transaction: MoneyTransaction) {
         do {
             try client.delete(transaction.id)
         } catch {
@@ -171,7 +171,7 @@ public final class AppSession {
 public enum AddRequest: Equatable, Sendable {
     case new
     case transfer
-    case edit(Transaction)
+    case edit(MoneyTransaction)
     /// "Repeat this": same details, today's date, a new transaction (TXN-014).
-    case repeatOf(Transaction)
+    case repeatOf(MoneyTransaction)
 }

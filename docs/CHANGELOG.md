@@ -2,11 +2,32 @@
 
 All notable changes to UZee are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: `0.MILESTONE.PATCH` until 1.0.0 (see MILESTONE_PLAN.md, BUILD_HISTORY.md).
 
-No application version exists yet; entries below are documentation stages and are dated instead of versioned.
+Entries before 0.0.1 are documentation stages and are dated instead of versioned.
 
 ## [Unreleased]
 
-Nothing yet. Next: Milestone 1 (navigation shell, design system, settings, sample data) after owner approval.
+Milestone 2 (accounts and money engine) in progress.
+
+## [0.1.0] build 2 — 2026-10-07 — Milestone 1 Navigation shell & design system
+
+### Added
+- Five tabs (Home, Activity, Budget, Calendar, People), each keeping its own navigation.
+- Floating "+" button that opens the Add sheet from every tab.
+- Home toolbar: mic (Ask UZee placeholder) and Settings.
+- Settings: sample data on/off, version and database status rows.
+- Sample data banner on every tab while sample data is on, with one-step removal.
+- Design system components: AmountText, StatusBadge, cards, progress bar and ring, empty / skeleton / alert states, confirm sheet, "Saved · Undo" toast.
+- Component gallery (debug builds only).
+- PRD §22: Qibla direction and Namaz reminders added as later features.
+
+### Changed
+- Launch screen replaced by the tab shell; version and database status moved to Settings.
+- CI: the GitHub Mac simulator job runs only on manual runs and on `main`; pushes run Linux checks only. Day-to-day UI tests run on the owner's Mac simulator. iPad boots only after the iPhone step.
+- `main` branch created at 4fba7f0 (the 0.0.1 build).
+
+### Fixed
+- A sixth "+" tab pushed People into a "More" tab on iPhone; "+" is now a floating button.
+- The floating "+" did not open Add with a custom glass layer; it now uses Apple's `.glassProminent` button style.
 
 ## [0.0.1] build 1 — 2026-10-06 — Milestone 0 Foundation
 

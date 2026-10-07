@@ -147,7 +147,7 @@ struct LedgerTests {
         let snapshot = try store.snapshot()
         let hbl = account("HBL", snapshot)
         // The second leg points at an account that does not exist, so the FK check fails mid-write.
-        let broken = Transaction(kind: .transfer, occurredAt: date(6), localDate: LocalDate(date(6), in: karachi), timeZoneID: karachi.identifier,
+        let broken = MoneyTransaction(kind: .transfer, occurredAt: date(6), localDate: LocalDate(date(6), in: karachi), timeZoneID: karachi.identifier,
                                  amount: rs(5_000), legs: [TransactionLeg(accountID: hbl.id, amount: rs(-5_000), role: .transferOut),
                                                            TransactionLeg(accountID: UUID(), amount: rs(5_000), role: .transferIn)])
         #expect(throws: (any Error).self) { try store.save(broken) }

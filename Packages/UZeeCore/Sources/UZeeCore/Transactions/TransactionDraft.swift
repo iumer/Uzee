@@ -1,7 +1,7 @@
 import Foundation
 
 /// What the Add and Transfer sheets collect before saving. `TransactionValidator` turns it into a
-/// `Transaction` with the right legs, or explains what is wrong (TXN-009, SMK-012).
+/// `MoneyTransaction` with the right legs, or explains what is wrong (TXN-009, SMK-012).
 public struct TransactionDraft: Sendable, Equatable {
     public var kind: TransactionKind
     public var status: TransactionStatus
@@ -65,7 +65,7 @@ public enum TransactionValidator {
     /// Builds the transaction to save. `existing` keeps id and createdAt when editing.
     /// `base` and `tableRate` are used only to store the real rate of a cross-currency transfer.
     public static func build(_ draft: TransactionDraft, accounts: [Account], base: Currency = .pkr,
-                             existing: Transaction? = nil, now: Date = Date()) throws(TransactionProblem) -> Transaction {
+                             existing: MoneyTransaction? = nil, now: Date = Date()) throws(TransactionProblem) -> MoneyTransaction {
         guard let amount = draft.amount else { throw .missingAmount }
         guard amount.minorUnits > 0 else { throw .zeroAmount }
         guard let accountID = draft.accountID else { throw .missingAccount }
@@ -123,7 +123,7 @@ public enum TransactionValidator {
 
         let trimmedPayee = draft.payeeName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = draft.note?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return Transaction(
+        return MoneyTransaction(
             id: existing?.id ?? UUID(),
             kind: draft.kind,
             status: draft.status,
@@ -145,7 +145,7 @@ public enum TransactionValidator {
     }
 
     /// The draft that reproduces a saved transaction, for edit and "Repeat this" (TXN-014).
-    public static func draft(from transaction: Transaction, timeZone: TimeZone? = nil) -> TransactionDraft {
+    public static func draft(from transaction: MoneyTransaction, timeZone: TimeZone? = nil) -> TransactionDraft {
         let main = transaction.legs.first { $0.role != .transferIn }
         let incoming = transaction.legs.first { $0.role == .transferIn }
         return TransactionDraft(

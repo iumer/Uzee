@@ -79,7 +79,7 @@ struct AccountRow: View {
 
 /// One transaction in a list. Says what the money did; transfers and loans read "not spending" (TXN-021).
 struct TransactionRow: View {
-    let transaction: Transaction
+    let transaction: MoneyTransaction
     let ledger: LedgerSnapshot
     /// When shown inside an account, the amount is this account's leg.
     var accountID: UUID?

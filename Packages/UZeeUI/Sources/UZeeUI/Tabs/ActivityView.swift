@@ -49,7 +49,7 @@ struct ActivityView: View {
 
     private struct Day {
         let date: LocalDate
-        let transactions: [Transaction]
+        let transactions: [MoneyTransaction]
         let spending: Money
     }
 
@@ -79,7 +79,7 @@ struct TransactionDetailView: View {
         }
     }
 
-    private func content(_ transaction: Transaction) -> some View {
+    private func content(_ transaction: MoneyTransaction) -> some View {
         let ledger = session.ledger
         return List {
             Section {
