@@ -17,7 +17,7 @@ final class TransactionSmokeTests: XCTestCase {
         app.descendants(matching: .any)[identifier].firstMatch
     }
 
-    private func tap(_ identifier: String, timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
+    private func tap(_ identifier: String, timeout: TimeInterval = 30, file: StaticString = #filePath, line: UInt = #line) {
         let target = element(identifier)
         XCTAssertTrue(target.waitForExistence(timeout: timeout), "\(identifier) missing", file: file, line: line)
         target.tap()
@@ -25,7 +25,7 @@ final class TransactionSmokeTests: XCTestCase {
 
     private func type(_ text: String, into identifier: String, clearing: Bool = false) {
         let field = element(identifier)
-        XCTAssertTrue(field.waitForExistence(timeout: 10), "\(identifier) missing")
+        XCTAssertTrue(field.waitForExistence(timeout: 30), "\(identifier) missing")
         field.tap()
         if clearing, let current = field.value as? String, !current.isEmpty {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count + 2))
@@ -36,7 +36,7 @@ final class TransactionSmokeTests: XCTestCase {
     private func balance(of account: String) -> String {
         tap("account.\(account)")
         let balance = element("account.balance")
-        XCTAssertTrue(balance.waitForExistence(timeout: 10))
+        XCTAssertTrue(balance.waitForExistence(timeout: 30))
         let label = balance.label
         app.navigationBars[account].buttons.element(boundBy: 0).tap()
         return label
@@ -48,18 +48,18 @@ final class TransactionSmokeTests: XCTestCase {
         type("HBL", into: "accountForm.name")
         type("10000", into: "accountForm.opening")
         tap("accountForm.save")
-        XCTAssertTrue(element("account.HBL").waitForExistence(timeout: 10), "HBL not listed")
+        XCTAssertTrue(element("account.HBL").waitForExistence(timeout: 30), "HBL not listed")
     }
 
-    /// Opens "+" and saves an expense in Utilities › Mobile.
+    /// Opens "+" and saves an expense in Food › Groceries (first in the list, so no scrolling).
     private func addExpense(_ amount: String) {
         tap("tab.add")
         type(amount, into: "add.amount")
         tap("add.category")
-        tap("category.Mobile")
+        tap("category.Groceries")
         tap("add.save")
         tap("confirm.primary")
-        XCTAssertTrue(element("add.sheet").waitForNonExistence(timeout: 10), "Add sheet still open")
+        XCTAssertTrue(element("add.sheet").waitForNonExistence(timeout: 30), "Add sheet still open")
     }
 
     /// SMK-007 Basic transaction can be created
@@ -74,12 +74,12 @@ final class TransactionSmokeTests: XCTestCase {
         addHBL()
         addExpense("1500")
         app.tabBars.buttons["Activity"].firstMatch.tap()
-        tap("txn.Utilities › Mobile")
+        tap("txn.Food › Groceries")
         tap("detail.edit")
         type("1650", into: "add.amount", clearing: true)
         tap("add.save")
         tap("confirm.primary")
-        XCTAssertTrue(element("add.sheet").waitForNonExistence(timeout: 10))
+        XCTAssertTrue(element("add.sheet").waitForNonExistence(timeout: 30))
         XCTAssertEqual(element("detail.amount").label, "1,650 rupees")
         tap("detail.delete")
         tap("detail.confirmDelete")

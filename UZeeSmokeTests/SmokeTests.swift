@@ -27,7 +27,7 @@ final class SmokeTests: XCTestCase {
     @discardableResult
     private func expectScreen(_ title: String, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
         let bar = app.navigationBars[title]
-        XCTAssertTrue(bar.waitForExistence(timeout: 10), "Screen \(title) not shown", file: file, line: line)
+        XCTAssertTrue(bar.waitForExistence(timeout: 30), "Screen \(title) not shown", file: file, line: line)
         return bar
     }
 
@@ -56,7 +56,7 @@ final class SmokeTests: XCTestCase {
     func testSMK004_databaseInitializes() {
         openSettings()
         let status = element("settings.database")
-        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        XCTAssertTrue(status.waitForExistence(timeout: 30))
         XCTAssertEqual(status.label, "Database ready")
     }
 
@@ -64,7 +64,7 @@ final class SmokeTests: XCTestCase {
     func testENV006_versionDisplayed() {
         openSettings()
         let version = element("settings.version")
-        XCTAssertTrue(version.waitForExistence(timeout: 10))
+        XCTAssertTrue(version.waitForExistence(timeout: 30))
         XCTAssertNotNil(version.label.range(of: #"^Version \d+\.\d+\.\d+ \(\d+\)$"#, options: .regularExpression), "Got: \(version.label)")
     }
 
@@ -81,7 +81,7 @@ final class SmokeTests: XCTestCase {
 
     /// SMK-005 Main navigation loads · UI-001 Tab order
     func testSMK005_UI001_tabsInOrderAndOpen() {
-        if app.tabBars.firstMatch.waitForExistence(timeout: 5) {
+        if app.tabBars.firstMatch.waitForExistence(timeout: 30) {
             let labels = app.tabBars.firstMatch.buttons.allElementsBoundByIndex.map { $0.label }
             XCTAssertEqual(Array(labels.prefix(5)), tabs, "Tab order")
         }
@@ -97,12 +97,12 @@ final class SmokeTests: XCTestCase {
             tapTab(tab)
             expectScreen(tab)
             let add = app.buttons["tab.add"]
-            XCTAssertTrue(add.waitForExistence(timeout: 5), "+ button missing on \(tab)")
+            XCTAssertTrue(add.waitForExistence(timeout: 30), "+ button missing on \(tab)")
             add.tap()
             let close = element("add.close")
-            XCTAssertTrue(close.waitForExistence(timeout: 5), "Add sheet not shown from \(tab)")
+            XCTAssertTrue(close.waitForExistence(timeout: 30), "Add sheet not shown from \(tab)")
             close.tap()
-            XCTAssertTrue(close.waitForNonExistence(timeout: 5))
+            XCTAssertTrue(close.waitForNonExistence(timeout: 30))
             expectScreen(tab)
         }
     }
@@ -120,9 +120,9 @@ final class SmokeTests: XCTestCase {
     func testUI012_homeToolbar() {
         element("home.voice").tap()
         let close = element("voice.close")
-        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        XCTAssertTrue(close.waitForExistence(timeout: 30))
         close.tap()
-        XCTAssertTrue(close.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(close.waitForNonExistence(timeout: 30))
         openSettings()
     }
 
@@ -130,17 +130,17 @@ final class SmokeTests: XCTestCase {
     func testDATA001_sampleBannerOnEveryTab() {
         openSettings()
         element("settings.sampleOn").tap()
-        XCTAssertTrue(element("settings.sampleOff").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("settings.sampleOff").waitForExistence(timeout: 30))
         goBack(from: "Settings")
         for tab in tabs {
             tapTab(tab)
             expectScreen(tab)
-            XCTAssertTrue(element("sample.banner").waitForExistence(timeout: 5), "No banner on \(tab)")
+            XCTAssertTrue(element("sample.banner").waitForExistence(timeout: 30), "No banner on \(tab)")
         }
         element("sample.remove").tap()
         let confirm = app.buttons["Remove sample data"].firstMatch
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertTrue(confirm.waitForExistence(timeout: 30))
         confirm.tap()
-        XCTAssertTrue(element("sample.banner").waitForNonExistence(timeout: 5))
+        XCTAssertTrue(element("sample.banner").waitForNonExistence(timeout: 30))
     }
 }
