@@ -33,20 +33,29 @@ final class TransactionSmokeTests: XCTestCase {
         field.typeText(text)
     }
 
+    /// Reads an account's balance through "See all" → the Accounts list row, a standard List cell
+    /// (synthesized taps on the plain-style card links on Home are not delivered reliably).
     private func balance(of account: String) -> String {
-        tap("account.\(account)")
+        tap("home.accounts")
+        XCTAssertTrue(app.navigationBars["Accounts"].waitForExistence(timeout: 30), "Accounts did not open")
+        let row = app.cells.containing(.any, identifier: "account.\(account)").firstMatch
+        let target = row.waitForExistence(timeout: 10) ? row : element("account.\(account)")
+        XCTAssertTrue(target.waitForExistence(timeout: 30), "\(account) row missing")
+        target.tap()
         let balance = element("account.balance")
-        // A tap made while a sheet is still sliding away is dropped by iOS; try once more.
-        if !balance.waitForExistence(timeout: 5) { element("account.\(account)").tap() }
+        if !balance.waitForExistence(timeout: 5) { target.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)).tap() }
         XCTAssertTrue(balance.waitForExistence(timeout: 30), "Account detail did not open")
         let label = balance.value as? String ?? balance.label
         app.navigationBars[account].buttons.element(boundBy: 0).tap()
+        app.navigationBars["Accounts"].buttons.element(boundBy: 0).tap()
         return label
     }
 
     /// Account "HBL", PKR, opening Rs 10,000, created from the Home empty state.
     private func addHBL() {
         tap("home.addAccount")
+        // The sheet can be slow on a busy Mac; tap once more if it has not appeared.
+        if !element("accountForm.name").waitForExistence(timeout: 10), element("home.addAccount").exists { element("home.addAccount").tap() }
         type("HBL", into: "accountForm.name")
         type("10000", into: "accountForm.opening")
         tap("accountForm.save")
