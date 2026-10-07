@@ -40,17 +40,40 @@ jobs:
           xcodebuild -version
       - name: Pick simulators
         run: scripts/ci-pick-simulators.sh >> "$GITHUB_ENV"
-      - name: Start booting the iPad early
-        # A fresh iPad simulator spends ~6 min on first-boot data migration; let it run during the build.
-        run: xcrun simctl boot "$IPAD_ID" || true
-      - name: Package tests
+      - name: Decide whether to run the iPad smoke
+        # iPad smoke adds ~15 min, so it runs on main and on manual runs (before each milestone sign-off).
         run: |
-          # UZeeCore is pure Swift and already tested in core-linux.
-          for pkg in UZeeData UZeeSystem UZeeUI; do
+          if [ "$GITHUB_REF" = "refs/heads/main" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "RUN_IPAD=1" >> "$GITHUB_ENV"
+          else
+            echo "RUN_IPAD=0" >> "$GITHUB_ENV"
+          fi
+      - name: Start booting simulators early
+        # A fresh simulator spends minutes on first-boot data migration; let it run during the builds.
+        run: |
+          xcrun simctl boot "$IPHONE_ID" || true
+          if [ "$RUN_IPAD" = 1 ]; then xcrun simctl boot "$IPAD_ID" || true; fi
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            Packages/UZeeData/.build
+            Packages/UZeeSystem/.build
+            build/dd/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('Packages/*/Package.swift', '**/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+      - name: Package tests on the Mac host
+        # UZeeData and UZeeSystem also support macOS, so they test natively without a simulator.
+        # UZeeCore is pure Swift and already tested in core-linux.
+        run: |
+          for pkg in UZeeData UZeeSystem; do
             echo "::group::$pkg"
-            scripts/ci-test-package.sh "$pkg" "$IPHONE_DEST"
+            swift test --package-path "Packages/$pkg" 2>&1 | grep -E "error:|✔|✘|Test run|passed|failed" 
             echo "::endgroup::"
           done
+      - name: UZeeUI tests on iPhone simulator
+        # UZeeUI is iOS-only, so it needs the simulator.
+        run: scripts/ci-test-package.sh UZeeUI "$IPHONE_DEST"
       - name: Build app for testing
         timeout-minutes: 20
         run: |
@@ -66,6 +89,7 @@ jobs:
           scripts/ci-run-smoke.sh "$IPHONE_ID" iphone
           xcrun simctl shutdown "$IPHONE_ID" || true
       - name: Smoke UI tests on iPad
+        if: env.RUN_IPAD == '1'
         timeout-minutes: 25
         run: scripts/ci-run-smoke.sh "$IPAD_ID" ipad
       - name: Upload test results
