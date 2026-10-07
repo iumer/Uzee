@@ -101,7 +101,12 @@ public struct BudgetLine: Hashable, Sendable, Identifiable {
 
     public func state(warnPercent: Int) -> BudgetState {
         if spent.minorUnits > limit.minorUnits { return .over }
-        return usedBasisPoints >= warnPercent * 100 && limit.minorUnits > 0 ? .warning : .onTrack
+        // Exact comparison (spent / limit >= warn%), so 79.998% is not rounded up into a warning.
+        guard limit.minorUnits > 0 else { return .onTrack }
+        let (scaled, overflow) = spent.minorUnits.multipliedReportingOverflow(by: 100)
+        let (threshold, overflow2) = limit.minorUnits.multipliedReportingOverflow(by: Int64(warnPercent))
+        if overflow || overflow2 { return usedBasisPoints >= warnPercent * 100 ? .warning : .onTrack }
+        return scaled >= threshold ? .warning : .onTrack
     }
 }
 

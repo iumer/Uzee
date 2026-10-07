@@ -25,7 +25,8 @@ final class AppContainer {
         session = AppSession(info: info, isDatabaseReady: database != nil,
                              sampleData: database.map(Self.sampleDataActions) ?? .unavailable,
                              ledger: database.map(Self.ledgerClient) ?? .unavailable,
-                             activity: activity)
+                             activity: activity,
+                             budgets: database.map(Self.budgetClient) ?? .unavailable)
     }
 
     static func live() -> AppContainer {
@@ -94,6 +95,22 @@ final class AppContainer {
         } catch {
             Log.data.error("Launch clean-up failed: \(String(describing: error), privacy: .private)")
         }
+    }
+
+    private static func budgetClient(_ database: AppDatabase) -> BudgetClient {
+        let store = BudgetStore(database: database)
+        return BudgetClient(
+            settings: {
+                let settings = try store.settings()
+                return (settings.periodKind, settings.warnPercent)
+            },
+            setSettings: { kind, warn in try store.setSettings(.init(periodKind: kind, warnPercent: warn)) },
+            plan: { try store.plan(for: $0) },
+            existingPlans: { try store.existingPlans() },
+            save: { try store.save($0) },
+            firedAlerts: { try store.firedAlerts() },
+            markFired: { try store.markFired($0) }
+        )
     }
 
     private static func activityClient(_ database: AppDatabase, _ files: AttachmentStore) -> ActivityClient {

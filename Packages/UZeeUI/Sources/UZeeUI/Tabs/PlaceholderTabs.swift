@@ -1,15 +1,5 @@
 import SwiftUI
 
-/// Budget (SCR-11). Limits and progress arrive in M4.
-struct BudgetView: View {
-    var body: some View {
-        TabPlaceholder(title: "Budget") {
-            EmptyStateView("No budget for \(Date.now.formatted(.dateTime.month(.wide)))", systemImage: "chart.pie",
-                           description: "Set a monthly total and limits per category. Your spending still counts while you decide.")
-        }
-    }
-}
-
 /// Calendar (SCR-14). Month grid and due items arrive in M7.
 struct CalendarTabView: View {
     var body: some View {

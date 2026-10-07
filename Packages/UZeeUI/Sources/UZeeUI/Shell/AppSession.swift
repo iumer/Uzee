@@ -54,14 +54,16 @@ public final class AppSession {
     private let sampleData: SampleDataActions
     public let client: LedgerClient
     public let activity: ActivityClient
+    public let budgets: BudgetClient
 
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
-                activity: ActivityClient = .unavailable) {
+                activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable) {
         self.info = info
         self.isDatabaseReady = isDatabaseReady
         self.sampleData = sampleData
         self.client = ledger
         self.activity = activity
+        self.budgets = budgets
         isSampleMode = (try? sampleData.isActive()) ?? false
         reload()
     }

@@ -1,4 +1,5 @@
 import Foundation
+import UZeeCore
 
 /// The five tabs in order (SCREEN_INVENTORY §1.1), plus the detached "+" item.
 public enum AppTab: String, CaseIterable, Hashable, Sendable {
@@ -42,4 +43,6 @@ public enum Route: Hashable, Sendable {
     case recentlyDeleted
     case categories
     case tags
+    case budgetLimits
+    case budgetCategory(UUID, LocalDate)
 }
