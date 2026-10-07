@@ -22,7 +22,7 @@ jobs:
         run: |
           if grep -rnwE 'Double|Float' Packages/UZeeCore/Sources/UZeeCore/Money Packages/UZeeCore/Sources/UZeeCore/Accounts \
                Packages/UZeeCore/Sources/UZeeCore/Transactions Packages/UZeeCore/Sources/UZeeCore/Budget \
-               Packages/UZeeCore/Sources/UZeeCore/People \
+               Packages/UZeeCore/Sources/UZeeCore/People Packages/UZeeCore/Sources/UZeeCore/Recurring \
                Packages/UZeeData/Sources/UZeeData/Ledger | grep -v '///'; then
             echo "::error::Money code must use Int64 minor units and Decimal only"; exit 1
           fi

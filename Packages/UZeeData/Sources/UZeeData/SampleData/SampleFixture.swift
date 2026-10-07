@@ -233,6 +233,7 @@ enum SampleFixture {
             groupIDs[group.name] = (row.id, members)
         }
         var loans: [Loan] = []
+        var october: [String: UUID] = [:]
         let now = Date()
         for (seed, isDeleted) in history.map({ ($0, false) }) + transactions.map({ ($0, false) }) + deleted.map({ ($0, true) }) {
             let when = date(day: seed.day, hour: seed.hour, month: seed.month)
@@ -267,6 +268,7 @@ enum SampleFixture {
             }
             try LedgerStore.save(transaction, db)
             if let split { try PeopleStore.insertSplit(split, isSample: true, db) }
+            if seed.month == 10, !isDeleted, let payee = seed.payee { october[payee] = transaction.id }
             if let person, seed.kind == .loanOut || seed.kind == .loanIn {
                 loans.append(Loan(direction: seed.kind == .loanOut ? .lent : .borrowed, personID: person, principal: seed.amount,
                                   startDate: transaction.localDate, dueDate: seed.due, transactionID: transaction.id, isSample: true))
@@ -283,6 +285,82 @@ enum SampleFixture {
         for month in 4...10 {
             let plan = BudgetPlan(periodStart: LocalDate(year: 2026, month: month, day: 1), total: rs(235_000), limits: limits)
             try BudgetStore.write(plan, isSample: true, db)
+        }
+        try insertRecurring(db, accounts: accountIDs, categories: categoryIDs, people: personIDs,
+                            groups: groupIDs.mapValues(\.id), october: october)
+    }
+
+    /// Bills, subscriptions, income and plans (dataset "Recurring items and October calendar"). Tracked
+    /// from 1 Oct; the October items already paid link to their October transactions.
+    static func insertRecurring(_ db: Database, accounts: [String: UUID], categories: [String: UUID], people: [String: UUID],
+                                groups: [String: UUID], october: [String: UUID]) throws {
+        let oct1 = LocalDate(year: 2026, month: 10, day: 1)
+        func day(_ y: Int, _ m: Int, _ d: Int) -> LocalDate { LocalDate(year: y, month: m, day: d) }
+        func item(_ name: String, _ type: RecurringType, _ amount: Money, day d: Int, account: String?, category: String?,
+                  estimated: Bool = false, group: String? = nil, paidBy: String? = nil, anchor: LocalDate? = nil,
+                  limit: Int? = nil, paidBefore: Int = 0, status: SubscriptionStatus = .active, changed: LocalDate? = nil,
+                  started: LocalDate? = nil, color: String, prices: [PricePoint] = [], payouts: [KametiPayout] = [],
+                  notes: String? = nil) -> RecurringItem {
+            let first = anchor ?? day(2026, 10, d)
+            return RecurringItem(name: name, type: type, amount: amount, isEstimated: estimated, accountID: account.flatMap { accounts[$0] },
+                                 categoryID: category.flatMap { categories[$0] }, groupID: group.flatMap { groups[$0] },
+                                 paidByID: paidBy.flatMap { people[$0] }, rule: RecurrenceRule(anchor: first, limit: limit),
+                                 trackedFrom: max(oct1, first), paidBeforeTracking: paidBefore, status: status, statusChangedAt: changed,
+                                 startedOn: started ?? first, colorHex: color, priceHistory: prices, payouts: payouts, notes: notes,
+                                 isSample: true)
+        }
+        let items: [(RecurringItem, paid: String?)] = [
+            (item("Office rent", .rent, rs(60_000), day: 1, account: "HBL", category: "office.office_rent", group: "Office",
+                  started: day(2026, 4, 1), color: "#5856D6"), "Office rent"),
+            (item("Jazz postpaid", .bill, rs(1_500), day: 2, account: "HBL", category: "utilities.mobile", started: day(2026, 4, 2),
+                  color: "#FFCC00"), "Jazz postpaid"),
+            (item("iCloud+", .subscription, usd(299), day: 3, account: "Wise", category: "subscriptions.cloud_storage",
+                  started: day(2024, 11, 3), color: "#007AFF"), "iCloud+"),
+            (item("Office electricity · K-Electric", .utility, rs(12_800), day: 5, account: nil, category: "office.office_utilities",
+                  estimated: true, group: "Office", paidBy: "Office partner", started: day(2026, 4, 5), color: "#5856D6"),
+             "Office electricity · K-Electric"),
+            (item("Office reimbursement", .income, usd(25_000), day: 5, account: "Wise", category: "income.reimbursement",
+                  estimated: true, group: "Office", started: day(2026, 4, 5), color: "#34C759"), "Office reimbursement"),
+            (item("Gas bill · SNGPL", .utility, rs(3_250), day: 5, account: "HBL", category: "utilities.gas", estimated: true,
+                  started: day(2026, 4, 6), color: "#FFCC00"), nil),
+            (item("Internet · Nayatel", .bill, rs(6_500), day: 8, account: "HBL", category: "utilities.internet",
+                  started: day(2026, 4, 8), color: "#FFCC00"), nil),
+            (item("Car installment · Meezan", .installment, rs(45_000), day: 10, account: "Meezan", category: "transport.car_installment",
+                  anchor: day(2025, 8, 10), limit: 36, paidBefore: 14, color: "#007AFF", notes: "Car finance with Meezan Bank"), nil),
+            (item("Netflix", .subscription, rs(1_100), day: 12, account: "HBL", category: "subscriptions.streaming",
+                  started: day(2025, 1, 12), color: "#E50914",
+                  prices: [PricePoint(effectiveFrom: day(2025, 1, 12), amount: rs(950)),
+                           PricePoint(effectiveFrom: day(2026, 4, 12), amount: rs(1_100))]), nil),
+            (item("Kameti", .kameti, rs(20_000), day: 15, account: "Cash", category: "financial.kameti_contribution",
+                  anchor: day(2026, 6, 15), limit: 12, paidBefore: 4, color: "#00C7BE",
+                  payouts: [KametiPayout(expectedDate: day(2026, 12, 15), amount: rs(150_000)),
+                            KametiPayout(expectedDate: day(2027, 6, 15), amount: rs(150_000))],
+                  notes: "12 members · committee: Khala"), nil),
+            (item("ChatGPT Plus", .subscription, usd(2_000), day: 18, account: "Wise", category: "subscriptions.software_ai_tools",
+                  started: day(2025, 3, 18), color: "#10A37F"), nil),
+            (item("Claude Pro", .subscription, usd(2_000), day: 20, account: "Wise", category: "subscriptions.software_ai_tools",
+                  started: day(2025, 9, 20), color: "#D97757"), nil),
+            (item("Salary", .salary, usd(187_500), day: 21, account: "Wise", category: "income.salary", started: day(2024, 1, 21),
+                  color: "#34C759"), nil),
+            (item("YouTube Premium", .subscription, rs(479), day: 24, account: "HBL", category: "subscriptions.streaming",
+                  started: day(2025, 6, 24), color: "#FF0000"), nil),
+            (item("Office staff salaries", .bill, rs(70_000), day: 25, account: "HBL", category: "office.staff_salaries", group: "Office",
+                  started: day(2026, 4, 25), color: "#5856D6", notes: "Office boy 25,000 + sales agent 45,000"), nil),
+            (item("Spotify", .subscription, rs(449), day: 27, account: "HBL", category: "subscriptions.streaming",
+                  started: day(2024, 8, 27), color: "#1DB954"), nil),
+            (item("Amazon Prime Video", .subscription, rs(450), day: 9, account: "HBL", category: "subscriptions.streaming",
+                  status: .cancelled, changed: day(2026, 8, 9), started: day(2025, 2, 9), color: "#00A8E1"), nil)
+        ]
+        for (order, (recurring, paid)) in items.enumerated() {
+            try RecurringStore.write(recurring, db)
+            try db.execute(sql: "UPDATE recurring_item SET sort_order = ? WHERE id = ?", arguments: [order, recurring.id.uuidString])
+            for point in recurring.priceHistory {
+                try RecurringStore.addPrice(recurring.id, point, isSample: true, db)
+            }
+            if let paid, let txn = october[paid] {
+                try RecurringStore.upsertRecord(OccurrenceRecord(itemID: recurring.id, scheduledDate: recurring.rule.anchor, status: .paid,
+                                                                 transactionID: txn), isSample: true, db)
+            }
         }
     }
 }

@@ -44,6 +44,8 @@ public final class AppDatabase: Sendable {
         migrator.registerMigration("v5_budget") { db in try BudgetSchema.create(db) }
         // M5: people, groups, splits and loans (DATA_MODEL §3.13–3.16).
         migrator.registerMigration("v6_people") { db in try PeopleSchema.create(db) }
+        // M6: bills, subscriptions, plans and occurrences (DATA_MODEL §3.17–3.21).
+        migrator.registerMigration("v7_recurring") { db in try RecurringSchema.create(db) }
         return migrator
     }
 
