@@ -332,3 +332,14 @@ public enum CSVReader {
         return rows
     }
 }
+
+/// Why a statement file couldn't be read (IMP-06, IMP-007).
+public enum StatementFileProblem: Error, Equatable, Sendable {
+    /// Not a PDF or CSV UZee can open.
+    case unreadable
+    /// The PDF has a password.
+    case needsPassword
+    case wrongPassword
+    /// A scanned PDF: pictures of pages, no text.
+    case noText
+}

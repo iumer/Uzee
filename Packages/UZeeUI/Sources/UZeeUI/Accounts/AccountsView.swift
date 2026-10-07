@@ -98,6 +98,8 @@ struct AccountDetailView: View {
                 if !account.isArchived {
                     Button("Reconcile balance") { isReconciling = true }
                         .accessibilityIdentifier("account.reconcile")
+                    Button("Import statement") { session.openImport(account: accountID) }
+                        .accessibilityIdentifier("account.import")
                 }
             }
             Section("Transactions") {

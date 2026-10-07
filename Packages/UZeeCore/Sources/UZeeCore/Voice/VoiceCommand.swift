@@ -135,6 +135,17 @@ public enum VoiceRuleParser {
         return command
     }
 
+    /// One of `names` as said by the user or the on-device model ("hbl" → "HBL", "my mother" → "Ammi").
+    public static func resolve(_ said: String?, among names: [String]) -> String? {
+        guard let said, !said.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        let t = " " + normalise(said) + " "
+        if let match = longestMatch(names, in: t, allowPlural: true) { return match }
+        for group in aliases where group.contains(where: { t.contains(" " + $0 + " ") }) {
+            if let name = names.first(where: { group.contains(normalise($0)) }) { return name }
+        }
+        return nil
+    }
+
     // MARK: Text
 
     /// Lowercase words separated by single spaces, punctuation removed except inside numbers and "'".

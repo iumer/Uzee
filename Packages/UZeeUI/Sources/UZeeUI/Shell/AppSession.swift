@@ -34,7 +34,14 @@ public final class AppSession {
     }
     /// What the Add sheet opens with: a blank expense, a transfer, an edit or a repeat (TXN-014).
     public var addRequest: AddRequest = .new
-    public var isVoicePresented = false
+    public var isVoicePresented = false {
+        didSet { if !isVoicePresented { voiceRequest = nil } }
+    }
+    /// A sentence to handle as soon as Ask UZee opens (from Siri "Add to UZee").
+    public var voiceRequest: String?
+    /// Statement import (SCR-34), opened from Settings or an account.
+    public var importAccountID: UUID?
+    public var isImportPresented = false
     public private(set) var isSampleMode = false
     /// Last error shown to the user, in plain words (DESIGN_SYSTEM §15).
     public var errorMessage: String?
@@ -62,10 +69,11 @@ public final class AppSession {
     public let budgets: BudgetClient
     public let peopleClient: PeopleClient
     public let recurringClient: RecurringClient
+    public let smart: SmartClient
 
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
                 activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable,
-                recurring: RecurringClient = .unavailable) {
+                recurring: RecurringClient = .unavailable, smart: SmartClient = .unavailable) {
         self.info = info
         self.isDatabaseReady = isDatabaseReady
         self.sampleData = sampleData
@@ -74,6 +82,7 @@ public final class AppSession {
         self.budgets = budgets
         self.peopleClient = people
         self.recurringClient = recurring
+        self.smart = smart
         isSampleMode = (try? sampleData.isActive()) ?? false
         reload()
     }
@@ -93,6 +102,19 @@ public final class AppSession {
         } catch {
             errorMessage = "Couldn't read your accounts. Close UZee and open it again."
         }
+    }
+
+    /// Opens Ask UZee, optionally with a sentence to handle right away.
+    public func openVoice(_ request: String? = nil) {
+        isAddPresented = false
+        voiceRequest = request
+        isVoicePresented = true
+    }
+
+    /// Opens statement import, into `account` when given.
+    public func openImport(account: UUID? = nil) {
+        importAccountID = account
+        isImportPresented = true
     }
 
     /// Opens the Add sheet for something specific.

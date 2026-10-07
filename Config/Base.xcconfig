@@ -17,3 +17,5 @@ ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
 CODE_SIGN_STYLE = Automatic
 ENABLE_PREVIEWS = YES
 INFOPLIST_KEY_NSCameraUsageDescription = UZee uses the camera to photograph receipts you attach to transactions.
+INFOPLIST_KEY_NSMicrophoneUsageDescription = UZee listens when you tap the mic in Ask UZee, so you can ask about your money or log something by voice.
+INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = UZee turns what you say in Ask UZee into text on this iPhone. Your voice is not sent anywhere.

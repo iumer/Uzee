@@ -28,8 +28,12 @@ final class AppContainer {
                              activity: activity,
                              budgets: database.map(Self.budgetClient) ?? .unavailable,
                              people: database.map(Self.peopleClient) ?? .unavailable,
-                             recurring: database.map(Self.recurringClient) ?? .unavailable)
+                             recurring: database.map(Self.recurringClient) ?? .unavailable,
+                             smart: Self.smartClient())
     }
+
+    /// The one container, shared by the app scene and Siri (App Intents run in the app's process).
+    static let shared = AppContainer.live()
 
     static func live() -> AppContainer {
         let info = AppInfo(infoDictionary: Bundle.main.infoDictionary)
@@ -46,6 +50,26 @@ final class AppContainer {
             Log.data.error("Database failed to open: \(String(describing: error), privacy: .private)")
             return AppContainer(info: info, database: nil)
         }
+    }
+
+    /// Vision, PDFKit, Speech and Foundation Models adapters from UZeeSystem (M9, M10).
+    static func smartClient() -> SmartClient {
+        SmartClient(
+            readReceipt: { try ReceiptTextReader.lines(from: $0) },
+            readStatement: { url, password in
+                switch try StatementTextReader.read(url, password: password) {
+                case .lines(let lines): .lines(lines)
+                case .csv(let text): .csv(text)
+                }
+            },
+            understand: { text, vocabulary, today in
+                await VoiceUnderstanding.understand(text, vocabulary: vocabulary, today: today)
+            },
+            voiceModelProblem: { VoiceUnderstanding.modelProblem() },
+            requestSpeechAccess: { await SpeechListener.requestAccess() },
+            startListening: { try SpeechListener.shared.start($0) },
+            stopListening: { SpeechListener.shared.stop() },
+            cancelListening: { SpeechListener.shared.cancel() })
     }
 
     private static func sampleDataActions(_ database: AppDatabase) -> AppSession.SampleDataActions {

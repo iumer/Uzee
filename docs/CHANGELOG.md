@@ -8,6 +8,21 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
+## [0.9.0] build 9 — 2026-10-07 — Receipt scanning, Ask UZee voice and Siri, statement import (Mac tests pending)
+
+Built on the owner's request to continue until OCR, voice and PDF statement import work (2026-10-07 20:06 UTC).
+
+### Added
+- Receipt scanning in Add: take or choose a photo; UZee reads the total, date and shop on the iPhone (Vision), fills them in and attaches the photo when you save (AI-02).
+- Ask UZee: type or speak (on-device speech). Answers what you owe or are owed, budget left, spending by category and period, next bill, subscriptions, due before salary, upcoming bills and balances, using the same numbers as the screens (VOX-03). Logs expenses, income, transfers, loans and repayments from one sentence, asks a follow-up when something is missing ("Who did you lend it to?") and always shows an editable card before saving (VOX-04…07). Amounts like "20k", "1.5 lakh", "$20" and "two thousand five hundred".
+- Built-in rules understand common sentences on every iPhone; Apple Intelligence (Foundation Models) is used on the device only for sentences the rules don't understand. When it's off, UZee says so (VOX-08).
+- Siri: "Hey Siri, ask UZee" answers without opening the app; "Hey Siri, add to UZee" opens Ask UZee with the card; both also appear in Shortcuts and can go on the Action Button. Settings › Siri & voice explains this.
+- Statement import (Settings › Import bank statement, or Account › Import statement): PDF (with password prompt) or CSV, read on the iPhone; review screen with suggested categories, editable rows, money in/out from the balance column, and possible duplicates switched off; import in one step with Undo (IMP-01…04, IMP-07).
+
+### Notes
+- The statement reader handles the common "date · description · amount · balance" layout. Bank-specific readers (IMP-06/008) need one sample statement per bank.
+- Not yet: Control Center control and Lock Screen widget (need a widget extension), reminders/events by voice (VOX-012).
+
 ## [0.6.1] build 8 — 2026-10-07 — Sample data fix
 
 ### Fixed

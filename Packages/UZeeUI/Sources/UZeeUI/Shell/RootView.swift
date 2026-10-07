@@ -30,7 +30,10 @@ public struct RootView: View {
             AddSheet(session: session)
         }
         .sheet(isPresented: $session.isVoicePresented) {
-            VoiceSheet()
+            VoiceSheet(session: session)
+        }
+        .sheet(isPresented: $session.isImportPresented) {
+            ImportStatementView(session: session)
         }
         .alert("Something went wrong", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}

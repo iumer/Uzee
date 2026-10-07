@@ -35,6 +35,22 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.deleted")
             }
             Section {
+                Button {
+                    session.openImport()
+                } label: {
+                    SettingsLabel("Import bank statement", symbol: "square.and.arrow.down", color: Color(uiColor: .systemIndigo))
+                }
+                .accessibilityIdentifier("settings.import")
+                NavigationLink {
+                    SiriVoiceView(session: session)
+                } label: {
+                    SettingsLabel("Siri & voice", symbol: "waveform", color: Color(uiColor: .systemPurple))
+                }
+                .accessibilityIdentifier("settings.voice")
+            } header: {
+                Text("Import and voice")
+            }
+            Section {
                 if session.isSampleMode {
                     Button(role: .destructive) {
                         confirmingRemove = true

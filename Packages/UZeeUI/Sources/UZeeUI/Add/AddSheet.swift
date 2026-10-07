@@ -1,4 +1,6 @@
+import PhotosUI
 import SwiftUI
+import UIKit
 import UZeeCore
 
 /// Add or edit a transaction (SCR-05, TXN-01…07). Amount first; account defaults to the last used one;
@@ -32,6 +34,13 @@ struct AddSheet: View {
     @State private var hadSplit = false
     @State private var editing: MoneyTransaction?
     @State private var didLoad = false
+    /// Receipt photo read on the device (AI-02); attached to the transaction when it is saved.
+    @State private var receiptPhoto: Data?
+    @State private var receiptNote: String?
+    @State private var isReadingReceipt = false
+    @State private var showingCamera = false
+    @State private var showingPhotos = false
+    @State private var photoItem: PhotosPickerItem?
     @FocusState private var amountFocused: Bool
 
     private var ledger: LedgerSnapshot { session.ledger }
@@ -84,10 +93,26 @@ struct AddSheet: View {
                     let saved = reviewSplit != nil || hadSplit
                         ? session.save(transaction, split: reviewSplit, isNew: editing == nil)
                         : session.save(transaction, isNew: editing == nil)
-                    if saved { session.isAddPresented = false }
+                    if saved {
+                        attachReceipt(to: transaction.id)
+                        session.isAddPresented = false
+                    }
                 }
             }
             .onAppear(perform: load)
+            .photosPicker(isPresented: $showingPhotos, selection: $photoItem, matching: .images)
+            .onChange(of: photoItem) { _, item in
+                guard let item else { return }
+                photoItem = nil
+                Task {
+                    let data = try? await item.loadTransferable(type: Data.self)
+                    readReceipt(data)
+                }
+            }
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraPicker { image in readReceipt(image?.jpegData(compressionQuality: 0.9)) }
+                    .ignoresSafeArea()
+            }
             .onChange(of: accountID) { problem = nil }
             .onChange(of: kind) { _, newKind in
                 problem = nil
@@ -123,6 +148,81 @@ struct AddSheet: View {
                     .accessibilityLabel(kind == .transfer ? "Amount sent" : "Amount")
                     .accessibilityIdentifier("add.amount")
             }
+            if kind != .transfer && editing == nil { scanRow }
+        }
+    }
+
+    /// "Scan receipt": fills amount, date and shop from a photo, read on this iPhone (AI-02, J2 step 4).
+    @ViewBuilder
+    private var scanRow: some View {
+        if isReadingReceipt {
+            HStack(spacing: UZSpacing.m) {
+                ProgressView()
+                Text("Reading the receipt on this iPhone…").foregroundStyle(UZColor.label2)
+            }
+            .accessibilityIdentifier("add.readingReceipt")
+        } else {
+            Menu {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button("Take photo", systemImage: "camera") { showingCamera = true }
+                }
+                Button("Choose photo", systemImage: "photo") { showingPhotos = true }
+            } label: {
+                Label(receiptPhoto == nil ? "Scan receipt" : "Scan another receipt", systemImage: "doc.text.viewfinder")
+            }
+            .accessibilityIdentifier("add.scanReceipt")
+            if let receiptNote {
+                Text(receiptNote).font(.footnote).foregroundStyle(UZColor.label2)
+                    .accessibilityIdentifier("add.receiptNote")
+            }
+        }
+    }
+
+    private func readReceipt(_ data: Data?) {
+        guard let data, let image = UIImage(data: data) else {
+            session.errorMessage = "Couldn't read that photo. Try another one."
+            return
+        }
+        let jpeg = image.resizedForReceipt().jpegData(compressionQuality: 0.8) ?? data
+        receiptPhoto = jpeg
+        isReadingReceipt = true
+        let smart = session.smart
+        let currency = currency
+        let today = session.today
+        Task {
+            let lines = await Task.detached { (try? smart.readReceipt(jpeg)) ?? [] }.value
+            apply(ReceiptParser.read(lines, currency: currency, today: today))
+            isReadingReceipt = false
+        }
+    }
+
+    private func apply(_ reading: ReceiptReading) {
+        var filled: [String] = []
+        if let amount = reading.amount {
+            amountText = plainNumber(amount)
+            filled.append("amount")
+        }
+        if let day = reading.date {
+            let time = Calendar.current.dateComponents([.hour, .minute], from: Date())
+            date = Calendar.current.date(byAdding: time, to: day.startDate(in: .current)) ?? day.startDate(in: .current)
+            filled.append("date")
+        }
+        if let merchant = reading.merchant, payee.trimmingCharacters(in: .whitespaces).isEmpty {
+            payee = merchant
+            suggestCategory(for: merchant)
+            filled.append("shop")
+        }
+        receiptNote = filled.isEmpty
+            ? "Couldn't read this receipt. The photo will still be attached."
+            : "Filled \(ListFormatter.localizedString(byJoining: filled)) from the receipt. Check them before saving. The photo will be attached."
+    }
+
+    private func attachReceipt(to transactionID: UUID) {
+        guard let receiptPhoto else { return }
+        if session.perform("Saved, but couldn't attach the receipt. Attach it from the transaction.", {
+            _ = try session.activity.addAttachment(transactionID, .photo, receiptPhoto)
+        }) {
+            session.reload()
         }
     }
 
