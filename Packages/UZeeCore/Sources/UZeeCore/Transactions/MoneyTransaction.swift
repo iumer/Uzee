@@ -36,6 +36,10 @@ public struct MoneyTransaction: Hashable, Sendable, Identifiable {
     /// Real rate of a cross-currency transfer, base units per foreign unit (TXN-03).
     public var fxRate: Decimal?
     public var source: EntrySource
+    /// Settlement: the other person (SPL-08).
+    public var counterpartyID: UUID?
+    /// Settlement made inside a group.
+    public var groupID: UUID?
     public var legs: [TransactionLeg]
     public var createdAt: Date
     public var updatedAt: Date
@@ -45,7 +49,7 @@ public struct MoneyTransaction: Hashable, Sendable, Identifiable {
     public init(id: UUID = UUID(), kind: TransactionKind, status: TransactionStatus = .posted,
                 occurredAt: Date, localDate: LocalDate, timeZoneID: String, amount: Money, myShare: Money? = nil,
                 categoryID: UUID? = nil, payeeName: String? = nil, note: String? = nil, fxRate: Decimal? = nil,
-                source: EntrySource = .manual, legs: [TransactionLeg],
+                source: EntrySource = .manual, counterpartyID: UUID? = nil, groupID: UUID? = nil, legs: [TransactionLeg],
                 createdAt: Date = Date(), updatedAt: Date? = nil, deletedAt: Date? = nil, isSample: Bool = false) {
         self.id = id
         self.kind = kind
@@ -60,6 +64,8 @@ public struct MoneyTransaction: Hashable, Sendable, Identifiable {
         self.note = note
         self.fxRate = fxRate
         self.source = source
+        self.counterpartyID = counterpartyID
+        self.groupID = groupID
         self.legs = legs
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt

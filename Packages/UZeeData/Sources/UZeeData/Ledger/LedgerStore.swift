@@ -244,6 +244,8 @@ extension LedgerStore {
             guard let id = UUID(uuidString: row["id"]), let currency = Currency.known(code: row["currency_code"]),
                   let localDate = LocalDate(row["local_date"] as String) else { return nil }
             let category: String? = row["category_id"]
+            let counterparty: String? = row["counterparty_person_id"]
+            let group: String? = row["group_id"]
             let rate: String? = row["fx_rate"]
             let deleted: Int64? = row["deleted_at"]
             let legs = (legsByTxn[row["id"]] ?? []).sorted { order($0.role) < order($1.role) }
@@ -255,6 +257,7 @@ extension LedgerStore {
                 myShare: Money(minorUnits: row["my_share_minor"], currency: currency),
                 categoryID: category.flatMap(UUID.init(uuidString:)), payeeName: row["payee_name"], note: row["note"],
                 fxRate: rate.flatMap(ExchangeRate.fromStorage), source: EntrySource(rawValue: row["source"]) ?? .manual,
+                counterpartyID: counterparty.flatMap(UUID.init(uuidString:)), groupID: group.flatMap(UUID.init(uuidString:)),
                 legs: legs, createdAt: Timestamp.date(row["created_at"]), updatedAt: Timestamp.date(row["updated_at"]),
                 deletedAt: deleted.map(Timestamp.date), isSample: row["is_sample"])
         }
@@ -299,21 +302,24 @@ extension LedgerStore {
         try db.execute(sql: "DELETE FROM transaction_leg WHERE txn_id = ?", arguments: [id])
         try db.execute(sql: """
             INSERT INTO txn (id, created_at, updated_at, deleted_at, is_sample, kind, status, occurred_at, local_date, time_zone_id,
-                amount_minor, currency_code, my_share_minor, category_id, payee_id, note, fx_rate, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                amount_minor, currency_code, my_share_minor, category_id, payee_id, note, fx_rate, source,
+                counterparty_person_id, group_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
                 kind = excluded.kind, status = excluded.status, occurred_at = excluded.occurred_at,
                 local_date = excluded.local_date, time_zone_id = excluded.time_zone_id, amount_minor = excluded.amount_minor,
                 currency_code = excluded.currency_code, my_share_minor = excluded.my_share_minor,
                 category_id = excluded.category_id, payee_id = excluded.payee_id, note = excluded.note,
-                fx_rate = excluded.fx_rate, source = excluded.source
+                fx_rate = excluded.fx_rate, source = excluded.source,
+                counterparty_person_id = excluded.counterparty_person_id, group_id = excluded.group_id
             """, arguments: [id, Timestamp.from(transaction.createdAt), Timestamp.from(transaction.updatedAt),
                              transaction.deletedAt.map(Timestamp.from), transaction.isSample, transaction.kind.rawValue,
                              transaction.status.rawValue, Timestamp.from(transaction.occurredAt),
                              transaction.localDate.description, transaction.timeZoneID, transaction.amount.minorUnits,
                              transaction.amount.currency.code, transaction.myShare.minorUnits,
                              transaction.categoryID?.uuidString, payeeID, transaction.note,
-                             transaction.fxRate.map(ExchangeRate.storageString), transaction.source.rawValue])
+                             transaction.fxRate.map(ExchangeRate.storageString), transaction.source.rawValue,
+                             transaction.counterpartyID?.uuidString, transaction.groupID?.uuidString])
         for leg in transaction.legs {
             let now = Timestamp.from(transaction.updatedAt)
             try db.execute(sql: """

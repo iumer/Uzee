@@ -9,7 +9,7 @@ struct MigrationTests {
     @Test("Empty database gets every migration")
     func baseline() throws {
         let db = try AppDatabase.inMemory()
-        #expect(try db.appliedMigrations() == ["v1_baseline", "v2_device_settings", "v3_money", "v4_activity", "v5_budget"])
+        #expect(try db.appliedMigrations() == ["v1_baseline", "v2_device_settings", "v3_money", "v4_activity", "v5_budget", "v6_people"])
         #expect(try db.isUpToDate())
         let hasSettings = try db.writer.read { try $0.tableExists("settings") }
         #expect(hasSettings)
@@ -28,7 +28,7 @@ struct MigrationTests {
             }
         }
         let second = try AppDatabase(DatabaseQueue(path: path))
-        #expect(try second.appliedMigrations() == ["v1_baseline", "v2_device_settings", "v3_money", "v4_activity", "v5_budget"])
+        #expect(try second.appliedMigrations() == ["v1_baseline", "v2_device_settings", "v3_money", "v4_activity", "v5_budget", "v6_people"])
         let count = try second.writer.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM settings") }
         #expect(count == 1)
     }
