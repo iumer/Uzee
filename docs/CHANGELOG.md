@@ -8,6 +8,12 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
+## [0.9.3] build 12 — 2026-10-07 — "Wallet pal" icon
+
+### Changed
+- New app icon chosen by the owner: a smiling white wallet with a yellow and a blue card, on a fresh green background, with dark and tinted versions (source: docs/brand/make-icon.py).
+- The animated logo now matches: the wallet pops in, the cards slide up out of it, the face appears and smiles, then the cards bob and the eyes blink. The launch screen is green to match. Still with Reduce Motion.
+
 ## [0.9.2] build 11 — 2026-10-07 — Smiley logo
 
 ### Changed

@@ -1,166 +1,155 @@
 import SwiftUI
 
-/// The UZee mark: a smiling "U" with two eyes and sparkles, the same drawing as the app icon (docs/brand/uzee-icon.svg).
-/// Coordinates are in the icon's 1024-point space and scaled to the frame.
-struct LogoU: Shape {
-    func path(in rect: CGRect) -> Path {
-        let s = min(rect.width, rect.height) / 1024
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + x * s, y: rect.minY + y * s) }
-        var path = Path()
-        path.move(to: p(330, 300))
-        path.addLine(to: p(330, 560))
-        path.addArc(tangent1End: p(330, 742), tangent2End: p(512, 742), radius: 182 * s)
-        path.addArc(tangent1End: p(694, 742), tangent2End: p(694, 560), radius: 182 * s)
-        path.addLine(to: p(694, 455))
-        return path
-    }
-}
-
-/// A four-point sparkle centred at (`x`, `y`) with radius `r`, in icon space.
-struct LogoSparkle: Shape {
-    var x: CGFloat
-    var y: CGFloat
-    var r: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let s = min(rect.width, rect.height) / 1024
-        let c = CGPoint(x: rect.minX + x * s, y: rect.minY + y * s)
-        let radius = r * s
-        let k = radius * 0.16
-        var path = Path()
-        path.move(to: CGPoint(x: c.x, y: c.y - radius))
-        path.addCurve(to: CGPoint(x: c.x + radius, y: c.y), control1: CGPoint(x: c.x + k, y: c.y - k), control2: CGPoint(x: c.x + k, y: c.y - k))
-        path.addCurve(to: CGPoint(x: c.x, y: c.y + radius), control1: CGPoint(x: c.x + k, y: c.y + k), control2: CGPoint(x: c.x + k, y: c.y + k))
-        path.addCurve(to: CGPoint(x: c.x - radius, y: c.y), control1: CGPoint(x: c.x - k, y: c.y + k), control2: CGPoint(x: c.x - k, y: c.y + k))
-        path.addCurve(to: CGPoint(x: c.x, y: c.y - radius), control1: CGPoint(x: c.x - k, y: c.y - k), control2: CGPoint(x: c.x - k, y: c.y - k))
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// A round eye centred at (`x`, `y`) with radius `r`, in icon space.
-struct LogoEye: Shape {
-    var x: CGFloat
-    var y: CGFloat
-    var r: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let s = min(rect.width, rect.height) / 1024
-        return Path(ellipseIn: CGRect(x: rect.minX + (x - r) * s, y: rect.minY + (y - r) * s, width: 2 * r * s, height: 2 * r * s))
-    }
-}
-
-/// Animated UZee logo: the U draws itself in, its colours drift, the sparkles twinkle and the eyes blink.
-/// With Reduce Motion on it is shown still.
+/// Animated UZee logo, "Wallet pal": the same drawing as the app icon (docs/brand/uzee-icon.svg).
+/// The wallet pops in, two cards slide up out of it, the face appears, then the cards bob and the eyes blink.
+/// With Reduce Motion on it is shown still. Drawn in the icon's 1024-point space and scaled to the frame.
 struct UZeeLogo: View {
     var size: CGFloat = 64
-    /// Draw the dark gradient tile behind the mark, like the app icon.
+    /// Draw the green tile behind the wallet, like the app icon.
     var tile = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var drawn: CGFloat = 0
-
-    static let colors: [Color] = [Color(red: 0.13, green: 0.83, blue: 0.93), Color(red: 0.65, green: 0.55, blue: 0.98),
-                                  Color(red: 0.96, green: 0.45, blue: 0.71)]
+    @State private var start = Date()
 
     var body: some View {
         TimelineView(.animation(paused: reduceMotion)) { context in
-            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            ZStack {
-                if tile { background(t) }
-                mark(t)
+            let t = reduceMotion ? 10 : context.date.timeIntervalSince(start)
+            Canvas { gc, canvasSize in
+                gc.scaleBy(x: canvasSize.width / 1024, y: canvasSize.height / 1024)
+                draw(&gc, t: t, still: reduceMotion)
             }
             .frame(width: size, height: size)
         }
-        .onAppear {
-            if reduceMotion { drawn = 1 } else { withAnimation(.easeOut(duration: 1.1)) { drawn = 1 } }
-        }
+        .onAppear { start = .now }
         .accessibilityElement()
         .accessibilityLabel("UZee")
     }
 
-    private func gradient(_ t: Double) -> LinearGradient {
-        // The gradient's direction turns slowly, so the colours flow along the U.
-        let angle = t * 0.6
-        let dx = cos(angle) * 0.5, dy = sin(angle) * 0.5
-        return LinearGradient(colors: Self.colors, startPoint: UnitPoint(x: 0.5 - dx, y: 0.5 - dy), endPoint: UnitPoint(x: 0.5 + dx, y: 0.5 + dy))
+    private static func hex(_ value: UInt32) -> Color {
+        Color(red: Double((value >> 16) & 0xFF) / 255, green: Double((value >> 8) & 0xFF) / 255, blue: Double(value & 0xFF) / 255)
     }
 
-    private func mark(_ t: Double) -> some View {
-        let line = size * 150 / 1024
-        let pulse = 0.55 + 0.25 * sin(t * 2)
-        return ZStack {
-            LogoU().trim(from: 0, to: drawn)
-                .stroke(gradient(t), style: StrokeStyle(lineWidth: line, lineCap: .round))
-                .blur(radius: size * 0.035)
-                .opacity(pulse)
-            LogoU().trim(from: 0, to: drawn)
-                .stroke(gradient(t), style: StrokeStyle(lineWidth: line, lineCap: .round))
-            eye(LogoEye(x: 448, y: 452, r: 44), t: t)
-            eye(LogoEye(x: 576, y: 452, r: 44), t: t)
-            sparkle(LogoSparkle(x: 694, y: 246, r: 124), t: t, phase: 0)
-            sparkle(LogoSparkle(x: 838, y: 392, r: 52), t: t, phase: 1.7)
+    private static func ease(_ x: Double) -> CGFloat {
+        let c = max(0, min(1, x))
+        return CGFloat(1 - pow(1 - c, 3))
+    }
+
+    private func draw(_ gc: inout GraphicsContext, t: Double, still: Bool) {
+        let h = Self.hex
+        let pop = Self.ease(t / 0.5)
+        let cards = Self.ease((t - 0.3) / 0.6)
+        let face = Self.ease((t - 0.6) / 0.45)
+        let bob = still ? 0 : CGFloat(sin(t * 1.8)) * 7
+
+        if tile {
+            let tilePath = Path(roundedRect: CGRect(x: 0, y: 0, width: 1024, height: 1024), cornerRadius: 230, style: .continuous)
+            gc.fill(tilePath, with: .linearGradient(Gradient(colors: [h(0x43E3A6), h(0x0B9467)]),
+                                                    startPoint: .zero, endPoint: CGPoint(x: 0, y: 1024)))
+            gc.fill(tilePath, with: .radialGradient(Gradient(colors: [.white.opacity(0.32), .white.opacity(0)]),
+                                                    center: CGPoint(x: 225, y: 123), startRadius: 0, endRadius: 770))
         }
-    }
 
-    /// Eyes pop in after the U and blink every few seconds (open and still with Reduce Motion).
-    private func eye(_ shape: LogoEye, t: Double) -> some View {
-        let period = 3.6, closing = 0.18
-        let phase = t.truncatingRemainder(dividingBy: period)
-        let blink = phase < closing ? 1 - 0.9 * sin(phase / closing * .pi) : 1
-        let anchor = UnitPoint(x: shape.x / 1024, y: shape.y / 1024)
-        let shown = max(0, min(1, (drawn - 0.6) / 0.4))
-        return shape
-            .fill(Color(red: 0.88, green: 0.97, blue: 1))
-            .shadow(color: .white.opacity(0.6), radius: size * 0.02)
-            .scaleEffect(x: shown, y: shown * CGFloat(blink), anchor: anchor)
-            .opacity(Double(shown))
-    }
+        // Cards rise from behind the wallet, then bob gently.
+        let lift = (1 - cards) * 170
+        card(&gc, center: CGPoint(x: 482, y: 339 + lift + bob), angle: -10, colors: [h(0xFDE68A), h(0xFBBF24), h(0xF59E0B)], visible: cards)
+        card(&gc, center: CGPoint(x: 552, y: 361 + lift - bob * 0.7), angle: 6, colors: [h(0x93C5FD), h(0x60A5FA), h(0x3B82F6)], visible: cards)
 
-    private func sparkle(_ shape: LogoSparkle, t: Double, phase: Double) -> some View {
-        let twinkle = reduceMotion ? 1 : 0.82 + 0.18 * sin(t * 2.4 + phase)
-        let anchor = UnitPoint(x: shape.x / 1024, y: shape.y / 1024)
-        return shape
-            .fill(LinearGradient(colors: [.white, Color(red: 0.77, green: 0.71, blue: 0.99)], startPoint: .top, endPoint: .bottom))
-            .shadow(color: .white.opacity(0.7), radius: size * 0.03)
-            .scaleEffect(drawn * CGFloat(twinkle), anchor: anchor)
-            .rotationEffect(.degrees(reduceMotion ? 0 : sin(t * 0.8 + phase) * 8), anchor: anchor)
-            .opacity(Double(drawn))
-    }
+        // Wallet body pops in from its centre.
+        var wallet = gc
+        let k = 0.6 + 0.4 * pop
+        wallet.opacity = Double(pop)
+        wallet.translateBy(x: 512, y: 588)
+        wallet.scaleBy(x: k, y: k)
+        wallet.translateBy(x: -512, y: -588)
 
-    private func background(_ t: Double) -> some View {
-        let drift = CGFloat(sin(t * 0.5)) * 0.08
-        return RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
-            .fill(Color(red: 0.04, green: 0.04, blue: 0.12))
-            .overlay {
-                ZStack {
-                    RadialGradient(colors: [Color(red: 0.49, green: 0.23, blue: 0.93).opacity(0.75), .clear],
-                                   center: UnitPoint(x: 0.25 + drift, y: 0.22), startRadius: 0, endRadius: size * 0.55)
-                    RadialGradient(colors: [Color(red: 0.15, green: 0.39, blue: 0.92).opacity(0.7), .clear],
-                                   center: UnitPoint(x: 0.84 - drift, y: 0.88), startRadius: 0, endRadius: size * 0.6)
-                    RadialGradient(colors: [Color(red: 0.93, green: 0.28, blue: 0.6).opacity(0.45), .clear],
-                                   center: UnitPoint(x: 0.88, y: 0.16 + drift), startRadius: 0, endRadius: size * 0.42)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+        let bodyRect = CGRect(x: 200, y: 368, width: 624, height: 440)
+        let bodyPath = Path(roundedRect: bodyRect, cornerRadius: 104, style: .continuous)
+        wallet.drawLayer { layer in
+            layer.addFilter(.shadow(color: h(0x053B2A).opacity(0.38), radius: 30, x: 0, y: 28))
+            layer.fill(bodyPath, with: .linearGradient(Gradient(colors: [.white, h(0xE3F6EE)]),
+                                                       startPoint: CGPoint(x: 0, y: 368), endPoint: CGPoint(x: 0, y: 808)))
+        }
+        wallet.stroke(Path(roundedRect: bodyRect.insetBy(dx: 3, dy: 3), cornerRadius: 101, style: .continuous),
+                      with: .color(.white.opacity(0.9)), lineWidth: 6)
+        wallet.stroke(Path(roundedRect: CGRect(x: 236, y: 404, width: 552, height: 368), cornerRadius: 76, style: .continuous),
+                      with: .color(h(0xA7E3CB).opacity(0.9)), style: StrokeStyle(lineWidth: 7, lineCap: .round, dash: [2, 22]))
+
+        // Clasp and button.
+        let clasp = Path(roundedRect: CGRect(x: 640, y: 524, width: 222, height: 136), cornerRadius: 68, style: .continuous)
+        wallet.drawLayer { layer in
+            layer.addFilter(.shadow(color: h(0x053B2A).opacity(0.25), radius: 12, x: 0, y: 10))
+            layer.fill(clasp, with: .linearGradient(Gradient(colors: [h(0xE7FBF2), h(0xBDEFD9)]),
+                                                    startPoint: CGPoint(x: 0, y: 524), endPoint: CGPoint(x: 0, y: 660)))
+        }
+        wallet.fill(Path(ellipseIn: CGRect(x: 682, y: 562, width: 60, height: 60)),
+                    with: .radialGradient(Gradient(colors: [h(0x34D399), h(0x047857)]), center: CGPoint(x: 703, y: 580), startRadius: 0, endRadius: 48))
+        wallet.fill(Path(ellipseIn: CGRect(x: 698, y: 571, width: 18, height: 18)), with: .color(.white.opacity(0.7)))
+
+        // Face: cheeks, blinking eyes and a smile that draws itself.
+        var faceLayer = wallet
+        faceLayer.opacity = Double(pop) * Double(face)
+        let ink = h(0x0A4D38)
+        for cx: CGFloat in [338, 582] {
+            faceLayer.fill(Path(ellipseIn: CGRect(x: cx - 34, y: 592, width: 68, height: 40)), with: .color(h(0x6EE7B7).opacity(0.55)))
+        }
+        let open = blink(t, still: still) * face
+        for cx: CGFloat in [398, 516] {
+            let eyeHeight = 80 * open
+            faceLayer.fill(Path(ellipseIn: CGRect(x: cx - 40, y: 540 - eyeHeight / 2, width: 80, height: eyeHeight)), with: .color(ink))
+            if open > 0.6 {
+                faceLayer.fill(Path(ellipseIn: CGRect(x: cx - 2, y: 514, width: 24, height: 24)), with: .color(.white.opacity(0.9)))
             }
+        }
+        var smile = Path()
+        smile.move(to: CGPoint(x: 372, y: 644))
+        smile.addQuadCurve(to: CGPoint(x: 542, y: 644), control: CGPoint(x: 457, y: 722))
+        faceLayer.stroke(smile.trimmedPath(from: 0, to: face), with: .color(ink), style: StrokeStyle(lineWidth: 40, lineCap: .round))
+    }
+
+    /// 1 when the eyes are open; dips towards 0.1 for a quick blink every few seconds.
+    private func blink(_ t: Double, still: Bool) -> CGFloat {
+        guard !still, t > 1.2 else { return 1 }
+        let period = 3.6, closing = 0.18
+        let phase = (t - 1.2).truncatingRemainder(dividingBy: period)
+        return phase < closing ? CGFloat(1 - 0.9 * sin(phase / closing * .pi)) : 1
+    }
+
+    private func card(_ gc: inout GraphicsContext, center: CGPoint, angle: Double, colors: [Color], visible: CGFloat) {
+        var c = gc
+        c.opacity = Double(visible)
+        c.translateBy(x: center.x, y: center.y)
+        c.rotate(by: .degrees(angle))
+        let rect = CGRect(x: -200, y: -125, width: 400, height: 250)
+        let shape = Path(roundedRect: rect, cornerRadius: 40, style: .continuous)
+        c.drawLayer { layer in
+            layer.addFilter(.shadow(color: Self.hex(0x053B2A).opacity(0.25), radius: 12, x: 0, y: 10))
+            layer.fill(shape, with: .linearGradient(Gradient(colors: colors), startPoint: CGPoint(x: -200, y: -125), endPoint: CGPoint(x: 200, y: 125)))
+        }
+        var inside = c
+        inside.clip(to: shape)
+        inside.fill(Path(CGRect(x: -200, y: -63, width: 400, height: 44)), with: .color(.black.opacity(0.1)))
+        inside.fill(Path(roundedRect: CGRect(x: -156, y: 7, width: 70, height: 52), cornerRadius: 12), with: .color(Self.hex(0xFFF7D6).opacity(0.85)))
+        c.stroke(Path(roundedRect: rect.insetBy(dx: 2, dy: 2), cornerRadius: 38, style: .continuous), with: .color(.white.opacity(0.45)), lineWidth: 4)
     }
 }
 
-/// Shown for a moment at launch: the icon tile draws in, then fades into the app.
+/// Shown for a moment at launch: the wallet tile animates in, then fades into the app.
 struct LaunchSplash: View {
     @Binding var isShowing: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            Color(red: 0.04, green: 0.04, blue: 0.12).ignoresSafeArea()
+            LinearGradient(colors: [Color(red: 0.06, green: 0.24, blue: 0.18), Color(red: 0.02, green: 0.08, blue: 0.06)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
             VStack(spacing: 18) {
                 UZeeLogo(size: 132, tile: true)
-                    .shadow(color: Color(red: 0.49, green: 0.23, blue: 0.93).opacity(0.5), radius: 30)
+                    .shadow(color: Color(red: 0.2, green: 0.83, blue: 0.6).opacity(0.45), radius: 30)
                 Text("UZee").font(.system(.title, design: .rounded, weight: .bold)).foregroundStyle(.white)
             }
         }
         .task {
-            try? await Task.sleep(for: .milliseconds(reduceMotion ? 500 : 1_400))
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 500 : 1_500))
             withAnimation(.easeInOut(duration: 0.45)) { isShowing = false }
         }
         .accessibilityHidden(true)
