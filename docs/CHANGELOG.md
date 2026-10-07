@@ -8,6 +8,12 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
+## [0.9.1] build 10 — 2026-10-07 — New app icon and animated logo
+
+### Added
+- App icon: a glowing cyan-to-pink "U" with AI sparkles on a deep violet and blue background, with dark and tinted versions for the Home Screen (source: docs/brand/uzee-icon.svg, docs/brand/make-icon.py).
+- Animated logo: the U draws itself in, its colours flow and the sparkles twinkle. Shown briefly at launch and at the top of Ask UZee; still when Reduce Motion is on.
+
 ## [0.9.0] build 9 — 2026-10-07 — Receipt scanning, Ask UZee voice and Siri, statement import (Mac tests pending)
 
 Built on the owner's request to continue until OCR, voice and PDF statement import work (2026-10-07 20:06 UTC).

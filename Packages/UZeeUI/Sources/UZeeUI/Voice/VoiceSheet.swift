@@ -90,9 +90,7 @@ struct VoiceSheet: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: UZSpacing.l) {
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(UZColor.tint)
+            UZeeLogo(size: 64, tile: true)
                 .accessibilityHidden(true)
             Text("Ask about your money, or log something").font(.title3.weight(.semibold))
             Text("Everything stays on this iPhone. Nothing is saved until you check it and tap Save.")

@@ -5,6 +5,8 @@ import UZeeCore
 /// `.sidebarAdaptable` gives iPad a sidebar with the same destinations; compact widths keep the tab bar.
 public struct RootView: View {
     @Bindable var session: AppSession
+    /// The animated logo at launch; UI tests (-uzee-in-memory) skip it.
+    @State private var showingSplash = !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory")
 
     public init(session: AppSession) {
         self.session = session
@@ -41,6 +43,11 @@ public struct RootView: View {
             Text(session.errorMessage ?? "")
         }
         .toastOverlay(session.toasts)
+        .overlay {
+            if showingSplash {
+                LaunchSplash(isShowing: $showingSplash).transition(.opacity)
+            }
+        }
     }
 
     private var errorBinding: Binding<Bool> {
