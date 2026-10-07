@@ -28,6 +28,8 @@ struct HomeView: View {
                                 .accessibilityIdentifier("home.addAccount")
                         }
                     }
+                    // .contain keeps child identifiers visible to UI tests.
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("home.empty")
                 } else {
                     availableCard

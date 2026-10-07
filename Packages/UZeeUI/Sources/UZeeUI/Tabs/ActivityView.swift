@@ -32,6 +32,8 @@ struct ActivityView: View {
                 EmptyStateView("No transactions yet", systemImage: "list.bullet.rectangle",
                                description: "Everything you spend, earn and transfer will be listed here by day.",
                                actionTitle: "Add") { session.openAdd(.new) }
+                    // .contain keeps child identifiers visible to UI tests.
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("activity.empty")
             }
         }

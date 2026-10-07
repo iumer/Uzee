@@ -85,6 +85,8 @@ struct AddSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationSizing(.form)
+        // .contain keeps child identifiers visible to UI tests.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("add.sheet")
     }
 
