@@ -8,6 +8,12 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
+## [0.6.1] build 8 — 2026-10-07 — Sample data fix
+
+### Fixed
+- Sample data failed to turn on when you had a real account with the same name as a sample one (for example "Hbl" and sample "HBL"). Account names now only need to be unique among real accounts, and separately among sample accounts. Migration `v8_sample_account_names`.
+- Debug builds show the real error when sample data fails.
+
 ## [0.6.0] build 7 — 2026-10-07 — Milestones 6–8 Bills, Calendar, Home and Reports (Mac UI tests pending)
 
 ### Added

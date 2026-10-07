@@ -46,6 +46,11 @@ public final class AppDatabase: Sendable {
         migrator.registerMigration("v6_people") { db in try PeopleSchema.create(db) }
         // M6: bills, subscriptions, plans and occurrences (DATA_MODEL §3.17–3.21).
         migrator.registerMigration("v7_recurring") { db in try RecurringSchema.create(db) }
+        // 0.6.1: a real account may share a name with a sample account (a real "Hbl" blocked sample "HBL").
+        migrator.registerMigration("v8_sample_account_names") { db in
+            try db.execute(sql: "DROP INDEX account_name")
+            try db.execute(sql: "CREATE UNIQUE INDEX account_name ON account(name_key, is_sample) WHERE deleted_at IS NULL")
+        }
         return migrator
     }
 

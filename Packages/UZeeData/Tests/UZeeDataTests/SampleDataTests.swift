@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import GRDB
+import UZeeCore
 @testable import UZeeData
 
 /// DATA-002 (mechanism) and DATA-003: removing sample data deletes only `is_sample = 1` rows,
@@ -66,5 +67,26 @@ struct SampleDataTests {
         try store.setSampleModeActive(false)
         let rows = try database.writer.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM device_settings") }
         #expect(rows == 1)
+    }
+
+    // Bug on 0.6.0: a real account named "Hbl" made sample data fail, because sample data has "HBL".
+    @Test("Sample data loads beside a real account with the same name")
+    func realAccountSameName() throws {
+        let database = try AppDatabase.inMemory()
+        let ledger = LedgerStore(database: database)
+        let real = try ledger.createAccount(name: "Hbl", kind: .bank, currency: .pkr, openingDate: LocalDate(year: 2026, month: 10, day: 1))
+        let service = SampleDataService(database: database)
+        try service.load()
+        let sampleHBL = try database.writer.read {
+            try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM account WHERE name_key = ? AND is_sample = 1", arguments: [NameKey.make("HBL")])
+        }
+        #expect(sampleHBL == 1)
+        _ = try service.removeAll()
+        let left = try database.writer.read { try String.fetchAll($0, sql: "SELECT id FROM account") }
+        #expect(left == [real.id.uuidString])
+        // Two real accounts still can't share a name.
+        #expect(throws: LedgerStore.Problem.duplicateName) {
+            try ledger.createAccount(name: "HBL", kind: .bank, currency: .pkr, openingDate: LocalDate(year: 2026, month: 10, day: 1))
+        }
     }
 }

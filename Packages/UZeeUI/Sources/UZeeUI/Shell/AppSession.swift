@@ -258,7 +258,11 @@ public final class AppSession {
             reload()
             toasts.show("Sample data on")
         } catch {
+            #if DEBUG
+            errorMessage = "Couldn't turn on sample data. \(error)"
+            #else
             errorMessage = "Couldn't turn on sample data. Try again."
+            #endif
         }
     }
 

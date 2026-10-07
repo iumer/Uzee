@@ -72,7 +72,7 @@ public struct LedgerStore: Sendable {
     public func createAccount(name: String, kind: AccountKind, currency: Currency, openingBalance: Money? = nil,
                               openingDate: LocalDate, includeInTotals: Bool = true, colorHex: String = "#007AFF") throws -> Account {
         try database.writer.write { db in
-            let existing = try String.fetchAll(db, sql: "SELECT name FROM account WHERE deleted_at IS NULL")
+            let existing = try String.fetchAll(db, sql: "SELECT name FROM account WHERE deleted_at IS NULL AND is_sample = 0")
             let cleanName: String
             do { cleanName = try Account.validateName(name, existingNames: existing) } catch {
                 if (error as? Account.Problem) == .duplicateName { throw Problem.duplicateName }
@@ -90,8 +90,10 @@ public struct LedgerStore: Sendable {
         try database.writer.write { db in
             guard let row = try Row.fetchOne(db, sql: "SELECT currency_code FROM account WHERE id = ? AND deleted_at IS NULL",
                                              arguments: [account.id.uuidString]) else { throw Problem.notFound }
-            let others = try String.fetchAll(db, sql: "SELECT name FROM account WHERE deleted_at IS NULL AND id != ?",
-                                             arguments: [account.id.uuidString])
+            let others = try String.fetchAll(db, sql: """
+                SELECT name FROM account WHERE deleted_at IS NULL AND id != ?1
+                  AND is_sample = (SELECT is_sample FROM account WHERE id = ?1)
+                """, arguments: [account.id.uuidString])
             do { _ = try Account.validateName(account.name, existingNames: others) } catch {
                 if (error as? Account.Problem) == .duplicateName { throw Problem.duplicateName }
                 throw error
