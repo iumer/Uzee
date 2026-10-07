@@ -32,10 +32,17 @@ final class ActivitySmokeTests: XCTestCase {
     }
 
     private func openActivity() {
-        app.navigationBars["Settings"].buttons.element(boundBy: 0).tap()
-        let tab = app.tabBars.buttons["Activity"]
-        if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons["Activity"].firstMatch.tap() }
-        XCTAssertTrue(app.navigationBars["Activity"].waitForExistence(timeout: 30))
+        let settings = app.navigationBars["Settings"]
+        settings.buttons.element(boundBy: 0).tap()
+        // Wait for the pop to finish; a tab tap during the transition can be dropped.
+        _ = settings.waitForNonExistence(timeout: 10)
+        let activity = app.navigationBars["Activity"]
+        for _ in 0..<2 where !activity.exists {
+            let tab = app.tabBars.buttons["Activity"]
+            if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons["Activity"].firstMatch.tap() }
+            if activity.waitForExistence(timeout: 15) { break }
+        }
+        XCTAssertTrue(activity.waitForExistence(timeout: 15), "Activity didn't open")
     }
 
     private func search(_ text: String) {

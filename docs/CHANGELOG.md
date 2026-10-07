@@ -14,6 +14,10 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 - New app icon chosen by the owner: a smiling white wallet with a yellow and a blue card, on a fresh green background, with dark and tinted versions (source: docs/brand/make-icon.py).
 - The animated logo now matches: the wallet pops in, the cards slide up out of it, the face appears and smiles, then the cards bob and the eyes blink. The launch screen is green to match. Still with Reduce Motion.
 
+### Fixed
+- Ask UZee: when a confirmation card appears, the keyboard drops so the whole card, including Save, is on screen.
+- Smoke tests: opening Activity waits for the Settings pop to finish, and the lend-card test reports the card's problem if saving fails.
+
 ## [0.9.2] build 11 — 2026-10-07 — Smiley logo
 
 ### Changed

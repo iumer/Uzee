@@ -55,7 +55,10 @@ final class SmartSmokeTests: XCTestCase {
         ask("Usama")
         XCTAssertTrue(element("voice.card").waitForExistence(timeout: 30), "No confirmation card")
         tap("voiceCard.save")
-        XCTAssertTrue(text(containing: "Saved").waitForExistence(timeout: 30), "Card did not save")
+        if !text(containing: "Saved").waitForExistence(timeout: 30) {
+            let problem = element("voiceCard.problem")
+            XCTFail(problem.exists ? "Card did not save: \(problem.label)" : "Card did not save")
+        }
     }
 
     func testIMP002_importSheetOpens() {

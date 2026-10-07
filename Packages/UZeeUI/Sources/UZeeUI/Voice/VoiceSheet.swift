@@ -76,6 +76,12 @@ struct VoiceSheet: View {
                 .padding(UZSpacing.xxl)
             }
             .scrollDismissesKeyboard(.interactively)
+            .onChange(of: model.card != nil) { _, shown in
+                // Drop the keyboard so the whole card, Save included, is on screen.
+                guard shown else { return }
+                typing = false
+                withAnimation { proxy.scrollTo("card", anchor: .bottom) }
+            }
             .onChange(of: model.lines.count) {
                 withAnimation {
                     if model.card != nil {
