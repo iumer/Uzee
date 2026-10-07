@@ -24,6 +24,18 @@ public final class AppDatabase: Sendable {
                 t.column("updatedAt", .datetime).notNull()
             }
         }
+        // M1: per-device settings (DATA_MODEL §3.2). Starts the snake_case convention used by every later table.
+        migrator.registerMigration("v2_device_settings") { db in
+            try db.create(table: "device_settings") { t in
+                t.primaryKey("id", .text)
+                t.column("app_lock_enabled", .integer).notNull().defaults(to: 0).check { [0, 1].contains($0) }
+                t.column("lock_timeout_seconds", .integer).notNull().defaults(to: 60)
+                t.column("calendar_export_mode", .text).notNull().defaults(to: "off")
+                t.column("calendar_identifier", .text)
+                t.column("sample_mode_active", .integer).notNull().defaults(to: 0).check { [0, 1].contains($0) }
+                t.column("updated_at", .integer).notNull()
+            }
+        }
         return migrator
     }
 

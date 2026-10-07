@@ -1,5 +1,4 @@
 import SwiftUI
-import UZeeCore
 import UZeeUI
 
 @main
@@ -8,7 +7,7 @@ struct UZeeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            LaunchView(info: container.info, status: container.databaseStatus)
+            RootView(session: container.session)
         }
     }
 }

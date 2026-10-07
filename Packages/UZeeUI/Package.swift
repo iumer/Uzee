@@ -3,7 +3,8 @@ import PackageDescription
 
 let package = Package(
     name: "UZeeUI",
-    platforms: [.iOS(.v26), .macOS(.v15)],
+    // SwiftUI + UIKit, iOS/iPadOS only.
+    platforms: [.iOS(.v26)],
     products: [.library(name: "UZeeUI", targets: ["UZeeUI"])],
     dependencies: [.package(path: "../UZeeCore")],
     targets: [

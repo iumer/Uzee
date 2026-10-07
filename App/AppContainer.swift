@@ -12,12 +12,13 @@ import UZeeUI
 final class AppContainer {
     let info: AppInfo
     let database: AppDatabase?
-
-    var databaseStatus: LaunchView.DatabaseStatus { database == nil ? .failed : .ready }
+    let session: AppSession
 
     init(info: AppInfo, database: AppDatabase?) {
         self.info = info
         self.database = database
+        session = AppSession(info: info, isDatabaseReady: database != nil,
+                             sampleData: database.map(Self.sampleDataActions) ?? .unavailable)
     }
 
     static func live() -> AppContainer {
@@ -33,5 +34,19 @@ final class AppContainer {
             Log.data.error("Database failed to open: \(String(describing: error), privacy: .private)")
             return AppContainer(info: info, database: nil)
         }
+    }
+
+    private static func sampleDataActions(_ database: AppDatabase) -> AppSession.SampleDataActions {
+        let settings = DeviceSettingsStore(database: database)
+        let sampleData = SampleDataService(database: database)
+        return AppSession.SampleDataActions(
+            isActive: { try settings.isSampleModeActive() },
+            load: { try sampleData.load() },
+            removeAll: {
+                let removed = try sampleData.removeAll()
+                Log.data.info("Sample data removed: \(removed, privacy: .public) rows")
+                return removed
+            }
+        )
     }
 }

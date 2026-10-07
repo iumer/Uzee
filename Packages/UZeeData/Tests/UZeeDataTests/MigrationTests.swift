@@ -5,11 +5,11 @@ import GRDB
 
 @Suite("Migrations")
 struct MigrationTests {
-    // SMK-004 (unit part) / ENV-004: an empty database is migrated to v1.
-    @Test("Empty database gets the v1 baseline")
+    // SMK-004 (unit part) / ENV-004: an empty database is migrated to the latest version.
+    @Test("Empty database gets every migration")
     func baseline() throws {
         let db = try AppDatabase.inMemory()
-        #expect(try db.appliedMigrations() == ["v1_baseline"])
+        #expect(try db.appliedMigrations() == ["v1_baseline", "v2_device_settings"])
         #expect(try db.isUpToDate())
         let hasSettings = try db.writer.read { try $0.tableExists("settings") }
         #expect(hasSettings)
@@ -28,7 +28,7 @@ struct MigrationTests {
             }
         }
         let second = try AppDatabase(DatabaseQueue(path: path))
-        #expect(try second.appliedMigrations() == ["v1_baseline"])
+        #expect(try second.appliedMigrations() == ["v1_baseline", "v2_device_settings"])
         let count = try second.writer.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM settings") }
         #expect(count == 1)
     }
