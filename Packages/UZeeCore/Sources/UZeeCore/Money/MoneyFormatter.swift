@@ -72,7 +72,9 @@ public enum MoneyFormatter {
         let magnitude = money.minorUnits.magnitude
         let dropped = currency.minorUnits - currency.displayFractionDigits
         let divisor = UInt64(Money.scale(dropped))
-        let shown = dropped == 0 ? magnitude : magnitude / divisor + (magnitude % divisor >= divisor / 2 ? 1 : 0)
+        // Display rounding goes through the single rounding function too (CUR-005).
+        let shown = dropped == 0 ? magnitude
+            : UInt64(Rounding.halfUp(Decimal(magnitude) / Decimal(divisor), scale: 0).description) ?? magnitude / divisor
         let fractionScale = UInt64(Money.scale(currency.displayFractionDigits))
         return (shown / fractionScale, shown % fractionScale)
     }
