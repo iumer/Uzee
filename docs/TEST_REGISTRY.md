@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Version | 0.1 (2026-10-06), seeded from MILESTONE_PLAN v0.1 |
-| Totals | 313 tests registered · 21 run · 21 pass (3 partial) · 0 fail · as of build 0.1.0 (2) |
+| Totals | 313 tests registered · 21 run · 21 pass (6 partial) · 0 fail · as of build 0.1.0 (2) |
 | Oracle | docs/mockup-dataset.md: today Tue 6 Oct 2026, Asia/Karachi, $1 = Rs 280, spending = my share |
 
 ## Rules
@@ -76,7 +76,7 @@ Common fields for every full-format test below unless stated: **ACTUAL RESULT:**
 - PRECONDITIONS: App launched, sample data off.
 - STEPS: 1. Read the tab bar. 2. Tap each tab.
 - EXPECTED RESULT: Tabs Home, Activity, Budget, Calendar, People in this order plus a separate "+" button; each tab shows its title; iPad shows a sidebar with the same destinations.
-- ACTUAL RESULT: 2026-10-07: tabs in order, each opens with its title (testSMK005_UI001_tabsInOrderAndOpen) in CI run #13 (iPhone 17 Pro sim, iOS 26.5) and on owner's Mac (iPhone 17 Pro Max sim, iOS 27). iPad sidebar not checked (UI-004 not run). · STATUS: Pass · BUILD: 0.1.0 (2)
+- ACTUAL RESULT: 2026-10-07: tabs in order, each opens with its title (testSMK005_UI001_tabsInOrderAndOpen) in CI run #13 (iPhone 17 Pro sim, iOS 26.5) and on owner's Mac (iPhone 17 Pro Max sim, iOS 27). iPad sidebar not checked (UI-004 not run). · STATUS: Pass (partial) · BUILD: 0.1.0 (2)
 - NOTES: Level UI. From M1.
 
 **TEST ID:** SMK-006 · **MODULE:** Navigation · **TITLE:** Core screens open
@@ -155,12 +155,12 @@ Common fields for every full-format test below unless stated: **ACTUAL RESULT:**
 | UI-006 | UI | Status never colour-only | Labels read "owes you", "you owe", "✓ Paid", "! Overdue" | Pass · 0.1.0 (2) · unit (UZeeUI tests, CI run #13) |
 | UI-007 | U | Fixed category colours | Office #5856D6, Transport #007AFF, Food #FF9500, Personal #30B0C7, Utilities #FFCC00 (text #A07800), Subscriptions #FF2D55, Financial #00C7BE, Health #FF3B30, Income #34C759 | Pass · 0.1.0 (2) · unit (UZeeUI tests, CI run #13) |
 | UI-008 | UI | Empty / loading / error states | Each component shows its state text and action | Not run |
-| UI-009 | UI | Confirm sheet + Undo toast | Money action opens confirm; after save toast "Saved · Undo" for ≥ 4 s | Pass · 0.1.0 (2) · unit (UZeeUI tests, CI run #13); UI part with M2 money actions |
+| UI-009 | UI | Confirm sheet + Undo toast | Money action opens confirm; after save toast "Saved · Undo" for ≥ 4 s | Pass (partial) · 0.1.0 (2) · unit (UZeeUI tests, CI run #13); UI part with M2 money actions |
 | UI-010 | UI | Light/dark snapshots | Components match approved snapshots in both appearances | Not run |
 | UI-011 | UI | Components at AX5 text size | No clipped amounts; rows wrap | Not run |
 | UI-012 | UI | Home toolbar | Mic and gear open Voice placeholder and Settings; no top segmented controls anywhere | Pass · 0.1.0 (2) · smoke testUI012, CI run #13 + owner's Mac |
 | DATA-001 | UI | Sample mode banner | Banner "Sample data" on every tab while on | Pass · 0.1.0 (2) · smoke testDATA001, CI run #13 + owner's Mac |
-| DATA-002 | I | Remove sample data | Only `isSample = 1` rows removed, in one transaction; real row counts unchanged | Pass · 0.1.0 (2) · mechanism tested with stand-in tables (UZeeData, CI run #13); real tables in M2 |
+| DATA-002 | I | Remove sample data | Only `isSample = 1` rows removed, in one transaction; real row counts unchanged | Pass (partial) · 0.1.0 (2) · mechanism tested with stand-in tables (UZeeData, CI run #13); real tables in M2 |
 | DATA-003 | I | Real record while sample mode on | Saved as real, survives removal | Not run · needs content tables (M2) |
 | DATA-004 | I | No mixing in totals | Totals in real mode exclude sample rows and vice versa | Not run · needs content tables (M2) |
 
