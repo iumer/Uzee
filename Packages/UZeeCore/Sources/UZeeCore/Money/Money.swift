@@ -19,7 +19,7 @@ public struct Money: Hashable, Sendable {
     public var isNegative: Bool { minorUnits < 0 }
     public var isZero: Bool { minorUnits == 0 }
 
-    static func scale(_ digits: Int) -> Int64 {
+    public static func scale(_ digits: Int) -> Int64 {
         var value: Int64 = 1
         for _ in 0..<digits { value *= 10 }
         return value
