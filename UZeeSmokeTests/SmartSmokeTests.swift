@@ -34,8 +34,9 @@ final class SmartSmokeTests: XCTestCase {
         let input = element("voice.input")
         XCTAssertTrue(input.waitForExistence(timeout: 30), "voice.input missing", file: file, line: line)
         input.tap()
-        // Type only once the keyboard is up; typing during its animation can drop letters.
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "Keyboard didn't open", file: file, line: line)
+        // Type only once the field has focus (the Simulator may not show a software keyboard).
+        let focused = NSPredicate(format: "hasKeyboardFocus == true")
+        _ = XCTWaiter.wait(for: [expectation(for: focused, evaluatedWith: input)], timeout: 5)
         input.typeText(sentence)
         tap("voice.send", file: file, line: line)
         XCTAssertTrue(text(containing: sentence).waitForExistence(timeout: 10), "\(sentence) wasn't sent", file: file, line: line)
