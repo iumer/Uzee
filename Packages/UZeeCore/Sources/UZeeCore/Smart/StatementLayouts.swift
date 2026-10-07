@@ -108,8 +108,8 @@ enum StatementLayouts {
     static func isWiseDateLine(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard trimmed.contains("|"), trimmed.lowercased().contains("transaction"),
-              let first = TextScan.dates(in: trimmed).first else { return false }
-        return first.start == 0
+              let first = TextScan.dates(in: trimmed).first, first.start == 0 else { return false }
+        return String(Array(trimmed)[first.end...]).trimmingCharacters(in: .whitespaces).hasPrefix("|")
     }
 
     /// Wise prints the description and amounts on one line (incoming, outgoing with a minus, then the

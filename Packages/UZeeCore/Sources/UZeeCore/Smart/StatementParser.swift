@@ -236,7 +236,12 @@ public enum StatementParser {
         let trailing = Array(amounts.suffix(3))
         let descriptionEnd = trailing[0].start
         var description = String(Array(body)[0..<descriptionEnd]).trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        description = description.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        var words = description.split(whereSeparator: \.isWhitespace).map(String.init)
+        // "… from + PKR" or "… GB -Rs.": the amount's currency belongs to the amount.
+        while let last = words.last, TextScan.currencyWord(last.trimmingCharacters(in: CharacterSet(charactersIn: "+-.\u{2212}"))) != nil {
+            words.removeLast()
+        }
+        description = words.joined(separator: " ").trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
 
         var magnitude: Decimal
         var knownSign: Int?
