@@ -1,0 +1,185 @@
+import Foundation
+import Testing
+@testable import UZeeCore
+
+private func day(_ y: Int, _ m: Int, _ d: Int) -> LocalDate { LocalDate(year: y, month: m, day: d) }
+private func dec(_ text: String) -> Decimal { Decimal(string: text, locale: Locale(identifier: "en_US_POSIX"))! }
+
+/// AI-02 receipt reading, IMP-001…009 statement reading (synthesised layouts; real bank samples are added as IMP-008x).
+@Suite("Text scanning")
+struct TextScanTests {
+    @Test("Amounts with grouping, decimals, markers and signs")
+    func amounts() {
+        let found = TextScan.amounts(in: "Rs 1,250.00 and (500) and 2,000.00 CR and -75 and 12,50,000")
+        #expect(found.map(\.value) == [1250, 500, 2000, 75, 1_250_000])
+        #expect(found[0].currencyMarker == "rs" && found[0].hasDecimals && found[0].hasGrouping)
+        #expect(found[1].isNegative)
+        #expect(found[2].creditDebit == "cr")
+        #expect(found[3].isNegative)
+    }
+
+    @Test("Dates, times, phone numbers and references are not amounts")
+    func notAmounts() {
+        #expect(TextScan.amounts(in: "06/10/2026 12:45 Tel 03001234567 INV1234 5th").isEmpty)
+        #expect(TextScan.amounts(in: "Rs1500").map(\.value) == [1500])
+    }
+
+    @Test("Numeric and named dates, day first")
+    func dates() {
+        #expect(TextScan.dates(in: "Date: 06/10/2026").map(\.date) == [day(2026, 10, 6)])
+        #expect(TextScan.dates(in: "6-10-26").map(\.date) == [day(2026, 10, 6)])
+        #expect(TextScan.dates(in: "2026-10-06").map(\.date) == [day(2026, 10, 6)])
+        #expect(TextScan.dates(in: "06 Oct 2026").map(\.date) == [day(2026, 10, 6)])
+        #expect(TextScan.dates(in: "06-OCT-26 POS").map(\.date) == [day(2026, 10, 6)])
+        #expect(TextScan.dates(in: "Oct 6, 2026").map(\.date) == [day(2026, 10, 6)])
+        #expect(TextScan.dates(in: "12/31/2026").map(\.date) == [day(2026, 12, 31)])
+        #expect(TextScan.dates(in: "06 Oct", defaultYear: 2026).map(\.date) == [day(2026, 10, 6)])
+        #expect(TextScan.dates(in: "06 Oct").isEmpty)
+        #expect(TextScan.dates(in: "31/02/2026").isEmpty)
+    }
+}
+
+@Suite("Receipt reading")
+struct ReceiptReadingTests {
+    let today = day(2026, 10, 6)
+
+    // UI-034 (unit part): amount, date and merchant from a typical till slip.
+    @Test("Grand total, date and shop name")
+    func tillSlip() {
+        let lines = ["*** IMTIAZ SUPER MARKET ***", "Gulberg III, Lahore", "NTN 1234567-8", "Date: 05/10/2026  Time 18:42",
+                     "Milk 1L        2 x 280     560.00", "Bread                      190.00", "Sub Total               2,350.00",
+                     "GST 18%                     423.00", "Grand Total             2,773.00", "Cash                    3,000.00",
+                     "Change                    227.00"]
+        let reading = ReceiptParser.read(lines, currency: .pkr, today: today)
+        #expect(reading.amount == Money(major: 2_773, .pkr))
+        #expect(reading.date == day(2026, 10, 5))
+        #expect(reading.merchant == "Imtiaz Super Market")
+    }
+
+    @Test("Total on the next line, and no total line at all")
+    func totals() {
+        let split = ReceiptParser.read(["Kababjees", "TOTAL", "Rs 3,450"], currency: .pkr, today: today)
+        #expect(split.amount == Money(major: 3_450, .pkr))
+        let none = ReceiptParser.read(["Shell Gulberg", "Super 95  50.2 L", "Rs 14,517.00"], currency: .pkr, today: today)
+        #expect(none.amount == Money(major: 14_517, .pkr))
+        #expect(none.merchant == "Shell Gulberg")
+    }
+
+    @Test("Future and very old dates are ignored; empty text reads nothing")
+    func implausible() {
+        let reading = ReceiptParser.read(["Cafe", "Valid till 06/12/2026", "Opened 01/01/2020"], currency: .pkr, today: today)
+        #expect(reading.date == nil)
+        #expect(ReceiptParser.read([], currency: .pkr, today: today).isEmpty)
+    }
+}
+
+@Suite("Statement reading")
+struct StatementReadingTests {
+    // IMP-001 (generic layout): date, description, debit/credit by running balance, oldest first.
+    @Test("Rows with running balance, oldest first")
+    func balanceOldestFirst() {
+        let lines = [
+            "Account Statement  Period 01/09/2026 to 30/09/2026",
+            "Date        Description                       Amount        Balance",
+            "Opening Balance                                             100,000.00",
+            "01/09/2026  POS PURCHASE FOODPANDA LHR 4411    1,250.00      98,750.00",
+            "            ORDER 99812",
+            "05/09/2026  SALARY SEPTEMBER                 560,000.00     658,750.00",
+            "06/09/2026  IBFT TO MEEZAN 0021              50,000.00      608,750.00",
+            "Closing Balance                                             608,750.00"
+        ]
+        let reading = StatementParser.read(lines: lines)
+        #expect(reading.signSource == .balance)
+        #expect(reading.rows.map(\.amount) == [dec("-1250"), dec("560000"), dec("-50000")])
+        #expect(reading.rows.map(\.date) == [day(2026, 9, 1), day(2026, 9, 5), day(2026, 9, 6)])
+        #expect(reading.rows[0].description == "POS PURCHASE FOODPANDA LHR 4411 ORDER 99812")
+        #expect(reading.openingBalance == 100_000)
+        #expect(reading.closingBalance == dec("608750"))
+        #expect(reading.first == day(2026, 9, 1) && reading.last == day(2026, 9, 6))
+    }
+
+    @Test("Newest first, with debit, credit and balance columns")
+    func newestFirstColumns() {
+        let lines = [
+            "Txn Date   Value Date  Particulars              Debit       Credit       Balance",
+            "06-Oct-26  06-Oct-26   Netflix.com              1,100.00    0.00         45,000.00",
+            "05-Oct-26  05-Oct-26   Cash deposit             0.00        20,000.00    46,100.00",
+            "04-Oct-26  04-Oct-26   ATM withdrawal           5,000.00    0.00         26,100.00"
+        ]
+        let reading = StatementParser.read(lines: lines)
+        #expect(reading.rows.map(\.amount) == [dec("-1100"), dec("20000"), dec("-5000")])
+        #expect(reading.rows[0].description == "Netflix.com")
+    }
+
+    @Test("CR/DR markers and words decide direction without a balance")
+    func markers() {
+        let reading = StatementParser.read(lines: ["01/10/2026 Funds received from Ali 5,000.00 CR",
+                                                   "02/10/2026 Bill payment K-Electric 3,200.00 DR",
+                                                   "03/10/2026 Salary October 250,000.00"])
+        #expect(reading.rows.map(\.amount) == [dec("5000"), dec("-3200"), dec("250000")])
+    }
+
+    // IMP-006: nothing that looks like a statement.
+    @Test("Text without rows reads nothing")
+    func unsupported() {
+        #expect(StatementParser.read(lines: ["Dear customer", "Thank you for banking with us"]).rows.isEmpty)
+    }
+
+    @Test("Short payees from statement descriptions")
+    func payees() {
+        #expect(StatementParser.payee(from: "POS PURCHASE FOODPANDA LHR 4411") == "Foodpanda")
+        #expect(StatementParser.payee(from: "Netflix.com") == "Netflix.com")
+        #expect(StatementParser.payee(from: "IBFT 00123456") == "IBFT 00123456")
+    }
+
+    // IMP-009 (unit part): CSV columns by name.
+    @Test("CSV with debit and credit columns, quoted fields")
+    func csv() {
+        let text = """
+        Date,Description,Debit,Credit,Balance
+        2026-10-01,"Daraz, order 55",6200.00,,93800.00
+        2026-10-02,Salary,,560000.00,653800.00
+        """
+        let reading = StatementParser.read(csv: text)
+        #expect(reading?.rows.map(\.amount) == [dec("-6200"), dec("560000")])
+        #expect(reading?.rows.first?.description == "Daraz, order 55")
+        #expect(StatementParser.read(csv: "name,phone\nAli,0300") == nil)
+    }
+
+    @Test("CSV with one signed amount column")
+    func csvSigned() {
+        let reading = StatementParser.read(csv: "Date,Title,Amount\n06/10/2026,Careem,-850\n07/10/2026,Refund,300\n")
+        #expect(reading?.rows.map(\.amount) == [dec("-850"), dec("300")])
+    }
+
+    @Test("CSV reader handles quotes and blank lines")
+    func csvReader() {
+        #expect(CSVReader.rows("a,\"b \"\"x\"\"\",c\r\n\r\n1,2,3") == [["a", "b \"x\"", "c"], ["1", "2", "3"]])
+    }
+}
+
+@Suite("Duplicates")
+struct DuplicateTests {
+    // IMP-004 / IMP-005: same account, amount and direction, same day or one day apart; one match each.
+    @Test("Matches by account, amount and date")
+    func matches() {
+        let hbl = UUID(), meezan = UUID()
+        func txn(_ account: UUID, _ amount: Int64, _ date: LocalDate) -> MoneyTransaction {
+            MoneyTransaction(kind: amount < 0 ? .expense : .income, occurredAt: date.startDate(in: TimeZone(identifier: "UTC")!), localDate: date,
+                             timeZoneID: "GMT", amount: Money(major: abs(amount), .pkr),
+                             legs: [TransactionLeg(accountID: account, amount: Money(major: amount, .pkr), role: .main)])
+        }
+        let saved = [txn(hbl, -1_250, day(2026, 9, 1)), txn(hbl, -1_250, day(2026, 9, 2)), txn(meezan, -500, day(2026, 9, 3))]
+        let rows = [DuplicateFinder.Candidate(date: day(2026, 9, 1), amount: Money(major: -1_250, .pkr)),
+                    DuplicateFinder.Candidate(date: day(2026, 9, 1), amount: Money(major: -1_250, .pkr)),
+                    DuplicateFinder.Candidate(date: day(2026, 9, 1), amount: Money(major: -1_250, .pkr)),
+                    DuplicateFinder.Candidate(date: day(2026, 9, 3), amount: Money(major: -500, .pkr)),
+                    DuplicateFinder.Candidate(date: day(2026, 9, 1), amount: Money(major: 1_250, .pkr))]
+        let found = DuplicateFinder.matches(rows, accountID: hbl, in: saved)
+        #expect(found[0] == saved[0].id)
+        #expect(found[1] == saved[1].id)
+        #expect(found[2] == nil)
+        #expect(found[3] == nil)
+        #expect(found[4] == nil)
+    }
+}
