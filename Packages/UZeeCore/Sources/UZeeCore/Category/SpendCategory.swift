@@ -6,7 +6,7 @@ public enum CategoryType: String, CaseIterable, Sendable, Codable {
 }
 
 /// A category row. `group` is the top-level `CategoryKind` that gives colour and symbol (AUD-16).
-public struct Category: Hashable, Sendable, Identifiable {
+public struct SpendCategory: Hashable, Sendable, Identifiable {
     public var id: UUID
     public var type: CategoryType
     public var parentID: UUID?

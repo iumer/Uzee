@@ -11,7 +11,7 @@ public struct LedgerSnapshot: Sendable, Equatable {
     /// "USD at $1 = Rs 280" when the total converted something (AUD-04).
     public var footnote: String?
     public var rates: [String: Decimal]
-    public var categories: [Category]
+    public var categories: [SpendCategory]
 
     public static func empty(base: Currency = .pkr) -> LedgerSnapshot {
         LedgerSnapshot(base: base, accounts: [], balances: [:], available: .zero(base), footnote: nil,
@@ -23,7 +23,7 @@ public struct LedgerSnapshot: Sendable, Equatable {
     /// Non-archived accounts, for pickers (ACC-005).
     public var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
 
-    public func category(_ id: UUID?) -> Category? { categories.first { $0.id == id } }
+    public func category(_ id: UUID?) -> SpendCategory? { categories.first { $0.id == id } }
 
     /// "Transport › Fuel"; income items read "Income › Salary".
     public func categoryPath(_ id: UUID?) -> String? {
@@ -70,7 +70,7 @@ public struct LedgerStore: Sendable {
         try database.writer.read { db in try Self.fetchAccounts(db) }
     }
 
-    public func categories() throws -> [Category] {
+    public func categories() throws -> [SpendCategory] {
         try database.writer.read { db in try Self.fetchCategories(db) }
     }
 
@@ -223,11 +223,11 @@ extension LedgerStore {
         }
     }
 
-    static func fetchCategories(_ db: Database) throws -> [Category] {
+    static func fetchCategories(_ db: Database) throws -> [SpendCategory] {
         try Row.fetchAll(db, sql: "SELECT * FROM category WHERE deleted_at IS NULL ORDER BY sort_order").compactMap { row in
             guard let id = UUID(uuidString: row["id"]) else { return nil }
             let parent: String? = row["parent_id"]
-            return Category(id: id, type: CategoryType(rawValue: row["kind"]) ?? .expense, parentID: parent.flatMap(UUID.init(uuidString:)),
+            return SpendCategory(id: id, type: CategoryType(rawValue: row["kind"]) ?? .expense, parentID: parent.flatMap(UUID.init(uuidString:)),
                             name: row["name"], group: CategoryKind(rawValue: row["group_key"]) ?? .other,
                             systemKey: row["system_key"], sortOrder: row["sort_order"], isHidden: row["is_hidden"])
         }
