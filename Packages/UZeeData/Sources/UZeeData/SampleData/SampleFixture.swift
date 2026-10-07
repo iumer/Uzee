@@ -72,6 +72,13 @@ enum SampleFixture {
              note: "Office group · you paid · split equally")
     ]
 
+    /// Recently Deleted (dataset "Other"): deleted when sample data is loaded, so they stay for 30 days.
+    static let deleted: [TransactionSeed] = [
+        seed(2, 18, .expense, "Careem", "transport.ride_hailing", "Easypaisa", rs(640)),
+        seed(5, 14, .expense, "Duplicate Imtiaz", "food.groceries", "NayaPay", rs(8_940)),
+        seed(1, 8, .expense, "Test entry", nil, "Cash", rs(100))
+    ]
+
     static func date(day: Int, hour: Int) -> Date {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
@@ -92,7 +99,8 @@ enum SampleFixture {
         for row in try Row.fetchAll(db, sql: "SELECT id, system_key FROM category WHERE system_key IS NOT NULL") {
             if let id = UUID(uuidString: row["id"]) { categoryIDs[row["system_key"]] = id }
         }
-        for seed in transactions {
+        let now = Date()
+        for (seed, isDeleted) in transactions.map({ ($0, false) }) + deleted.map({ ($0, true) }) {
             let when = date(day: seed.day, hour: seed.hour)
             var legs: [TransactionLeg] = []
             var fxRate: Decimal?
@@ -109,7 +117,7 @@ enum SampleFixture {
                 kind: seed.kind, occurredAt: when, localDate: LocalDate(when, in: timeZone), timeZoneID: timeZone.identifier,
                 amount: seed.amount, myShare: seed.myShare, categoryID: seed.category.flatMap { categoryIDs[$0] },
                 payeeName: seed.payee, note: seed.note, fxRate: fxRate, source: .sample, legs: legs,
-                createdAt: when, isSample: true)
+                createdAt: when, deletedAt: isDeleted ? now : nil, isSample: true)
             try LedgerStore.save(transaction, db)
         }
     }

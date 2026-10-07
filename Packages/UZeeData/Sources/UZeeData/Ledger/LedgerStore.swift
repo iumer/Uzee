@@ -215,8 +215,10 @@ extension LedgerStore {
         return rates
     }
 
-    static func fetchTransactions(_ db: Database, from start: LocalDate?, through end: LocalDate?, id: UUID? = nil) throws -> [MoneyTransaction] {
-        var conditions = ["t.deleted_at IS NULL"]
+    /// `deleted` reads Recently Deleted instead: soft-deleted rows with the legs deleted alongside them.
+    static func fetchTransactions(_ db: Database, from start: LocalDate?, through end: LocalDate?, id: UUID? = nil,
+                                  deleted: Bool = false) throws -> [MoneyTransaction] {
+        var conditions = [deleted ? "t.deleted_at IS NOT NULL" : "t.deleted_at IS NULL"]
         var arguments: [(any DatabaseValueConvertible)?] = []
         if let start { conditions.append("t.local_date >= ?"); arguments.append(start.description) }
         if let end { conditions.append("t.local_date <= ?"); arguments.append(end.description) }
@@ -224,12 +226,12 @@ extension LedgerStore {
         let rows = try Row.fetchAll(db, sql: """
             SELECT t.*, p.name AS payee_name FROM txn t LEFT JOIN payee p ON p.id = t.payee_id
             WHERE \(conditions.joined(separator: " AND "))
-            ORDER BY t.local_date DESC, t.occurred_at DESC
+            ORDER BY \(deleted ? "t.deleted_at DESC," : "") t.local_date DESC, t.occurred_at DESC
             """, arguments: StatementArguments(arguments))
         var legsByTxn: [String: [TransactionLeg]] = [:]
         let legRows = try Row.fetchAll(db, sql: """
             SELECT l.* FROM transaction_leg l JOIN txn t ON t.id = l.txn_id
-            WHERE l.deleted_at IS NULL AND \(conditions.joined(separator: " AND "))
+            WHERE \(deleted ? "l.deletion_batch_id IS t.deletion_batch_id" : "l.deleted_at IS NULL") AND \(conditions.joined(separator: " AND "))
             ORDER BY l.role
             """, arguments: StatementArguments(arguments))
         for row in legRows {

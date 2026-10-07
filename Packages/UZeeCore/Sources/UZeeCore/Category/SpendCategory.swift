@@ -89,3 +89,33 @@ public enum DefaultCategories {
              children: children.map { (group.rawValue + "." + slug($0), $0) })
     }
 }
+
+extension SpendCategory {
+    public enum Problem: Error, Equatable, Sendable {
+        case emptyName
+        case nameTooLong
+        case duplicateName
+        /// Delete is blocked while transactions use it; merge instead (CAT-005).
+        case inUse
+        /// Merge needs two different categories of the same type.
+        case invalidMerge
+        case notFound
+    }
+
+    public static let maxNameLength = 30
+
+    /// Checks a new or renamed category against its siblings (same parent), case- and space-insensitive.
+    public static func validateName(_ name: String, siblingNames: [String]) throws(Problem) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw .emptyName }
+        guard trimmed.count <= maxNameLength else { throw .nameTooLong }
+        let key = NameKey.make(trimmed)
+        guard !siblingNames.contains(where: { NameKey.make($0) == key }) else { throw .duplicateName }
+        return trimmed
+    }
+
+    /// Tags use the same rules with all tags as siblings.
+    public static func validateTagName(_ name: String, existing: [String]) throws(Problem) -> String {
+        try validateName(name, siblingNames: existing)
+    }
+}

@@ -38,6 +38,8 @@ public final class AppDatabase: Sendable {
         }
         // M2: money engine tables (DATA_MODEL §3.3–3.9).
         migrator.registerMigration("v3_money") { db in try MoneySchema.create(db) }
+        // M3: tags and receipts (DATA_MODEL §3.10–3.12).
+        migrator.registerMigration("v4_activity") { db in try ActivitySchema.create(db) }
         return migrator
     }
 

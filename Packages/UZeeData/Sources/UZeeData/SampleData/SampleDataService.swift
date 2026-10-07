@@ -6,7 +6,7 @@ import GRDB
 public struct SampleDataService: Sendable {
     /// Tables that carry `is_sample`, children before parents so deletes are FK-safe.
     /// Each milestone that adds a user-content table appends it here.
-    public static let defaultTables: [String] = ["transaction_leg", "txn", "payee", "account"]
+    public static let defaultTables: [String] = ["attachment", "txn_tag", "tag", "transaction_leg", "txn", "payee", "account"]
 
     let database: AppDatabase
     let tables: [String]
