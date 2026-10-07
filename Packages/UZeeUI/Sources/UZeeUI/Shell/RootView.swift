@@ -17,13 +17,15 @@ public struct RootView: View {
                     TabRoot(tab: tab, session: session)
                 }
             }
-            // iOS 26 shows the search-role tab detached at the trailing end: our "+" button.
-            Tab(AppTab.add.title, systemImage: AppTab.add.symbol, value: AppTab.add, role: .search) {
-                Color.clear
-            }
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.never)
+        // A sixth Tab would push People into "More" on iPhone, so "+" floats above the tab bar instead.
+        .overlay(alignment: .bottomTrailing) {
+            AddButton { session.isAddPresented = true }
+                .padding(.trailing, UZSpacing.xxl)
+                .padding(.bottom, 72)
+        }
         .sheet(isPresented: $session.isAddPresented) {
             AddSheet(session: session)
         }
@@ -40,6 +42,24 @@ public struct RootView: View {
 
     private var errorBinding: Binding<Bool> {
         Binding(get: { session.errorMessage != nil }, set: { if !$0 { session.errorMessage = nil } })
+    }
+}
+
+/// The floating glass "+" that opens Add from any tab.
+struct AddButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: AppTab.add.symbol)
+                .font(.title2.weight(.semibold))
+                .frame(width: 56, height: 56)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.tint)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .accessibilityLabel(AppTab.add.title)
+        .accessibilityIdentifier("tab.add")
     }
 }
 
