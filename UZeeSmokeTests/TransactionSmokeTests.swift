@@ -36,7 +36,9 @@ final class TransactionSmokeTests: XCTestCase {
     private func balance(of account: String) -> String {
         tap("account.\(account)")
         let balance = element("account.balance")
-        XCTAssertTrue(balance.waitForExistence(timeout: 30))
+        // A tap made while a sheet is still sliding away is dropped by iOS; try once more.
+        if !balance.waitForExistence(timeout: 5) { element("account.\(account)").tap() }
+        XCTAssertTrue(balance.waitForExistence(timeout: 30), "Account detail did not open")
         let label = balance.value as? String ?? balance.label
         app.navigationBars[account].buttons.element(boundBy: 0).tap()
         return label
@@ -48,6 +50,7 @@ final class TransactionSmokeTests: XCTestCase {
         type("HBL", into: "accountForm.name")
         type("10000", into: "accountForm.opening")
         tap("accountForm.save")
+        XCTAssertTrue(element("accountForm.name").waitForNonExistence(timeout: 30), "Account form still open")
         XCTAssertTrue(element("account.HBL").waitForExistence(timeout: 30), "HBL not listed")
     }
 
