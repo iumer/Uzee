@@ -2,37 +2,6 @@ import Foundation
 import GRDB
 import UZeeCore
 
-/// Everything the M2 screens show at once: accounts with derived balances and the available total.
-public struct LedgerSnapshot: Sendable, Equatable {
-    public var base: Currency
-    public var accounts: [Account]
-    public var balances: [UUID: Money]
-    public var available: Money
-    /// "USD at $1 = Rs 280" when the total converted something (AUD-04).
-    public var footnote: String?
-    public var rates: [String: Decimal]
-    public var categories: [SpendCategory]
-
-    public static func empty(base: Currency = .pkr) -> LedgerSnapshot {
-        LedgerSnapshot(base: base, accounts: [], balances: [:], available: .zero(base), footnote: nil,
-                       rates: ["USD": ExchangeRate.defaultUSD.rate], categories: [])
-    }
-
-    public func balance(of account: Account) -> Money { balances[account.id] ?? account.openingBalance }
-
-    /// Non-archived accounts, for pickers (ACC-005).
-    public var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
-
-    public func category(_ id: UUID?) -> SpendCategory? { categories.first { $0.id == id } }
-
-    /// "Transport › Fuel"; income items read "Income › Salary".
-    public func categoryPath(_ id: UUID?) -> String? {
-        guard let category = category(id) else { return nil }
-        if let parent = self.category(category.parentID) { return "\(parent.name) › \(category.name)" }
-        return category.type == .income ? "Income › \(category.name)" : category.name
-    }
-}
-
 /// Reads and writes accounts, transactions, rates and categories. Every write is one DB transaction
 /// (TXN-012); balances are always derived (ACC-03).
 public struct LedgerStore: Sendable {

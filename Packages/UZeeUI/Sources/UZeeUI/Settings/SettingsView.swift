@@ -1,12 +1,27 @@
 import SwiftUI
+import UZeeCore
 
-/// Settings (SCR-04). M1 holds sample data and app info; the other sections arrive with their features.
+/// Settings (SCR-04). M2 adds accounts and the exchange rate; other sections arrive with their features.
 struct SettingsView: View {
     @Bindable var session: AppSession
     @State private var confirmingRemove = false
 
     var body: some View {
         List {
+            Section("Money") {
+                NavigationLink(value: Route.accounts) {
+                    SettingsLabel("Accounts", symbol: "building.columns", color: Color(uiColor: .systemBlue))
+                }
+                .accessibilityIdentifier("settings.accounts")
+                NavigationLink(value: Route.exchangeRate) {
+                    HStack {
+                        SettingsLabel("Exchange rate", symbol: "dollarsign.arrow.circlepath", color: Color(uiColor: .systemGreen))
+                        Spacer()
+                        Text("$1 = Rs \(ExchangeRate.display(session.ledger.rate(for: .usd)))").foregroundStyle(UZColor.label2)
+                    }
+                }
+                .accessibilityIdentifier("settings.rate")
+            }
             Section {
                 if session.isSampleMode {
                     Button(role: .destructive) {

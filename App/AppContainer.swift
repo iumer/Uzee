@@ -18,7 +18,8 @@ final class AppContainer {
         self.info = info
         self.database = database
         session = AppSession(info: info, isDatabaseReady: database != nil,
-                             sampleData: database.map(Self.sampleDataActions) ?? .unavailable)
+                             sampleData: database.map(Self.sampleDataActions) ?? .unavailable,
+                             ledger: database.map(Self.ledgerClient) ?? .unavailable)
     }
 
     static func live() -> AppContainer {
@@ -48,5 +49,42 @@ final class AppContainer {
                 return removed
             }
         )
+    }
+
+    private static func ledgerClient(_ database: AppDatabase) -> LedgerClient {
+        let store = LedgerStore(database: database)
+        return LedgerClient(
+            snapshot: { try store.snapshot() },
+            transactions: { try store.transactions() },
+            lastUsedAccountID: { try store.lastUsedAccountID() },
+            save: { transaction in
+                try store.save(transaction)
+                Log.data.info("Transaction saved: \(transaction.kind.rawValue, privacy: .public)")
+            },
+            delete: { try store.delete(transactionID: $0) },
+            discard: { try store.discard(transactionID: $0) },
+            createAccount: { new in
+                try Self.mapped {
+                    try store.createAccount(name: new.name, kind: new.kind, currency: new.currency, openingBalance: new.openingBalance,
+                                            openingDate: new.openingDate, includeInTotals: new.includeInTotals)
+                }
+            },
+            updateAccount: { account in try Self.mapped { try store.updateAccount(account) } },
+            setArchived: { archived, id in try store.setArchived(archived, accountID: id) },
+            deleteAccount: { try store.deleteAccount(id: $0) },
+            hasTransactions: { try store.hasTransactions(accountID: $0) },
+            setRate: { rate, currency in try store.setRate(rate, for: currency) }
+        )
+    }
+
+    /// Store problems become the shared account problems the UI explains (ACC-008).
+    private nonisolated static func mapped<T>(_ work: () throws -> T) throws -> T {
+        do { return try work() } catch let problem as LedgerStore.Problem {
+            switch problem {
+            case .duplicateName: throw Account.Problem.duplicateName
+            case .currencyLocked: throw Account.Problem.currencyLocked
+            default: throw problem
+            }
+        }
     }
 }

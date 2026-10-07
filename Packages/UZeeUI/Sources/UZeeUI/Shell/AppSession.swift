@@ -29,19 +29,101 @@ public final class AppSession {
 
     public var selectedTab: AppTab = .home
     public var paths: [AppTab: [Route]] = [:]
-    public var isAddPresented = false
+    public var isAddPresented = false {
+        didSet { if !isAddPresented { addRequest = .new } }
+    }
+    /// What the Add sheet opens with: a blank expense, a transfer, an edit or a repeat (TXN-014).
+    public var addRequest: AddRequest = .new
     public var isVoicePresented = false
     public private(set) var isSampleMode = false
     /// Last error shown to the user, in plain words (DESIGN_SYSTEM §15).
     public var errorMessage: String?
 
-    private let sampleData: SampleDataActions
+    /// Accounts, balances, categories and rates as of the last change.
+    public private(set) var ledger: LedgerSnapshot = .empty()
+    /// Non-deleted transactions, newest first.
+    public private(set) var transactions: [Transaction] = []
 
-    public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions) {
+    private let sampleData: SampleDataActions
+    public let client: LedgerClient
+
+    public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable) {
         self.info = info
         self.isDatabaseReady = isDatabaseReady
         self.sampleData = sampleData
+        self.client = ledger
         isSampleMode = (try? sampleData.isActive()) ?? false
+        reload()
+    }
+
+    /// Re-reads the ledger after any change; balances are always derived, never cached (ACC-03).
+    public func reload() {
+        do {
+            ledger = try client.snapshot()
+            transactions = try client.transactions()
+        } catch {
+            errorMessage = "Couldn't read your accounts. Close UZee and open it again."
+        }
+    }
+
+    /// Opens the Add sheet for something specific.
+    public func openAdd(_ request: AddRequest) {
+        addRequest = request
+        isAddPresented = true
+    }
+
+    /// Saves a new or edited transaction, then offers Undo for 5 seconds (AUD-13, TXN-013).
+    @discardableResult
+    public func save(_ transaction: Transaction, isNew: Bool) -> Bool {
+        let previous = isNew ? nil : transactions.first { $0.id == transaction.id }
+        do {
+            try client.save(transaction)
+        } catch {
+            errorMessage = "Couldn't save. Nothing was changed. Try again."
+            return false
+        }
+        reload()
+        toasts.show(isNew ? "Saved" : "Changes saved") { [weak self] in
+            guard let self else { return }
+            do {
+                if let previous { try self.client.save(previous) } else { try self.client.discard(transaction.id) }
+            } catch {
+                self.errorMessage = "Couldn't undo. Your entry is still saved."
+            }
+            self.reload()
+        }
+        return true
+    }
+
+    /// Soft delete; the row can come back from Recently Deleted (TXN-008, M3).
+    public func delete(_ transaction: Transaction) {
+        do {
+            try client.delete(transaction.id)
+        } catch {
+            errorMessage = "Couldn't delete. Nothing was changed. Try again."
+            return
+        }
+        reload()
+        toasts.show("Deleted") { [weak self] in
+            guard let self else { return }
+            var restored = transaction
+            restored.deletedAt = nil
+            try? self.client.save(restored)
+            self.reload()
+        }
+    }
+
+    /// Runs an account change and refreshes; returns false and explains when it fails.
+    @discardableResult
+    public func perform(_ failure: String, _ work: () throws -> Void) -> Bool {
+        do {
+            try work()
+            reload()
+            return true
+        } catch {
+            errorMessage = failure
+            return false
+        }
     }
 
     /// Binding for the TabView: choosing "+" opens the Add sheet instead of switching tabs.
@@ -66,6 +148,7 @@ public final class AppSession {
         do {
             try sampleData.load()
             isSampleMode = true
+            reload()
             toasts.show("Sample data on")
         } catch {
             errorMessage = "Couldn't turn on sample data. Try again."
@@ -76,9 +159,19 @@ public final class AppSession {
         do {
             _ = try sampleData.removeAll()
             isSampleMode = false
+            reload()
             toasts.show("Sample data removed")
         } catch {
             errorMessage = "Couldn't remove sample data. Nothing was changed. Try again."
         }
     }
+}
+
+/// How the Add sheet starts.
+public enum AddRequest: Equatable, Sendable {
+    case new
+    case transfer
+    case edit(Transaction)
+    /// "Repeat this": same details, today's date, a new transaction (TXN-014).
+    case repeatOf(Transaction)
 }

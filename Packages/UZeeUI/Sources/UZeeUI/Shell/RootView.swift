@@ -80,6 +80,10 @@ struct TabRoot: View {
                     switch route {
                     case .settings: SettingsView(session: session)
                     case .componentGallery: ComponentGallery(session: session)
+                    case .accounts: AccountsView(session: session)
+                    case .account(let id): AccountDetailView(session: session, accountID: id)
+                    case .transaction(let id): TransactionDetailView(session: session, transactionID: id)
+                    case .exchangeRate: ExchangeRateView(session: session)
                     }
                 }
         }
@@ -88,7 +92,7 @@ struct TabRoot: View {
     @ViewBuilder private var screen: some View {
         switch tab {
         case .home: HomeView(session: session)
-        case .activity: ActivityView()
+        case .activity: ActivityView(session: session)
         case .budget: BudgetView()
         case .calendar: CalendarTabView()
         case .people: PeopleView()

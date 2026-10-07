@@ -1,15 +1,5 @@
 import SwiftUI
 
-/// Activity (SCR-08). The list, search and filters arrive with transactions (M2–M3).
-struct ActivityView: View {
-    var body: some View {
-        TabPlaceholder(title: "Activity") {
-            EmptyStateView("No transactions yet", systemImage: "list.bullet.rectangle",
-                           description: "Everything you spend, earn and transfer will be listed here by day.")
-        }
-    }
-}
-
 /// Budget (SCR-11). Limits and progress arrive in M4.
 struct BudgetView: View {
     var body: some View {

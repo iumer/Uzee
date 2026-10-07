@@ -18,6 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: scripts/check-secrets.sh
+      - name: No Double or Float in money code (M2 acceptance 1)
+        run: |
+          if grep -rnwE 'Double|Float' Packages/UZeeCore/Sources/UZeeCore/Money Packages/UZeeCore/Sources/UZeeCore/Accounts \
+               Packages/UZeeCore/Sources/UZeeCore/Transactions Packages/UZeeData/Sources/UZeeData/Ledger | grep -v '///'; then
+            echo "::error::Money code must use Int64 minor units and Decimal only"; exit 1
+          fi
 
   core-linux:
     name: UZeeCore tests on Linux (ENV-001)
@@ -54,9 +60,8 @@ jobs:
         run: scripts/ci-pick-simulators.sh >> "$GITHUB_ENV"
       - name: Start booting simulators early
         # A fresh simulator spends minutes on first-boot data migration; let it run during the builds.
-        run: |
-          xcrun simctl boot "$IPHONE_ID" || true
-          xcrun simctl boot "$IPAD_ID" || true
+        # Only the iPhone: booting the iPad at the same time slowed the iPhone smoke past its timeout (run #16).
+        run: xcrun simctl boot "$IPHONE_ID" || true
       - name: Cache Swift packages
         uses: actions/cache@v4
         with:
@@ -88,7 +93,7 @@ jobs:
             -destination "generic/platform=iOS Simulator" -derivedDataPath build/dd \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/build.log | grep -E "error:|\*\* " || (tail -60 build/build.log; exit 1)
       - name: Smoke UI tests on iPhone
-        timeout-minutes: 15
+        timeout-minutes: 25
         run: |
           scripts/ci-run-smoke.sh "$IPHONE_ID" iphone
           xcrun simctl shutdown "$IPHONE_ID" || true

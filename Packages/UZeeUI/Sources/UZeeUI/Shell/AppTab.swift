@@ -33,4 +33,8 @@ public enum AppTab: String, CaseIterable, Hashable, Sendable {
 public enum Route: Hashable, Sendable {
     case settings
     case componentGallery
+    case accounts
+    case account(UUID)
+    case transaction(UUID)
+    case exchangeRate
 }
