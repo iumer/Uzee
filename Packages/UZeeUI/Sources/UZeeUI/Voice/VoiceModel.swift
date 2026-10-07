@@ -244,6 +244,11 @@ final class VoiceModel {
             self.card = nil
             say(result)
         } else {
+            // The app-wide error alert can't show over this sheet, so a save failure goes on the card.
+            if card.problem == nil, let message = session.errorMessage {
+                card.problem = message
+                session.errorMessage = nil
+            }
             self.card = card
         }
     }

@@ -250,7 +250,11 @@ public final class AppSession {
             reload()
             return true
         } catch {
+            #if DEBUG
+            errorMessage = "\(failure) [\(error)]"
+            #else
             errorMessage = failure
+            #endif
             return false
         }
     }

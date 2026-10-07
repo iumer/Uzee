@@ -16,6 +16,7 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 
 ### Fixed
 - Ask UZee: when a confirmation card appears, the keyboard drops so the whole card, including Save, is on screen.
+- Ask UZee: if saving a card fails, the reason shows on the card. Before, it went to an alert that can't appear over the sheet, so Save seemed to do nothing.
 - Smoke tests: opening Activity waits for the Settings pop to finish, and the lend-card test reports the card's problem if saving fails.
 
 ## [0.9.2] build 11 — 2026-10-07 — Smiley logo
