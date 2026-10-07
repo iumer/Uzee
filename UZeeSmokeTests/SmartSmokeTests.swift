@@ -30,10 +30,23 @@ final class SmartSmokeTests: XCTestCase {
         app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", value)).firstMatch
     }
 
-    private func ask(_ sentence: String) {
-        tap("voice.input")
-        app.typeText(sentence)
-        tap("voice.send")
+    private func ask(_ sentence: String, file: StaticString = #filePath, line: UInt = #line) {
+        let input = element("voice.input")
+        XCTAssertTrue(input.waitForExistence(timeout: 30), "voice.input missing", file: file, line: line)
+        input.tap()
+        // Type only once the keyboard is up; typing during its animation can drop letters.
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "Keyboard didn't open", file: file, line: line)
+        input.typeText(sentence)
+        tap("voice.send", file: file, line: line)
+        XCTAssertTrue(text(containing: sentence).waitForExistence(timeout: 10), "\(sentence) wasn't sent", file: file, line: line)
+    }
+
+    /// Saves a screenshot with the failure so the run shows what was on screen.
+    private func fail(_ message: String, file: StaticString = #filePath, line: UInt = #line) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.lifetime = .keepAlways
+        add(shot)
+        XCTFail(message, file: file, line: line)
     }
 
     private func openVoice() {
@@ -53,11 +66,12 @@ final class SmartSmokeTests: XCTestCase {
         ask("I lent 20k to a friend")
         XCTAssertTrue(text(containing: "Who did you lend it to?").waitForExistence(timeout: 30), "No follow-up question")
         ask("Usama")
-        XCTAssertTrue(element("voice.card").waitForExistence(timeout: 30), "No confirmation card")
-        tap("voiceCard.save")
+        let save = element("voiceCard.save")
+        guard save.waitForExistence(timeout: 30) else { return fail("No confirmation card") }
+        save.tap()
         if !text(containing: "Saved").waitForExistence(timeout: 30) {
             let problem = element("voiceCard.problem")
-            XCTFail(problem.exists ? "Card did not save: \(problem.label)" : "Card did not save")
+            fail(problem.exists ? "Card did not save: \(problem.label)" : "Card did not save")
         }
     }
 
