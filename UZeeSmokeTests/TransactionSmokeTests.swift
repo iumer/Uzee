@@ -37,7 +37,7 @@ final class TransactionSmokeTests: XCTestCase {
         tap("account.\(account)")
         let balance = element("account.balance")
         XCTAssertTrue(balance.waitForExistence(timeout: 30))
-        let label = balance.label
+        let label = balance.value as? String ?? balance.label
         app.navigationBars[account].buttons.element(boundBy: 0).tap()
         return label
     }

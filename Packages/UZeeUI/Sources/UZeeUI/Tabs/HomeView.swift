@@ -92,6 +92,7 @@ struct HomeView: View {
                             AccountRow(account: account, ledger: session.ledger)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("account.\(account.name)")
                         if account.id != shown.last?.id { Divider() }
                     }
                 }

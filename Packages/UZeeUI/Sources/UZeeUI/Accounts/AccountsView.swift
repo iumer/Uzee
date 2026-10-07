@@ -26,6 +26,7 @@ struct AccountsView: View {
                         NavigationLink(value: Route.account(account.id)) {
                             AccountRow(account: account, ledger: session.ledger)
                         }
+                        .accessibilityIdentifier("account.\(account.name)")
                     }
                 }
             }
@@ -36,6 +37,7 @@ struct AccountsView: View {
                         NavigationLink(value: Route.account(account.id)) {
                             AccountRow(account: account, ledger: session.ledger)
                         }
+                        .accessibilityIdentifier("account.\(account.name)")
                     }
                 }
             }
@@ -84,11 +86,15 @@ struct AccountDetailView: View {
                     Text("Balance").font(.subheadline).foregroundStyle(UZColor.label2)
                     AmountText(session.ledger.balance(of: account), style: .transfer, font: .title.bold(),
                                base: session.ledger.base, rate: session.ledger.rate(for: account.currency))
-                        .accessibilityIdentifier("account.balance")
                     Text("Opening \(MoneyFormatter.string(account.openingBalance)) on \(account.openingDate.listTitle(today: today))")
                         .font(.caption).foregroundStyle(UZColor.label2)
                 }
                 .padding(.vertical, UZSpacing.xs)
+                // One element for VoiceOver and UI tests: "Balance", value "8,500 rupees".
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Balance")
+                .accessibilityValue(MoneyFormatter.spoken(session.ledger.balance(of: account)))
+                .accessibilityIdentifier("account.balance")
                 if !account.isArchived {
                     Button("Reconcile balance") { isReconciling = true }
                         .accessibilityIdentifier("account.reconcile")

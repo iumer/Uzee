@@ -65,7 +65,7 @@ struct AccountRow: View {
         }
         .frame(minHeight: 52)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("account.\(account.name)")
+        // The id goes on the NavigationLink around this row; an inner id is hidden from UI tests.
     }
 
     private var subtitle: String {
