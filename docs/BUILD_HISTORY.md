@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Version | 0.1 (2026-10-06) |
-| Latest build | none (no application code yet) |
+| Latest build | 0.0.1 (1), 2026-10-06 |
 | Related | MILESTONE_PLAN.md, TEST_PLAN.md §6 and §9, BUG_REGISTRY.md, DEPLOYMENT_GUIDE.md |
 
 ## Rules (master prompt §16, §17)
@@ -18,7 +18,7 @@
 
 | Version (build) | Date | Milestone | Highlights | Tests run / pass / fail | Installed on |
 |---|---|---|---|---|---|
-| — | — | — | No builds yet | — | — |
+| 0.0.1 (1) | 2026-10-06 | M0 — Foundation | Xcode project, 4 packages, GRDB database, CI, launch screen | 10 run / 10 pass (3 partial) / 0 fail | Owner's iPhone 17 Pro Max (iOS 27.0) |
 
 ## Entry format
 
@@ -42,4 +42,30 @@ INSTALLATION NOTES:  how to install (DEPLOYMENT_GUIDE §2), schema migration (ye
 
 ## Builds
 
-None yet. The first planned build is **0.0.1 (1)** at the end of Milestone 0.
+```
+BUILD:               0.0.1 (1)
+DATE:                2026-10-06
+MILESTONE:           M0 — Foundation
+GIT:                 commit b987435 · branch claude/project-thread-m75ycs (tag v0.0.1 to be added when main exists)
+NEW FEATURES:        Launch screen showing app name, version "0.0.1 (1)" and database status
+CHANGES:             Xcode project (universal iPhone + iPad, iOS 26+); local packages UZeeCore, UZeeData (GRDB 7,
+                     migration v1_baseline), UZeeSystem (logging), UZeeUI; xcconfig versioning; CI (Linux core tests,
+                     secret check, iOS package tests + smoke UI tests on iPhone and iPad simulators); scripts
+BUG FIXES:           none (pre-release CI fixes only: SMK-004 duplicate accessibility match, iPad simulator boot timeout)
+KNOWN ISSUES:        none in the app. CI runs Xcode 26.6 / iOS 26.5 simulators (newest on the runner); owner builds
+                     with Xcode 27 beta / iOS 27 — both green.
+NEW TESTS:           AppInfoTests (2), MigrationTests (3), LogTests (1), LaunchViewTests (1), SmokeTests (4)
+TESTS RUN:           CI run #5 (37542793190): core-linux, secret check, package tests on iPhone 17 Pro sim,
+                     smoke UI tests on iPhone 17 Pro and iPad Pro 13-inch (M5) sims, iOS 26.5.
+                     Manual: install + launch on owner's iPhone 17 Pro Max, iOS 27.0, Xcode 27 beta.
+PASS:                SMK-001, SMK-002, ENV-001, ENV-002, ENV-004, ENV-006, ENV-007
+                     Partial pass: SMK-003 (1 cold launch, not 5), SMK-004 (in-memory DB; file/WAL/protection not
+                     inspected), SMK-011 (1 relaunch cycle, no background/foreground)
+FAIL:                none
+NOT RUN:             ENV-003 (⌘U on owner's Mac; build + run done), ENV-005 (file protection on device, needs debug
+                     screen), ENV-008 (logger redaction in Console)
+REGRESSIONS:         none (first build)
+INSTALLATION NOTES:  DEPLOYMENT_GUIDE §2: open UZee.xcodeproj, Team = Personal Team, run on iPhone, trust the
+                     developer once. No user data yet; migration v1 creates an empty settings table.
+                     Free Apple ID: app stops opening after 7 days (around 2026-10-13); press Run again to renew.
+```

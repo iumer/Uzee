@@ -6,7 +6,16 @@ No application version exists yet; entries below are documentation stages and ar
 
 ## [Unreleased]
 
-Nothing yet. Implementation starts with Milestone 0 (`0.0.1`) after the owner approves the planning documents.
+Nothing yet. Next: Milestone 1 (navigation shell, design system, settings, sample data) after owner approval.
+
+## [0.0.1] build 1 — 2026-10-06 — Milestone 0 Foundation
+
+### Added
+- Universal iPhone + iPad Xcode project (iOS 26+, Swift 6, strict concurrency) with Debug/Release xcconfigs and versioning.
+- Local packages: UZeeCore (app info, errors), UZeeData (GRDB database, migration `v1_baseline`, protected storage location), UZeeSystem (logging), UZeeUI (launch screen).
+- Launch screen showing version and database status.
+- CI: UZeeCore tests on Linux, secret-pattern check, package tests and smoke UI tests on iPhone and iPad simulators.
+- First install on the owner's iPhone 17 Pro Max (iOS 27).
 
 ## 2026-10-06 — Design approval and planning documents
 

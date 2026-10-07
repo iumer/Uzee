@@ -3,14 +3,14 @@
 | | |
 |---|---|
 | Version | 0.1 (2026-10-06), seeded from MILESTONE_PLAN v0.1 |
-| Totals | 313 tests registered · 0 run · 0 pass · 0 fail |
+| Totals | 313 tests registered · 10 run · 10 pass (3 partial) · 0 fail · as of build 0.0.1 (1) |
 | Oracle | docs/mockup-dataset.md: today Tue 6 Oct 2026, Asia/Karachi, $1 = Rs 280, spending = my share |
 
 ## Rules
 
 - Tests are **never deleted**. A test that no longer applies is marked `Retired` with the date, reason and the owner's approval; it stays in this file.
 - Every test has an ID, module, title and expected result. Core tests use the full §12 format; others use the compact table and get the full format when first run.
-- After every run, ACTUAL RESULT, STATUS (`Not run` · `Pass` · `Fail` · `Blocked` · `Retired`) and BUILD are updated. Totals at the top are updated with them.
+- After every run, ACTUAL RESULT, STATUS (`Not run` · `Pass` · `Pass (partial)` (what ran passed but some steps are not covered yet; ACTUAL RESULT says which) · `Fail` · `Blocked` · `Retired`) and BUILD are updated. Totals at the top are updated with them.
 - Level: **U** unit (UZeeCore, also Linux) · **I** integration (GRDB / system adapters) · **UI** XCUITest/snapshot · **M** manual on device.
 - Bug regressions are added as `REG-nnn` (linked to `BUG-nnn` in BUG_REGISTRY) and run before every build.
 
@@ -48,28 +48,28 @@ Common fields for every full-format test below unless stated: **ACTUAL RESULT:**
 - PRECONDITIONS: Clean simulator (iPhone and iPad) or owner's iPhone paired, Developer Mode on, no previous UZee install.
 - STEPS: 1. Build and run scheme UZee from Xcode (device) or `xcodebuild test` (simulator). 2. Look at the Home Screen.
 - EXPECTED RESULT: Install succeeds with no signing or provisioning error; UZee icon appears.
-- ACTUAL RESULT: — · STATUS: Not run · BUILD: —
+- ACTUAL RESULT: 2026-10-06: installed from Xcode 27 beta (free Apple ID, Personal Team) on owner's iPhone 17 Pro Max, iOS 27.0; icon appeared; one-time Trust step done. CI simulators install via test runner (run #5). · STATUS: Pass · BUILD: 0.0.1 (1)
 - NOTES: Level UI + M. From M0. On device also tests "Trust developer" first-run step.
 
 **TEST ID:** SMK-002 · **MODULE:** App · **TITLE:** Application launches
 - PRECONDITIONS: SMK-001 passed.
 - STEPS: 1. Tap the UZee icon (or `XCUIApplication().launch()`). 2. Wait for the first screen.
 - EXPECTED RESULT: First screen appears (M0: "UZee 0.0.1 (1)" placeholder; M1+: Home tab) with no alert or error banner.
-- ACTUAL RESULT: — · STATUS: Not run · BUILD: —
+- ACTUAL RESULT: Launch screen "UZee · 0.0.1 (1) · Database ready" on owner's iPhone; CI run #5 passed on iPhone 17 Pro and iPad Pro 13-inch (M5) simulators, iOS 26.5. · STATUS: Pass · BUILD: 0.0.1 (1)
 - NOTES: Level UI + M. From M0.
 
 **TEST ID:** SMK-003 · **MODULE:** App · **TITLE:** No crash on launch
 - PRECONDITIONS: SMK-001 passed.
 - STEPS: 1. Cold launch 5 times (terminate between launches). 2. Check app state after 5 s each time. 3. Check Xcode Organizer / device crash logs.
 - EXPECTED RESULT: App is `runningForeground` every time; no crash report.
-- ACTUAL RESULT: — · STATUS: Not run · BUILD: —
+- ACTUAL RESULT: CI run #5: one cold launch per simulator, `runningForeground`, no crash; owner's iPhone launched without crash. The 5× cold-launch loop and crash-log check are not automated yet. · STATUS: Pass (partial) · BUILD: 0.0.1 (1)
 - NOTES: Level UI + M. From M0. NFR-07.
 
 **TEST ID:** SMK-004 · **MODULE:** Data · **TITLE:** Database initializes
 - PRECONDITIONS: Fresh install (no database file).
 - STEPS: 1. Launch. 2. Inspect Application Support/UZee/uzee.sqlite via the debug info screen or integration test hook. 3. Read `grdb_migrations` and the file protection attribute.
 - EXPECTED RESULT: File exists; all migrations up to the build's latest are recorded once; protection = `completeUntilFirstUserAuthentication`; WAL mode on.
-- ACTUAL RESULT: — · STATUS: Not run · BUILD: —
+- ACTUAL RESULT: CI run #5: "Database ready" shown with the in-memory database; migrations covered by ENV-004. On-disk file, WAL mode and protection attribute not checked yet (ENV-005, needs a debug info screen). · STATUS: Pass (partial) · BUILD: 0.0.1 (1)
 - NOTES: Level I + UI. From M0. Protection attribute only meaningful on device (ENV-005).
 
 **TEST ID:** SMK-005 · **MODULE:** Navigation · **TITLE:** Main navigation loads
@@ -118,7 +118,7 @@ Common fields for every full-format test below unless stated: **ACTUAL RESULT:**
 - PRECONDITIONS: App installed; (M2+) at least one transaction.
 - STEPS: Repeat 3×: launch → send to background → foreground → terminate → relaunch.
 - EXPECTED RESULT: No crash; same data; migrations not re-run; no duplicate rows.
-- ACTUAL RESULT: — · STATUS: Not run · BUILD: —
+- ACTUAL RESULT: CI run #5: launch → terminate → relaunch once per simulator, no crash. 3× loop with background/foreground not automated yet. · STATUS: Pass (partial) · BUILD: 0.0.1 (1)
 - NOTES: Level UI. From M0.
 
 **TEST ID:** SMK-012 · **MODULE:** Transactions · **TITLE:** Invalid input is handled safely
@@ -134,13 +134,13 @@ Common fields for every full-format test below unless stated: **ACTUAL RESULT:**
 
 | ID | Lvl | Title | Expected result | Status |
 |---|---|---|---|---|
-| ENV-001 | CI | CI `core-linux` runs UZeeCore tests | Job green; test count printed; any failure fails the job | Not run |
-| ENV-002 | CI | CI `ios` builds app + packages and runs tests on iPhone and iPad simulators | Job green; `.xcresult` uploaded | Not run |
-| ENV-003 | M | Local build on owner's Mac (Xcode 27 beta) | Build and ⌘U succeed with zero errors | Not run |
-| ENV-004 | I | Migration v1 on empty DB, then relaunch | Schema created once; second launch applies nothing | Not run |
+| ENV-001 | CI | CI `core-linux` runs UZeeCore tests | Job green; test count printed; any failure fails the job | Pass · 0.0.1 (1) · CI run #5 core-linux, 2 tests |
+| ENV-002 | CI | CI `ios` builds app + packages and runs tests on iPhone and iPad simulators | Job green; `.xcresult` uploaded | Pass · 0.0.1 (1) · CI run #5: 7 package tests + 4 smoke tests on iPhone and iPad sims |
+| ENV-003 | M | Local build on owner's Mac (Xcode 27 beta) | Build and ⌘U succeed with zero errors | Not run · build + run on device succeeded 2026-10-06; ⌘U not run locally yet |
+| ENV-004 | I | Migration v1 on empty DB, then relaunch | Schema created once; second launch applies nothing | Pass · 0.0.1 (1) · MigrationTests (3) in CI run #5 |
 | ENV-005 | M | DB file protection on device | Attribute = completeUntilFirstUserAuthentication | Not run |
-| ENV-006 | UI | Version display | "0.0.1 (1)" equals Info.plist values | Not run |
-| ENV-007 | CI | Secret-pattern check | Fails on a planted fake key in a throwaway branch; passes on clean repo | Not run |
+| ENV-006 | UI | Version display | "0.0.1 (1)" equals Info.plist values | Pass · 0.0.1 (1) · CI run #5 + owner's iPhone shows "0.0.1 (1)" |
+| ENV-007 | CI | Secret-pattern check | Fails on a planted fake key in a throwaway branch; passes on clean repo | Pass · 0.0.1 (1) · planted key failed locally, clean repo passes in CI run #5 |
 | ENV-008 | M | Logger redaction | Interpolated amount/name shows `<private>` in Console | Not run |
 
 ## 3. M1 — Navigation, design system, sample mode (compact)
