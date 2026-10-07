@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -29,6 +29,9 @@ jobs:
 
   ios:
     name: Build and test on iPhone and iPad simulators (ENV-002)
+    # GitHub's Mac machines take ~20-30 min, so this runs once per milestone (manual run) and on main.
+    # Day-to-day checks run on the owner's Mac simulator, which takes ~4 min.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: macos-26
     timeout-minutes: 60
     steps:
@@ -40,19 +43,11 @@ jobs:
           xcodebuild -version
       - name: Pick simulators
         run: scripts/ci-pick-simulators.sh >> "$GITHUB_ENV"
-      - name: Decide whether to run the iPad smoke
-        # iPad smoke adds ~15 min, so it runs on main and on manual runs (before each milestone sign-off).
-        run: |
-          if [ "$GITHUB_REF" = "refs/heads/main" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "RUN_IPAD=1" >> "$GITHUB_ENV"
-          else
-            echo "RUN_IPAD=0" >> "$GITHUB_ENV"
-          fi
       - name: Start booting simulators early
         # A fresh simulator spends minutes on first-boot data migration; let it run during the builds.
         run: |
           xcrun simctl boot "$IPHONE_ID" || true
-          if [ "$RUN_IPAD" = 1 ]; then xcrun simctl boot "$IPAD_ID" || true; fi
+          xcrun simctl boot "$IPAD_ID" || true
       - name: Cache Swift packages
         uses: actions/cache@v4
         with:
@@ -89,7 +84,6 @@ jobs:
           scripts/ci-run-smoke.sh "$IPHONE_ID" iphone
           xcrun simctl shutdown "$IPHONE_ID" || true
       - name: Smoke UI tests on iPad
-        if: env.RUN_IPAD == '1'
         timeout-minutes: 25
         run: scripts/ci-run-smoke.sh "$IPAD_ID" ipad
       - name: Upload test results
