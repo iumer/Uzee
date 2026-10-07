@@ -35,7 +35,8 @@ struct ActivityStoreTests {
     @Test("TXN-020 day totals for 1–6 Oct, my share")
     func dayTotals() throws {
         let (_, _, snapshot, rows) = try sample()
-        let days = ActivityQuery.days(ActivityQuery.filter(rows, ActivityFilter(), snapshot: snapshot), snapshot: snapshot)
+        let october = ActivityFilter(from: day(1), through: day(31))
+        let days = ActivityQuery.days(ActivityQuery.filter(rows, october, snapshot: snapshot), snapshot: snapshot)
         #expect(days.map(\.date.day) == [6, 5, 4, 3, 2, 1])
         #expect(days.map { MoneyFormatter.string($0.spending) } == ["Rs 16,117", "Rs 19,690", "Rs 6,200", "Rs 2,687", "Rs 3,680", "Rs 30,000"])
     }
@@ -43,7 +44,13 @@ struct ActivityStoreTests {
     @Test("TXN-022 HBL; TXN-023 Food; TXN-024 type and date range")
     func filters() throws {
         let (_, _, snapshot, rows) = try sample()
-        func run(_ filter: ActivityFilter) -> [MoneyTransaction] { ActivityQuery.filter(rows, filter, snapshot: snapshot) }
+        // October only; April–September history is sample data too.
+        func run(_ filter: ActivityFilter) -> [MoneyTransaction] {
+            var filter = filter
+            filter.from = filter.from ?? day(1)
+            filter.through = filter.through ?? day(31)
+            return ActivityQuery.filter(rows, filter, snapshot: snapshot)
+        }
         #expect(Set(run(ActivityFilter(accountIDs: [id("HBL", snapshot)])).compactMap(\.payeeName))
                 == ["Office rent", "Jazz postpaid", "Wise → HBL", "Shell, Gulberg"])
         let food = run(ActivityFilter(categoryIDs: [group(.food, snapshot)]))
@@ -56,7 +63,9 @@ struct ActivityStoreTests {
     @Test("TXN-025 search payee, note and amount")
     func search() throws {
         let (_, _, snapshot, rows) = try sample()
-        func find(_ text: String) -> [String] { ActivityQuery.filter(rows, ActivityFilter(text: text), snapshot: snapshot).compactMap(\.payeeName) }
+        func find(_ text: String) -> [String] {
+            ActivityQuery.filter(rows, ActivityFilter(from: day(1), through: day(31), text: text), snapshot: snapshot).compactMap(\.payeeName)
+        }
         #expect(find("8940") == ["Imtiaz Super Market"])
         #expect(find("shell") == ["Shell, Gulberg"])
         #expect(find("SPLIT EQUALLY").count == 4)
