@@ -27,7 +27,8 @@ final class AppContainer {
                              ledger: database.map(Self.ledgerClient) ?? .unavailable,
                              activity: activity,
                              budgets: database.map(Self.budgetClient) ?? .unavailable,
-                             people: database.map(Self.peopleClient) ?? .unavailable)
+                             people: database.map(Self.peopleClient) ?? .unavailable,
+                             recurring: database.map(Self.recurringClient) ?? .unavailable)
     }
 
     static func live() -> AppContainer {
@@ -137,6 +138,27 @@ final class AppContainer {
             settle: { person, group, amount, iPaid, account, date in
                 try store.settle(personID: person, groupID: group, amount: amount, iPaid: iPaid, accountID: account, on: day(date), at: date)
             }
+        )
+    }
+
+    private static func recurringClient(_ database: AppDatabase) -> RecurringClient {
+        let store = RecurringStore(database: database)
+        @Sendable func day(_ date: Date) -> LocalDate { LocalDate(date, in: .current) }
+        return RecurringClient(
+            snapshot: { try store.snapshot() },
+            save: { item, from in try store.save(item, priceFrom: from) },
+            delete: { try store.delete(itemID: $0) },
+            setStatus: { status, item in try store.setStatus(status, itemID: item, on: day(Date())) },
+            markPaid: { item, scheduled, amount, account, date in
+                let transaction = try store.markPaid(itemID: item, scheduledDate: scheduled, amount: amount, accountID: account,
+                                                     on: day(date), at: date)
+                Log.data.info("Recurring marked paid: \(transaction.kind.rawValue, privacy: .public)")
+                return transaction.id
+            },
+            skip: { item, scheduled in try store.skip(itemID: item, scheduledDate: scheduled) },
+            snooze: { item, scheduled, until in try store.snooze(itemID: item, scheduledDate: scheduled, until: until) },
+            reopen: { item, scheduled in try store.reopen(itemID: item, scheduledDate: scheduled) },
+            recordPayout: { payout, account, date in try store.recordPayout(payoutID: payout, accountID: account, on: day(date), at: date) }
         )
     }
 

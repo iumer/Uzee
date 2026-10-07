@@ -301,7 +301,8 @@ enum SampleFixture {
                   limit: Int? = nil, paidBefore: Int = 0, status: SubscriptionStatus = .active, changed: LocalDate? = nil,
                   started: LocalDate? = nil, color: String, prices: [PricePoint] = [], payouts: [KametiPayout] = [],
                   notes: String? = nil) -> RecurringItem {
-            let first = anchor ?? day(2026, 10, d)
+            // Regular items repeat from when they started, so earlier months show as paid before tracking.
+            let first = anchor ?? started ?? day(2026, 10, d)
             return RecurringItem(name: name, type: type, amount: amount, isEstimated: estimated, accountID: account.flatMap { accounts[$0] },
                                  categoryID: category.flatMap { categories[$0] }, groupID: group.flatMap { groups[$0] },
                                  paidByID: paidBy.flatMap { people[$0] }, rule: RecurrenceRule(anchor: first, limit: limit),
@@ -322,7 +323,7 @@ enum SampleFixture {
             (item("Office reimbursement", .income, usd(25_000), day: 5, account: "Wise", category: "income.reimbursement",
                   estimated: true, group: "Office", started: day(2026, 4, 5), color: "#34C759"), "Office reimbursement"),
             (item("Gas bill · SNGPL", .utility, rs(3_250), day: 5, account: "HBL", category: "utilities.gas", estimated: true,
-                  started: day(2026, 4, 6), color: "#FFCC00"), nil),
+                  started: day(2026, 4, 5), color: "#FFCC00"), nil),
             (item("Internet · Nayatel", .bill, rs(6_500), day: 8, account: "HBL", category: "utilities.internet",
                   started: day(2026, 4, 8), color: "#FFCC00"), nil),
             (item("Car installment · Meezan", .installment, rs(45_000), day: 10, account: "Meezan", category: "transport.car_installment",
@@ -357,8 +358,8 @@ enum SampleFixture {
             for point in recurring.priceHistory {
                 try RecurringStore.addPrice(recurring.id, point, isSample: true, db)
             }
-            if let paid, let txn = october[paid] {
-                try RecurringStore.upsertRecord(OccurrenceRecord(itemID: recurring.id, scheduledDate: recurring.rule.anchor, status: .paid,
+            if let paid, let txn = october[paid], let due = recurring.rule.date(at: recurring.rule.firstIndex(onOrAfter: oct1)) {
+                try RecurringStore.upsertRecord(OccurrenceRecord(itemID: recurring.id, scheduledDate: due, status: .paid,
                                                                  transactionID: txn), isSample: true, db)
             }
         }

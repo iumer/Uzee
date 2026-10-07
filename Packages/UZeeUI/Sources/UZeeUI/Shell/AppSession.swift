@@ -53,15 +53,19 @@ public final class AppSession {
     /// People, groups, splits and loans, and the balances computed from them (SPL-07).
     public private(set) var people: PeopleSnapshot = .empty
     public private(set) var balances = PeopleLedger(selfID: UUID(), transactions: [], splits: [], loans: [], base: .pkr, rates: [:])
+    /// Bills, subscriptions, income and plans with their resolved occurrences (REC-02).
+    public private(set) var recurring: RecurringSnapshot = .empty
 
     private let sampleData: SampleDataActions
     public let client: LedgerClient
     public let activity: ActivityClient
     public let budgets: BudgetClient
     public let peopleClient: PeopleClient
+    public let recurringClient: RecurringClient
 
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
-                activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable) {
+                activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable,
+                recurring: RecurringClient = .unavailable) {
         self.info = info
         self.isDatabaseReady = isDatabaseReady
         self.sampleData = sampleData
@@ -69,6 +73,7 @@ public final class AppSession {
         self.activity = activity
         self.budgets = budgets
         self.peopleClient = people
+        self.recurringClient = recurring
         isSampleMode = (try? sampleData.isActive()) ?? false
         reload()
     }
@@ -84,6 +89,7 @@ public final class AppSession {
             people = try peopleClient.snapshot()
             balances = PeopleLedger(selfID: people.selfID, transactions: transactions, splits: people.splits, loans: people.loans,
                                     base: ledger.base, rates: ledger.rates)
+            recurring = try recurringClient.snapshot()
         } catch {
             errorMessage = "Couldn't read your accounts. Close UZee and open it again."
         }
@@ -143,6 +149,54 @@ public final class AppSession {
             self.reload()
         }
         return true
+    }
+
+    /// Today in the device time zone, for due states.
+    public var today: LocalDate { LocalDate(Date(), in: .current) }
+
+    /// Mark paid (REC-02): posts the payment once, then offers Undo, which removes it and makes the bill due again.
+    @discardableResult
+    public func markPaid(_ occurrence: Occurrence, amount: Money, account: UUID?, date: Date) -> Bool {
+        let item = occurrence.itemID, scheduled = occurrence.scheduledDate
+        let transactionID: UUID
+        do {
+            transactionID = try recurringClient.markPaid(item, scheduled, amount, account, date)
+        } catch {
+            errorMessage = "Couldn't mark it paid. Nothing was changed. Try again."
+            return false
+        }
+        reload()
+        toasts.show("Marked paid") { [weak self] in
+            guard let self else { return }
+            do {
+                try self.recurringClient.reopen(item, scheduled)
+                try self.client.discard(transactionID)
+            } catch {
+                self.errorMessage = "Couldn't undo. The payment is still saved."
+            }
+            self.reload()
+        }
+        return true
+    }
+
+    /// Skip this time or snooze (REC-08), with Undo.
+    public func skip(_ occurrence: Occurrence) {
+        resolve(occurrence, toast: "Skipped this time") { try $0.skip(occurrence.itemID, occurrence.scheduledDate) }
+    }
+
+    public func snooze(_ occurrence: Occurrence, days: Int = 1) {
+        let until = max(today, occurrence.dueDate).addingDays(days)
+        resolve(occurrence, toast: "Snoozed to \(DateText.short(until))") {
+            try $0.snooze(occurrence.itemID, occurrence.scheduledDate, until)
+        }
+    }
+
+    private func resolve(_ occurrence: Occurrence, toast: String, _ work: (RecurringClient) throws -> Void) {
+        guard perform("Couldn't change it. Try again.", { try work(recurringClient) }) else { return }
+        toasts.show(toast) { [weak self] in
+            guard let self else { return }
+            self.perform("Couldn't undo. Try again.") { try self.recurringClient.reopen(occurrence.itemID, occurrence.scheduledDate) }
+        }
     }
 
     /// Soft delete; the row can come back from Recently Deleted (TXN-008, DATA-011).

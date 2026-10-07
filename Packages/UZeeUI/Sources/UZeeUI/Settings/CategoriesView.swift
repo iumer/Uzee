@@ -96,7 +96,7 @@ struct CategoryEditView: View {
                 Section { Text(problem).foregroundStyle(UZColor.negative).accessibilityIdentifier("category.problem") }
             }
             Section {
-                Toggle("Hide from pickers", isOn: Binding(get: { current.isHidden }, set: setHidden))
+                Toggle("Hide from pickers", isOn: Binding(get: { current.isHidden }, set: { setHidden($0) }))
                     .accessibilityIdentifier("category.hide")
             } footer: {
                 Text("Hidden categories still show on old transactions.")

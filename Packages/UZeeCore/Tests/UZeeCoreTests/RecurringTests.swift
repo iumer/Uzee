@@ -103,6 +103,7 @@ struct RecurringTests {
 
     @Test("LOAN-006 car plan: 14 paid before tracking, October is 15 of 36, Rs 990,000 left, ends Jul 2028")
     func carPlan() {
+        let car = self.car
         let summary = InstallmentSummary(car, records: [])
         #expect(summary.paid == 14 && summary.total == 36 && summary.left == 22)
         #expect(summary.remaining == rs(990_000))

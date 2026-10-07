@@ -48,4 +48,7 @@ public enum Route: Hashable, Sendable {
     case person(UUID)
     case groups
     case group(UUID)
+    case bills
+    case recurring(UUID)
+    case reports
 }

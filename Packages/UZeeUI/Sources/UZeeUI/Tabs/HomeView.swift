@@ -1,10 +1,12 @@
 import SwiftUI
 import UZeeCore
 
-/// Home (SCR-02). M2: available balance and accounts; due items, budget and people cards arrive in M4–M8.
+/// Home (SCR-02, AUD-02): what needs attention, what's available, budget left, what's due before salary,
+/// the next 7 days, people balances, where the money went this month, insights and accounts.
 struct HomeView: View {
     @Bindable var session: AppSession
     @State private var isAddingAccount = false
+    @State private var paying: Occurrence?
 
     var body: some View {
         ScrollView {
@@ -32,7 +34,10 @@ struct HomeView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("home.empty")
                 } else {
+                    let model = RecurringModel(session: session)
+                    overdueStrip(model)
                     availableCard
+                    HomeCards(session: session, model: model, paying: $paying)
                     accountsCard
                 }
             }
@@ -42,6 +47,7 @@ struct HomeView: View {
         .background(UZColor.bg)
         .navigationTitle("Home")
         .sheet(isPresented: $isAddingAccount) { AccountFormSheet(session: session, editing: nil) }
+        .sheet(item: $paying) { MarkPaidSheet(session: session, occurrence: $0) }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
@@ -60,10 +66,37 @@ struct HomeView: View {
         }
     }
 
+    @ViewBuilder
+    private func overdueStrip(_ model: RecurringModel) -> some View {
+        let overdue = model.nextOccurrences.filter { $0.occurrence.state == .overdue }
+        if let first = overdue.first {
+            UZCard(padding: UZSpacing.l) {
+                HStack(spacing: UZSpacing.l) {
+                    Image(systemName: "exclamationmark.circle.fill").font(.title2).foregroundStyle(UZColor.negative)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                        Text(overdue.count == 1 ? "1 overdue" : "\(overdue.count) overdue")
+                            .font(.caption.weight(.bold)).foregroundStyle(UZColor.negative)
+                        Text("\(first.item.name) · \(MoneyFormatter.string(first.occurrence.amount))").font(.subheadline.weight(.semibold))
+                        Text((first.item.isEstimated ? "Estimated · " : "") + "was due \(DateText.short(first.occurrence.scheduledDate))")
+                            .font(.footnote).foregroundStyle(UZColor.label2)
+                    }
+                    Spacer()
+                    Button("Pay") { paying = first.occurrence }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("home.payOverdue")
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("home.overdue")
+        }
+    }
+
     private var availableCard: some View {
         UZCard {
             VStack(alignment: .leading, spacing: UZSpacing.s) {
-                Text("Available").font(.subheadline.weight(.semibold)).foregroundStyle(UZColor.label2)
+                Text("Available balance").font(.subheadline.weight(.semibold)).foregroundStyle(UZColor.label2)
                 AmountText(session.ledger.available, font: .system(.largeTitle, weight: .bold))
                     .accessibilityIdentifier("home.available")
                 if let footnote = session.ledger.footnote {
