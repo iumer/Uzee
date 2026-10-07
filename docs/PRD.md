@@ -383,6 +383,8 @@ See RPT-01…09. Reports count my share of split items, currency conversion at c
 | Savings goals with targets | Progress to a target amount/date | Motivation | Medium | Accounts |
 | Home Screen widgets | Balance/budget at a glance | Faster check | Low | Dashboard |
 | Urdu / Roman Urdu voice | Speak naturally in Urdu | Comfort | High | On-device model language support |
+| Qibla direction (owner request 2026-10-07) | Compass arrow pointing to the Kaaba from the current location | Daily use, keeps UZee the one personal app | Low | Core Location + heading (magnetometer); location permission |
+| Namaz times and reminders (owner request 2026-10-07) | Today's five prayer windows for the current city and country, clearly shown as start and end (e.g. "Fajr · now · ends 5:15 am"), with a notification at each start | Timings change daily; reminders follow location | Medium | Location; an authentic source: either fetch daily timings online (e.g. a recognised timings service) or compute on device with a standard method (University of Islamic Sciences, Karachi; Hanafi Asr) and let the owner pick the method; works offline after fetch; notifications |
 
 ---
 
