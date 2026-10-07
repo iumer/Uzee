@@ -60,7 +60,7 @@ jobs:
             Packages/UZeeData/.build
             Packages/UZeeSystem/.build
             build/dd/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('Packages/*/Package.swift', '**/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ hashFiles('Packages/*/Package.swift', 'Packages/*/Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
       - name: Package tests on the Mac host
         # UZeeData and UZeeSystem also support macOS, so they test natively without a simulator.
