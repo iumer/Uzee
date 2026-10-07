@@ -37,14 +37,18 @@ public struct StatementReading: Equatable, Sendable {
     public var closingBalance: Decimal?
     public var signSource: SignSource
     public var linesRead: Int
+    /// The bank or wallet, when the layout is one UZee knows.
+    public var source: StatementSource? = nil
+    /// The currency the statement names in its header, e.g. "USD" for a Wise dollar statement.
+    public var currencyCode: String? = nil
 
     public var first: LocalDate? { rows.map(\.date).min() }
     public var last: LocalDate? { rows.map(\.date).max() }
 }
 
-/// Reads statement text into rows without knowing the bank (IMP-01, IMP-06): a row starts with a date
-/// and ends with the amount and, usually, the running balance. Per-bank readers can replace parts of this
-/// once sample statements are available; until then this covers the common table layout.
+/// Reads statement text into rows (IMP-01, IMP-06). Most banks print one row per transaction: it starts with
+/// a date and ends with the amount and, usually, the running balance. SadaPay and Wise use their own
+/// layouts (StatementLayouts). Known sources: MCB, HBL, Meezan, SadaPay, NayaPay and Wise, PDF and CSV.
 public enum StatementParser {
     static let openingWords = ["opening balance", "balance b/f", "balance bf", "brought forward", "balance forward", "previous balance"]
     static let closingWords = ["closing balance", "balance c/f", "carried forward", "total", "available balance"]
@@ -54,8 +58,22 @@ public enum StatementParser {
     static let moneyOutWords = ["purchase", "pos", "payment", "paid", "withdrawal", "atm", "debit", "charges", "fee", "tax",
                                 "transfer to", "sent", "bill", "ibft out", "raast out"]
 
-    /// - Parameter lines: the statement's text, line by line, in reading order.
+    /// - Parameter lines: the statement's text, line by line, in reading order. Leading spaces show indentation.
     public static func read(lines: [String]) -> StatementReading {
+        let source = StatementLayouts.source(of: lines)
+        var reading: StatementReading
+        switch source {
+        case .sadapay: reading = StatementLayouts.readSadaPay(lines)
+        case .wise: reading = StatementLayouts.readWise(lines)
+        default: reading = readTable(lines)
+        }
+        reading.source = source
+        reading.currencyCode = StatementLayouts.currencyCode(lines)
+        return reading
+    }
+
+    /// One transaction per line, with wrapped descriptions on the lines below.
+    static func readTable(_ lines: [String]) -> StatementReading {
         let year = headerYear(lines)
         var drafts: [Draft] = []
         var opening: Decimal?
@@ -76,9 +94,10 @@ public enum StatementParser {
             }
             if let draft = row(from: line, year: year) {
                 drafts.append(draft)
-            } else if var previous = drafts.last, previous.continuations < 2, TextScan.amounts(in: line).filter(\.looksLikeMoney).isEmpty,
-                      line.contains(where: \.isLetter), line.count < 80 {
-                // A wrapped description.
+            } else if var previous = drafts.last, previous.continuations < 4, line.contains(where: \.isLetter), line.count < 100,
+                      !StatementLayouts.isTableHeader(lower), !StatementLayouts.isPageNoise(lower),
+                      TextScan.amounts(in: line).filter(\.looksLikeMoney).isEmpty || raw.prefix(while: \.isWhitespace).count >= 4 {
+                // A wrapped description. Indented lines can hold figures ("PKR 2600.00 … FOOD PANDA" on HBL).
                 previous.description += " " + line
                 previous.continuations += 1
                 drafts[drafts.count - 1] = previous
@@ -91,19 +110,21 @@ public enum StatementParser {
     /// Reads a CSV export (IMP-07): finds the date, description, amount (or debit and credit) and balance columns by name.
     public static func read(csv text: String) -> StatementReading? {
         let table = CSVReader.rows(text)
-        guard let headerIndex = table.prefix(15).firstIndex(where: { row in
+        guard let headerIndex = table.prefix(20).firstIndex(where: { row in
             let names = row.map { $0.lowercased() }
-            return names.contains(where: { $0.contains("date") })
+            return names.contains(where: { $0.contains("date") || $0.contains("timestamp") })
                 && names.contains(where: { $0.contains("amount") || $0.contains("debit") || $0.contains("credit") || $0.contains("withdraw") })
         }) else { return nil }
         let header = table[headerIndex].map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
         func column(_ names: [String], excluding: [String] = []) -> Int? {
             header.firstIndex { cell in names.contains(where: { cell.contains($0) }) && !excluding.contains(where: { cell.contains($0) }) }
         }
-        guard let dateColumn = column(["date"], excluding: ["value date"]) ?? column(["date"]) else { return nil }
+        guard let dateColumn = column(["date"], excluding: ["value date"]) ?? column(["date", "timestamp"]) else { return nil }
         let descriptionColumn = column(["description", "details", "narration", "particulars", "remarks", "merchant", "title", "reference", "note"])
-        let debitColumn = column(["debit", "withdraw", "money out", "paid out", "dr"], excluding: ["credit"])
-        let creditColumn = column(["credit", "deposit", "money in", "paid in", "cr"], excluding: ["debit", "description"])
+        // "Cr/Dr" (MCB): a column that says which way each amount went.
+        let directionColumn = column(["cr/dr", "dr/cr", "debit/credit", "credit/debit", "cr / dr", "dr / cr"])
+        let debitColumn = column(["debit", "withdraw", "money out", "paid out", "dr"], excluding: ["credit", "/"])
+        let creditColumn = column(["credit", "deposit", "money in", "paid in", "cr"], excluding: ["debit", "description", "/", "currency"])
         let amountColumn = column(["amount"])
         let balanceColumn = column(["balance"])
         guard amountColumn != nil || debitColumn != nil || creditColumn != nil else { return nil }
@@ -128,18 +149,44 @@ public enum StatementParser {
             } else if let value = TextScan.amounts(in: cell(amountColumn)).first {
                 amount = signed(value)
                 signKnown = signedColumn || value.isNegative || value.creditDebit != nil
+                switch cell(directionColumn).trimmingCharacters(in: .whitespaces).lowercased() {
+                case "dr", "debit", "d": amount = -value.value; signKnown = true
+                case "cr", "credit", "c": amount = value.value; signKnown = true
+                default: break
+                }
             }
             guard let amount, amount != 0 else { continue }
             hasColumns = hasColumns || signKnown
             let balance = TextScan.amounts(in: cell(balanceColumn)).first.map(signed)
-            let description = cell(descriptionColumn).trimmingCharacters(in: .whitespaces)
+            let description = csvDescription(cell(descriptionColumn))
             drafts.append(Draft(id: offset, date: date, description: description.isEmpty ? "Transaction" : description,
                                 magnitude: abs(amount), knownSign: signKnown ? (amount < 0 ? -1 : 1) : nil, balance: balance))
         }
+        let headerLines = table.prefix(headerIndex + 8).map { $0.joined(separator: " ") }
         guard !drafts.isEmpty else { return nil }
         let (rows, source) = resolveSigns(drafts, opening: nil)
-        return StatementReading(rows: rows, openingBalance: nil, closingBalance: nil,
-                                signSource: hasColumns && source == .words ? .columns : source, linesRead: table.count)
+        var reading = StatementReading(rows: rows, openingBalance: nil, closingBalance: nil,
+                                       signSource: hasColumns && source == .words ? .columns : source, linesRead: table.count)
+        reading.source = StatementLayouts.source(of: headerLines)
+        let currencyColumn = column(["currency"])
+        let firstCurrency = table.dropFirst(headerIndex + 1).first.flatMap { cells in
+            currencyColumn.flatMap { $0 < cells.count ? cells[$0].trimmingCharacters(in: .whitespaces).uppercased() : nil }
+        }
+        reading.currencyCode = StatementLayouts.currencyCodes.contains(firstCurrency ?? "") ? firstCurrency
+            : StatementLayouts.currencyCode(table.prefix(headerIndex).map { $0.joined(separator: " ") })
+        return reading
+    }
+
+    /// NayaPay puts several lines in one cell ("Incoming fund transfer from Ali\nSadaPay-0001|Transaction ID …"):
+    /// keep the useful parts, joined with " | ".
+    static func csvDescription(_ cell: String) -> String {
+        let parts = cell.components(separatedBy: CharacterSet(charactersIn: "|\n\r"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { part in
+                let lower = part.lowercased()
+                return !part.isEmpty && lower != "null" && !lower.hasPrefix("transaction id")
+            }
+        return parts.joined(separator: " | ")
     }
 
     // MARK: Rows
@@ -179,7 +226,9 @@ public enum StatementParser {
         let chars = Array(line)
         var bodyStart = first.end
         // A value date right after the posting date.
-        if dates.count > 1, dates[1].start - first.end <= 3 { bodyStart = dates[1].end }
+        if dates.count > 1, dates[1].start - first.end <= 12, String(chars[first.end..<dates[1].start]).allSatisfy(\.isWhitespace) {
+            bodyStart = dates[1].end
+        }
         let body = String(chars[bodyStart...])
         let amounts = TextScan.amounts(in: body).filter(\.looksLikeMoney)
         guard !amounts.isEmpty else { return nil }
@@ -220,7 +269,7 @@ public enum StatementParser {
 
     private static func sign(of found: TextScan.FoundAmount) -> Int? {
         if found.isNegative || found.creditDebit == "dr" { return -1 }
-        if found.creditDebit == "cr" { return 1 }
+        if found.creditDebit == "cr" || found.hasPlusSign { return 1 }
         return nil
     }
 
@@ -259,7 +308,8 @@ public enum StatementParser {
         }
         let rows = drafts.enumerated().map { index, draft in
             let sign = signs[index] ?? guessSign(draft.description)
-            return StatementRow(id: index, date: draft.date, description: draft.description,
+            let description = StatementLayouts.tidyDescription(draft.description)
+            return StatementRow(id: index, date: draft.date, description: description.isEmpty ? "Transaction" : description,
                                 amount: sign < 0 ? -draft.magnitude : draft.magnitude, balance: draft.balance)
         }
         return (rows, source)
@@ -278,8 +328,10 @@ public enum StatementParser {
                                           "card", "visa", "mastercard", "paypak", "txn", "trx", "ref", "no", "id", "online", "mobile",
                                           "app", "raast", "inward", "outward", "payment", "via", "dr", "cr", "pk", "pak", "lhr", "khi", "isb"]
 
-    /// A short payee from a statement description: "POS PURCHASE FOODPANDA LHR 4411" → "Foodpanda".
+    /// A short payee from a statement description: "POS PURCHASE FOODPANDA LHR 4411" → "Foodpanda",
+    /// "Paid to FOOD PANDA KARACHI PK | Visa xxxx5592" → "Food Panda Karachi".
     public static func payee(from description: String) -> String {
+        if let known = StatementLayouts.payee(from: description) { return known }
         let words = description.split(whereSeparator: { $0.isWhitespace || $0 == "/" || $0 == "*" || $0 == "-" }).map(String.init)
         let kept = words.filter { word in
             let lower = word.lowercased().trimmingCharacters(in: .punctuationCharacters)

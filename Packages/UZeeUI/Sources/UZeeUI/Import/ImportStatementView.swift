@@ -39,6 +39,8 @@ struct ImportStatementView: View {
     @State private var password = ""
     @State private var rows: [ImportRow] = []
     @State private var guessedSigns = false
+    @State private var sourceName: String?
+    @State private var currencyNote: String?
     @State private var confirming = false
 
     private var ledger: LedgerSnapshot { session.ledger }
@@ -185,7 +187,11 @@ struct ImportStatementView: View {
 
     private func review(_ reading: StatementReading, into account: Account) {
         guard !reading.rows.isEmpty else {
-            fail("UZee can't read this bank's statement format yet. Share a sample statement so a reader can be added for this bank.")
+            if let source = reading.source {
+                fail("This \(source.rawValue) statement has no transactions in it.")
+            } else {
+                fail("UZee can't read this bank's statement format yet. Share a sample statement so a reader can be added for this bank.")
+            }
             return
         }
         let currency = account.currency
@@ -211,6 +217,12 @@ struct ImportStatementView: View {
                              isMoneyIn: row.isMoneyIn, categoryID: row.categoryID, include: false, duplicateOf: match)
         }
         guessedSigns = reading.signSource == .words
+        sourceName = reading.source?.rawValue
+        if let code = reading.currencyCode, code != account.currency.code {
+            currencyNote = "This statement is in \(code), but \(account.name) is in \(account.currency.code). Amounts are imported as they are, so choose a \(code) account if you have one."
+        } else {
+            currencyNote = nil
+        }
         step = .review
     }
 
@@ -226,6 +238,13 @@ struct ImportStatementView: View {
                     if let first = rows.map(\.date).min(), let last = rows.map(\.date).max() {
                         Text("\(DateText.long(first)) – \(DateText.long(last)) · into \(account?.name ?? "")")
                             .font(.subheadline).foregroundStyle(UZColor.label2)
+                    }
+                    if let sourceName {
+                        Text("Read as a \(sourceName) statement").font(.footnote).foregroundStyle(UZColor.label2)
+                    }
+                    if let currencyNote {
+                        Label(currencyNote, systemImage: "exclamationmark.triangle")
+                            .font(.footnote).foregroundStyle(UZColor.warning)
                     }
                     if guessedSigns {
                         Label("This statement has no balance column, so money in and out was guessed from the words. Tap an amount to switch it.",

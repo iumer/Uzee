@@ -8,6 +8,15 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
+## [Unreleased] — Statement readers for MCB, HBL, Meezan, SadaPay, NayaPay and Wise
+
+### Added
+- Statement import recognises MCB (PDF and CSV), HBL, Meezan Bank, SadaPay, NayaPay (PDF and CSV) and Wise (one PDF per currency), learned from the owner's real statements. Test data is made up in the same layouts; no real statement is in the repository.
+- PDFs are rebuilt line by line from where each character sits, so table rows read as one line whatever order the PDF stores its text in.
+- Cleaner payees: people's names from transfers, merchants from card payments ("Food Panda Karachi"), "Salary Credit", "Wise fees".
+- The review screen says which bank the statement was read as, and warns when the statement's currency differs from the account's.
+- An empty statement (e.g. a Wise currency with no activity) says so instead of "can't read this format".
+
 ## [0.9.3] build 12 — 2026-10-07 — "Wallet pal" icon
 
 ### Changed

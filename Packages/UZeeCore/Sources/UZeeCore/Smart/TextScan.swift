@@ -18,6 +18,8 @@ public enum TextScan {
         public var currencyMarker: String?
         /// "cr" or "dr" right after the number.
         public var creditDebit: String?
+        /// Written with a plus: "+ 2,000.00", "+Rs. 1,000".
+        public var hasPlusSign = false
 
         /// Looks like money rather than a count or a reference: decimals, grouping or a marker.
         public var looksLikeMoney: Bool { hasDecimals || hasGrouping || currencyMarker != nil || creditDebit != nil }
@@ -104,7 +106,7 @@ public enum TextScan {
             if let value = Decimal(string: literal, locale: Locale(identifier: "en_US_POSIX")) {
                 found.append(FoundAmount(value: value, start: start, end: j, hasDecimals: !fraction.isEmpty,
                                          hasGrouping: hasGrouping, isNegative: negative, currencyMarker: marker,
-                                         creditDebit: creditDebit))
+                                         creditDebit: creditDebit, hasPlusSign: !negative && hasPlus(before: start, in: chars)))
             }
             i = j
         }
@@ -167,13 +169,24 @@ public enum TextScan {
             while e < chars.count, chars[e] == " " { e += 1 }
             return e < chars.count && chars[e] == ")"
         }
-        if k >= 1, chars[k].isLetter {
+        // "-Rs 500", "- PKR500" or "-Rs. 283.83"
+        if k >= 1, chars[k].isLetter || (chars[k] == "." && chars[k - 1].isLetter) {
             var m = k
             while m >= 0, chars[m].isLetter || chars[m] == "." { m -= 1 }
             while m >= 0, chars[m] == " " { m -= 1 }
             return m >= 0 && (chars[m] == "-" || chars[m] == "\u{2212}") && (m == 0 || !chars[m - 1].isASCIIDigit)
         }
         return false
+    }
+
+    /// "+500", "+ 500", "+Rs. 500" or "+ PKR500".
+    private static func hasPlus(before start: Int, in chars: [Character]) -> Bool {
+        var k = start - 1
+        while k >= 0, chars[k] == " " { k -= 1 }
+        if k >= 0, chars[k] == "." { k -= 1 }
+        while k >= 0, chars[k].isLetter { k -= 1 }
+        while k >= 0, chars[k] == " " { k -= 1 }
+        return k >= 0 && chars[k] == "+" && (k == 0 || !chars[k - 1].isASCIIDigit)
     }
 
     private static func creditDebitAfter(_ end: Int, in chars: [Character]) -> String? {
