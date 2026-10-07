@@ -106,7 +106,7 @@ public struct LedgerStore: Sendable {
             let existing = try String.fetchAll(db, sql: "SELECT name FROM account WHERE deleted_at IS NULL")
             let cleanName: String
             do { cleanName = try Account.validateName(name, existingNames: existing) } catch {
-                if error == .duplicateName { throw Problem.duplicateName }
+                if (error as? Account.Problem) == .duplicateName { throw Problem.duplicateName }
                 throw error
             }
             let order = try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(sort_order) + 1, 0) FROM account") ?? 0
@@ -124,7 +124,7 @@ public struct LedgerStore: Sendable {
             let others = try String.fetchAll(db, sql: "SELECT name FROM account WHERE deleted_at IS NULL AND id != ?",
                                              arguments: [account.id.uuidString])
             do { _ = try Account.validateName(account.name, existingNames: others) } catch {
-                if error == .duplicateName { throw Problem.duplicateName }
+                if (error as? Account.Problem) == .duplicateName { throw Problem.duplicateName }
                 throw error
             }
             let oldCode: String = row["currency_code"]
