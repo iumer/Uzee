@@ -11,6 +11,7 @@ final class BudgetSmokeTests: XCTestCase {
         app.launchArguments = ["-uzee-in-memory"]
         app.launch()
         tap("home.settings")
+        if !element("settings.sampleOn").waitForExistence(timeout: 10), element("home.settings").exists { element("home.settings").tap() }
         tap("settings.sampleOn")
         XCTAssertTrue(element("settings.sampleOff").waitForExistence(timeout: 30))
         app.navigationBars["Settings"].buttons.element(boundBy: 0).tap()

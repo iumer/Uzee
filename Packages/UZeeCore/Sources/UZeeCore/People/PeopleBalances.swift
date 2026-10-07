@@ -47,6 +47,31 @@ public struct MoneyBag: Hashable, Sendable {
     public var currencies: Set<Currency> { Set(amounts.values.filter { !$0.isZero }.map(\.currency)) }
 }
 
+/// Everything the People screens read: you, people, groups, splits of live transactions and loans.
+public struct PeopleSnapshot: Sendable {
+    public var selfID: UUID
+    public var people: [Person]
+    public var groups: [SplitGroup]
+    public var splits: [Split]
+    public var loans: [Loan]
+
+    public init(selfID: UUID, people: [Person], groups: [SplitGroup], splits: [Split], loans: [Loan]) {
+        self.selfID = selfID
+        self.people = people
+        self.groups = groups
+        self.splits = splits
+        self.loans = loans
+    }
+
+    public static let empty = PeopleSnapshot(selfID: UUID(), people: [], groups: [], splits: [], loans: [])
+
+    public func person(_ id: UUID?) -> Person? { people.first { $0.id == id } }
+    public func group(_ id: UUID?) -> SplitGroup? { groups.first { $0.id == id } }
+    public func split(for transaction: UUID) -> Split? { splits.first { $0.transactionID == transaction } }
+    /// People other than you, archived ones last.
+    public var others: [Person] { people.filter { !$0.isSelf } }
+}
+
 /// A settle-up payment between me and one person (SPL-08), read from a `.settlement` transaction.
 public struct Settlement: Hashable, Sendable {
     public var transactionID: UUID

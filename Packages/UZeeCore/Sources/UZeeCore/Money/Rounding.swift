@@ -11,7 +11,7 @@ public enum Rounding {
     }
 
     /// A whole Decimal as Int64, or nil when it does not fit (or is not whole).
-    static func int64(_ value: Decimal) -> Int64? {
+    public static func int64(_ value: Decimal) -> Int64? {
         guard value == halfUp(value, scale: 0),
               value <= Decimal(Int64.max), value >= Decimal(Int64.min) else { return nil }
         // Through the canonical string, so no binary floating point is involved on any platform.

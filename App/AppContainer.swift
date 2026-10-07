@@ -26,7 +26,8 @@ final class AppContainer {
                              sampleData: database.map(Self.sampleDataActions) ?? .unavailable,
                              ledger: database.map(Self.ledgerClient) ?? .unavailable,
                              activity: activity,
-                             budgets: database.map(Self.budgetClient) ?? .unavailable)
+                             budgets: database.map(Self.budgetClient) ?? .unavailable,
+                             people: database.map(Self.peopleClient) ?? .unavailable)
     }
 
     static func live() -> AppContainer {
@@ -110,6 +111,32 @@ final class AppContainer {
             save: { try store.save($0) },
             firedAlerts: { try store.firedAlerts() },
             markFired: { try store.markFired($0) }
+        )
+    }
+
+    private static func peopleClient(_ database: AppDatabase) -> PeopleClient {
+        let store = PeopleStore(database: database)
+        @Sendable func day(_ date: Date) -> LocalDate { LocalDate(date, in: .current) }
+        return PeopleClient(
+            snapshot: { try store.snapshot() },
+            createPerson: { name, phone in try store.createPerson(name: name, phone: phone) },
+            updatePerson: { try store.updatePerson($0) },
+            createGroup: { name, icon, members, method in try store.createGroup(name: name, icon: icon, memberIDs: members, method: method) },
+            updateGroup: { try store.updateGroup($0) },
+            saveSplit: { transaction, split in try store.save(transaction, split: split) },
+            recordLoan: { direction, person, amount, account, date, due, note in
+                try store.recordLoan(direction: direction, personID: person, amount: amount, accountID: account, on: day(date),
+                                     at: date, dueDate: due, note: note)
+            },
+            recordRepayment: { loan, amount, account, date in
+                try store.recordRepayment(loanID: loan, amount: amount, accountID: account, on: day(date), at: date)
+            },
+            setWrittenOff: { writtenOff, loan in try store.setWrittenOff(writtenOff, loanID: loan) },
+            setDueDate: { due, interest, loan in try store.setDueDate(due, interestBasisPoints: interest, loanID: loan) },
+            addExistingBalances: { rows in try store.addExistingBalances(rows, on: day(Date())) },
+            settle: { person, group, amount, iPaid, account, date in
+                try store.settle(personID: person, groupID: group, amount: amount, iPaid: iPaid, accountID: account, on: day(date), at: date)
+            }
         )
     }
 

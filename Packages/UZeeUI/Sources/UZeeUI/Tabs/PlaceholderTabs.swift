@@ -10,16 +10,6 @@ struct CalendarTabView: View {
     }
 }
 
-/// People (SCR-20). People, groups and balances arrive in M5.
-struct PeopleView: View {
-    var body: some View {
-        TabPlaceholder(title: "People") {
-            EmptyStateView("No people yet", systemImage: "person.2",
-                           description: "Add someone you lend to, borrow from or split bills with. Each person gets one balance.")
-        }
-    }
-}
-
 /// Large-title tab root with grouped background and centred content.
 struct TabPlaceholder<Content: View>: View {
     let title: String

@@ -90,6 +90,9 @@ struct TabRoot: View {
                     case .budgetLimits: BudgetLimitsView(session: session)
                     case .budgetCategory(let id, let start):
                         BudgetCategoryView(session: session, categoryID: id, periodStart: start)
+                    case .person(let id): PersonDetailView(session: session, personID: id)
+                    case .groups: GroupsView(session: session)
+                    case .group(let id): GroupDetailView(session: session, groupID: id)
                     }
                 }
         }
@@ -101,7 +104,7 @@ struct TabRoot: View {
         case .activity: ActivityView(session: session)
         case .budget: BudgetView(session: session)
         case .calendar: CalendarTabView()
-        case .people: PeopleView()
+        case .people: PeopleView(session: session)
         case .add: EmptyView()
         }
     }

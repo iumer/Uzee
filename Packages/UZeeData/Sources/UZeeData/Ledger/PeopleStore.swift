@@ -19,22 +19,7 @@ public struct PeopleStore: Sendable {
         self.database = database
     }
 
-    /// Everything the People screens need, read in one go.
-    public struct Snapshot: Sendable {
-        public var selfID: UUID
-        public var people: [Person]
-        public var groups: [SplitGroup]
-        public var splits: [Split]
-        public var loans: [Loan]
-
-        public init(selfID: UUID, people: [Person], groups: [SplitGroup], splits: [Split], loans: [Loan]) {
-            self.selfID = selfID
-            self.people = people
-            self.groups = groups
-            self.splits = splits
-            self.loans = loans
-        }
-    }
+    public typealias Snapshot = PeopleSnapshot
 
     public func snapshot() throws -> Snapshot {
         try database.writer.read { db in

@@ -50,20 +50,25 @@ public final class AppSession {
     public private(set) var withReceipts: Set<UUID> = []
     /// Activity search and filters survive tab switches.
     public var activityFilter = ActivityFilter()
+    /// People, groups, splits and loans, and the balances computed from them (SPL-07).
+    public private(set) var people: PeopleSnapshot = .empty
+    public private(set) var balances = PeopleLedger(selfID: UUID(), transactions: [], splits: [], loans: [], base: .pkr, rates: [:])
 
     private let sampleData: SampleDataActions
     public let client: LedgerClient
     public let activity: ActivityClient
     public let budgets: BudgetClient
+    public let peopleClient: PeopleClient
 
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
-                activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable) {
+                activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable) {
         self.info = info
         self.isDatabaseReady = isDatabaseReady
         self.sampleData = sampleData
         self.client = ledger
         self.activity = activity
         self.budgets = budgets
+        self.peopleClient = people
         isSampleMode = (try? sampleData.isActive()) ?? false
         reload()
     }
@@ -76,6 +81,9 @@ public final class AppSession {
             tags = try activity.tags()
             tagMap = try activity.tagMap()
             withReceipts = try activity.withAttachments()
+            people = try peopleClient.snapshot()
+            balances = PeopleLedger(selfID: people.selfID, transactions: transactions, splits: people.splits, loans: people.loans,
+                                    base: ledger.base, rates: ledger.rates)
         } catch {
             errorMessage = "Couldn't read your accounts. Close UZee and open it again."
         }
@@ -102,6 +110,33 @@ public final class AppSession {
             guard let self else { return }
             do {
                 if let previous { try self.client.save(previous) } else { try self.client.discard(transaction.id) }
+            } catch {
+                self.errorMessage = "Couldn't undo. Your entry is still saved."
+            }
+            self.reload()
+        }
+        return true
+    }
+
+    /// Saves a transaction with its split (SPL-03), then offers Undo like `save`.
+    @discardableResult
+    public func save(_ transaction: MoneyTransaction, split: Split?, isNew: Bool) -> Bool {
+        let previous = isNew ? nil : transactions.first { $0.id == transaction.id }
+        let previousSplit = people.split(for: transaction.id)
+        do {
+            try peopleClient.saveSplit(transaction, split)
+        } catch let problem as SplitProblem {
+            errorMessage = SplitText.problem(problem)
+            return false
+        } catch {
+            errorMessage = "Couldn't save. Nothing was changed. Try again."
+            return false
+        }
+        reload()
+        toasts.show(isNew ? "Saved" : "Changes saved") { [weak self] in
+            guard let self else { return }
+            do {
+                if let previous { try self.peopleClient.saveSplit(previous, previousSplit) } else { try self.client.discard(transaction.id) }
             } catch {
                 self.errorMessage = "Couldn't undo. Your entry is still saved."
             }
@@ -192,4 +227,6 @@ public enum AddRequest: Equatable, Sendable {
     case edit(MoneyTransaction)
     /// "Repeat this": same details, today's date, a new transaction (TXN-014).
     case repeatOf(MoneyTransaction)
+    /// "Add shared expense" from People: an expense split with a group or a person (SPL-03).
+    case shared(group: UUID?, person: UUID?)
 }

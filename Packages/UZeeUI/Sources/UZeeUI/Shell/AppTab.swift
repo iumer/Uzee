@@ -45,4 +45,7 @@ public enum Route: Hashable, Sendable {
     case tags
     case budgetLimits
     case budgetCategory(UUID, LocalDate)
+    case person(UUID)
+    case groups
+    case group(UUID)
 }

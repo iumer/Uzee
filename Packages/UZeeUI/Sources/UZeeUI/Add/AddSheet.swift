@@ -25,6 +25,11 @@ struct AddSheet: View {
     @State private var isPending = false
     @State private var problem: String?
     @State private var review: MoneyTransaction?
+    /// Split with people or a group (SPL-03); nil = not split.
+    @State private var splitDraft: SplitDraft?
+    @State private var reviewSplit: Split?
+    /// The edited transaction had a split, so saving without one removes it.
+    @State private var hadSplit = false
     @State private var editing: MoneyTransaction?
     @State private var didLoad = false
     @FocusState private var amountFocused: Bool
@@ -73,9 +78,10 @@ struct AddSheet: View {
             .sheet(item: $review) { transaction in
                 ConfirmSheet(title: confirmTitle, amount: transaction.amount, rows: confirmRows(transaction),
                              confirmTitle: editing == nil ? "Save" : "Save changes") {
-                    if session.save(transaction, isNew: editing == nil) {
-                        session.isAddPresented = false
-                    }
+                    let saved = reviewSplit != nil || hadSplit
+                        ? session.save(transaction, split: reviewSplit, isNew: editing == nil)
+                        : session.save(transaction, isNew: editing == nil)
+                    if saved { session.isAddPresented = false }
                 }
             }
             .onAppear(perform: load)
@@ -152,7 +158,36 @@ struct AddSheet: View {
                 .textInputAutocapitalization(.words)
                 .accessibilityIdentifier("add.payee")
                 .onChange(of: payee) { _, newPayee in suggestCategory(for: newPayee) }
+            if kind == .expense || kind == .income {
+                NavigationLink {
+                    SplitEditorView(session: session, total: currentTotal, isIncome: kind == .income, caption: splitCaption,
+                                    draft: $splitDraft)
+                } label: {
+                    LabeledContent("Split") {
+                        Text(splitSummary).foregroundStyle(splitDraft == nil ? UZColor.label2 : UZColor.label)
+                    }
+                }
+                .accessibilityIdentifier("add.split")
+            }
         }
+    }
+
+    private var currentTotal: Money {
+        (try? AmountParser.parse(amountText, currency: currency)) ?? .zero(currency)
+    }
+
+    private var splitCaption: String {
+        [payee.isEmpty ? nil : payee, ledger.categoryPath(categoryID)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// "Office · your share Rs 1,600" or "Not split".
+    private var splitSummary: String {
+        guard let splitDraft else { return "Not split" }
+        let me = session.people.selfID
+        let with = session.people.group(splitDraft.groupID)?.name
+            ?? splitDraft.members.filter { $0 != me }.compactMap { session.people.person($0)?.name }.joined(separator: ", ")
+        guard let share = (try? splitDraft.shares(total: currentTotal))?.first(where: { $0.personID == me })?.share else { return with }
+        return "\(with) · your share \(MoneyFormatter.string(share))"
     }
 
     private func suggestCategory(for payee: String) {
@@ -261,8 +296,22 @@ struct AddSheet: View {
         case .edit(let transaction):
             editing = transaction
             fill(from: transaction, keepDate: true)
+            splitDraft = session.people.split(for: transaction.id).map { SplitDraft($0) }
+            hadSplit = splitDraft != nil
         case .repeatOf(let transaction):
             fill(from: transaction, keepDate: false)
+            splitDraft = session.people.split(for: transaction.id).map { SplitDraft($0) }
+        case .shared(let group, let person):
+            accountID = defaultAccountID()
+            amountFocused = true
+            let me = session.people.selfID
+            if let group = session.people.group(group) {
+                var draft = SplitDraft(groupID: group.id, participants: group.memberIDs, method: group.defaultMethod, payer: me)
+                draft.members = group.memberIDs
+                splitDraft = draft
+            } else if let person {
+                splitDraft = SplitDraft(participants: [me, person], payer: me)
+            }
         }
     }
 
@@ -305,14 +354,28 @@ struct AddSheet: View {
                 return
             }
         }
+        // Someone else paid: no account moves, but the amount still needs a currency to be checked against.
+        let me = session.people.selfID
+        let othersPaid = splitDraft.map { $0.payer != nil && $0.payer != me } ?? false
+        let checkedAccountID = accountID ?? (othersPaid ? ledger.activeAccounts.first { $0.currency == currency }?.id : nil)
         let draft = TransactionDraft(
-            kind: kind, status: isPending ? .pending : .posted, amount: amount, accountID: accountID,
+            kind: kind, status: isPending ? .pending : .posted, amount: amount, accountID: checkedAccountID,
             toAccountID: kind == .transfer ? toAccountID : nil, receivedAmount: received,
             categoryID: kind == .transfer ? nil : categoryID, payeeName: kind == .transfer ? nil : payee, note: note,
             occurredAt: date, timeZone: editing.flatMap { TimeZone(identifier: $0.timeZoneID) } ?? .current,
             source: editing?.source ?? .manual)
         do {
-            review = try TransactionValidator.build(draft, accounts: ledger.accounts, base: ledger.base, existing: editing)
+            let built = try TransactionValidator.build(draft, accounts: ledger.accounts, base: ledger.base, existing: editing)
+            reviewSplit = nil
+            if let splitDraft, kind == .expense || kind == .income {
+                do {
+                    reviewSplit = try splitDraft.build(total: built.amount, transactionID: built.id)
+                } catch {
+                    problem = SplitText.problem(error)
+                    return
+                }
+            }
+            review = built
         } catch {
             problem = ProblemText.message(error)
         }
@@ -332,6 +395,16 @@ struct AddSheet: View {
             if let leg = transaction.legs.first, let account = ledger.account(leg.accountID) { rows.append(.init("Account", account.name)) }
             if let path = ledger.categoryPath(transaction.categoryID) { rows.append(.init("Category", path)) }
             if let payee = transaction.payeeName { rows.append(.init(transaction.kind == .income ? "From" : "Paid to", payee)) }
+        }
+        if let split = reviewSplit {
+            let me = session.people.selfID
+            let with = session.people.group(split.groupID)?.name
+                ?? split.people.filter { $0 != me }.compactMap { session.people.person($0)?.name }.joined(separator: ", ")
+            rows.append(.init("Split with", with))
+            if let payer = split.payers.first, split.payers.count == 1, payer.personID != me {
+                rows.append(.init(transaction.kind == .income ? "Received by" : "Paid by", session.people.person(payer.personID)?.name ?? "Someone"))
+            }
+            rows.append(.init("Your share", MoneyFormatter.string(split.share(of: me) ?? .zero(transaction.amount.currency))))
         }
         rows.append(.init("Date", transaction.occurredAt.formatted(date: .abbreviated, time: .shortened)))
         if transaction.status == .pending { rows.append(.init("Status", "Pending")) }
