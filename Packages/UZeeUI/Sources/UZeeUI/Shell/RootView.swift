@@ -50,14 +50,14 @@ struct AddButton: View {
     let action: () -> Void
 
     var body: some View {
+        // The system glass button style keeps taps reliable; a custom interactive glass layer can swallow them.
         Button(action: action) {
             Image(systemName: AppTab.add.symbol)
                 .font(.title2.weight(.semibold))
-                .frame(width: 56, height: 56)
+                .frame(width: 44, height: 44)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(.tint)
-        .glassEffect(.regular.interactive(), in: .circle)
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.circle)
         .accessibilityLabel(AppTab.add.title)
         .accessibilityIdentifier("tab.add")
     }

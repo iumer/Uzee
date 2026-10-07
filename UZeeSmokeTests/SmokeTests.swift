@@ -96,7 +96,9 @@ final class SmokeTests: XCTestCase {
         for tab in tabs {
             tapTab(tab)
             expectScreen(tab)
-            element("tab.add").tap()
+            let add = app.buttons["tab.add"]
+            XCTAssertTrue(add.waitForExistence(timeout: 5), "+ button missing on \(tab)")
+            add.tap()
             let close = element("add.close")
             XCTAssertTrue(close.waitForExistence(timeout: 5), "Add sheet not shown from \(tab)")
             close.tap()
