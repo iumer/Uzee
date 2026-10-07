@@ -237,7 +237,7 @@ struct TransactionEngineTests {
     @Test("TXN-009 invalid input refused, each with its own reason")
     func invalid() {
         func problem(_ draft: TransactionDraft) -> TransactionProblem? {
-            do { _ = try save(draft); return nil } catch { return error }
+            do { _ = try save(draft); return nil } catch { return error as? TransactionProblem }
         }
         #expect(problem(TransactionDraft(kind: .expense, amount: rs(0), accountID: hbl.id, categoryID: category)) == .zeroAmount)
         #expect(problem(TransactionDraft(kind: .expense, amount: nil, accountID: hbl.id, categoryID: category)) == .missingAmount)
