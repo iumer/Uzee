@@ -77,10 +77,12 @@ public final class AppSession {
     public let recurringClient: RecurringClient
     public let smart: SmartClient
     public let calendar: CalendarClient
+    public let backup: BackupClient
 
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
                 activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable,
-                recurring: RecurringClient = .unavailable, smart: SmartClient = .unavailable, calendar: CalendarClient = .unavailable) {
+                recurring: RecurringClient = .unavailable, smart: SmartClient = .unavailable, calendar: CalendarClient = .unavailable,
+                backup: BackupClient = .unavailable) {
         self.info = info
         self.isDatabaseReady = isDatabaseReady
         self.sampleData = sampleData
@@ -91,6 +93,7 @@ public final class AppSession {
         self.recurringClient = recurring
         self.smart = smart
         self.calendar = calendar
+        self.backup = backup
         isSampleMode = (try? sampleData.isActive()) ?? false
         reload()
     }
@@ -113,6 +116,13 @@ public final class AppSession {
             errorMessage = "Couldn't read your accounts. Close UZee and open it again."
         }
         rescheduleReminders()
+    }
+
+    /// After a restore: everything, including sample mode, comes from the backup.
+    public func reloadAfterRestore() {
+        isSampleMode = (try? sampleData.isActive()) ?? false
+        paths = [:]
+        reload()
     }
 
     /// Re-plans every reminder from the current data (on launch, after each change and on return to the app).

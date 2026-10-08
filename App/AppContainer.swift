@@ -30,7 +30,8 @@ final class AppContainer {
                              people: database.map(Self.peopleClient) ?? .unavailable,
                              recurring: database.map(Self.recurringClient) ?? .unavailable,
                              smart: Self.smartClient(),
-                             calendar: database.map(Self.calendarClient) ?? .unavailable)
+                             calendar: database.map(Self.calendarClient) ?? .unavailable,
+                             backup: database.flatMap { db in files.map { Self.backupClient(db, $0, info: info) } } ?? .unavailable)
         let session = session
         NotificationScheduler.shared.start { response in
             await MainActor.run {
@@ -41,6 +42,30 @@ final class AppContainer {
                 }
             }
         }
+    }
+
+    /// Encrypted backup and restore: archive and restore in UZeeData, AES-GCM + PBKDF2 in UZeeSystem.
+    private static func backupClient(_ database: AppDatabase, _ files: AttachmentStore, info: AppInfo) -> BackupClient {
+        let cipher = BackupService.Cipher(iterations: BackupCrypto.iterations,
+                                          seal: { try BackupCrypto.seal($0, password: $1, salt: $2, iterations: $3) },
+                                          open: { try BackupCrypto.open($0, password: $1, salt: $2, iterations: $3) })
+        let service = BackupService(database: database, attachments: files, cipher: cipher)
+        return BackupClient(
+            makeBackup: { password in
+                let data = try service.makeBackup(password: password, appVersion: info.displayVersion)
+                let day = LocalDate(Date(), in: .current)
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("UZee backup \(day).uzeebackup")
+                try data.write(to: url, options: [.atomic, .completeFileProtection])
+                Log.data.info("Backup made")
+                return url
+            },
+            inspect: { try service.inspect($0, password: $1) },
+            restore: { data, password in
+                let safety = try StorageLocation.databaseFolder().appendingPathComponent("Safety copies", isDirectory: true)
+                let summary = try service.restore(data, password: password, safetyFolder: safety)
+                Log.data.info("Backup restored")
+                return summary
+            })
     }
 
     /// Custom events, reminder settings (UZeeData) and local notifications (UZeeSystem), M7.

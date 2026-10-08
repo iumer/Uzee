@@ -6,6 +6,10 @@ import UZeeCore
 /// Touch ID or the iPhone passcode.
 enum AppLock {
     static let key = "uzee.faceIDLock"
+    static let timeoutKey = "uzee.lockTimeout"
+
+    /// Seconds away before UZee locks again: immediately, after 1 minute or after 5 minutes.
+    static var timeout: TimeInterval { UserDefaults.standard.double(forKey: timeoutKey) }
 
     static var isOn: Bool { UserDefaults.standard.bool(forKey: key) && !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory") }
 
@@ -34,7 +38,8 @@ enum AppLock {
 
 /// Covers the app while it is locked.
 struct LockScreen: View {
-    let unlock: () -> Void
+    var showsButton = true
+    var unlock: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -43,13 +48,15 @@ struct LockScreen: View {
                 .ignoresSafeArea()
             VStack(spacing: UZSpacing.xxl) {
                 UZeeLogo(size: 96, tile: true)
-                Text("UZee is locked").font(.title2.bold()).foregroundStyle(.white)
-                Button(action: unlock) {
-                    Label("Unlock with \(AppLock.methodName)", systemImage: AppLock.methodName == "Touch ID" ? "touchid" : "faceid")
-                        .font(.headline).padding(.horizontal, UZSpacing.l).padding(.vertical, UZSpacing.s)
+                Text(showsButton ? "UZee is locked" : "UZee").font(.title2.bold()).foregroundStyle(.white)
+                if showsButton {
+                    Button(action: unlock) {
+                        Label("Unlock with \(AppLock.methodName)", systemImage: AppLock.methodName == "Touch ID" ? "touchid" : "faceid")
+                            .font(.headline).padding(.horizontal, UZSpacing.l).padding(.vertical, UZSpacing.s)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .accessibilityIdentifier("lock.unlock")
                 }
-                .buttonStyle(.glassProminent)
-                .accessibilityIdentifier("lock.unlock")
             }
         }
     }
@@ -58,8 +65,21 @@ struct LockScreen: View {
 /// Settings › Privacy: the lock switch, tried once so turning it on proves it works.
 struct LockToggle: View {
     @AppStorage(AppLock.key) private var isOn = false
+    @AppStorage(AppLock.timeoutKey) private var timeout: Double = 0
 
     var body: some View {
+        toggle
+        if isOn {
+            Picker("Lock", selection: $timeout) {
+                Text("Immediately").tag(0.0)
+                Text("After 1 minute").tag(60.0)
+                Text("After 5 minutes").tag(300.0)
+            }
+            .accessibilityIdentifier("settings.lockTimeout")
+        }
+    }
+
+    private var toggle: some View {
         Toggle(isOn: Binding(get: { isOn }, set: { wanted in
             if !wanted { isOn = false; return }
             Task { @MainActor in isOn = await AppLock.unlock(reason: "Turn on the lock for UZee") }

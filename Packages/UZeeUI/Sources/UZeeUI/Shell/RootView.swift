@@ -14,6 +14,8 @@ public struct RootView: View {
     @State private var isUnlocking = false
     /// Ask once per return; the Face ID prompt itself makes the app inactive, so a cancel mustn't re-prompt.
     @State private var promptOnActive = AppLock.isOn
+    /// When UZee left the screen; it locks on return once the timeout has passed (SET-01).
+    @State private var backgroundedAt: Date?
     @Environment(\.scenePhase) private var scenePhase
 
     public init(session: AppSession) {
@@ -64,13 +66,20 @@ public struct RootView: View {
         .overlay {
             if isLocked {
                 LockScreen { unlock() }.transition(.opacity)
+            } else if AppLock.isOn && scenePhase != .active {
+                // App switcher privacy (SET-02): no amounts in the snapshot while the lock is on.
+                LockScreen(showsButton: false)
             }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
             case .background:
-                if AppLock.isOn { isLocked = true; promptOnActive = true }
+                if AppLock.isOn, !isLocked { backgroundedAt = Date() }
             case .active:
+                if let since = backgroundedAt, AppLock.isOn {
+                    backgroundedAt = nil
+                    if Date().timeIntervalSince(since) >= AppLock.timeout { isLocked = true; promptOnActive = true }
+                }
                 if isLocked, promptOnActive { promptOnActive = false; unlock() }
                 session.rescheduleReminders()
             default: break

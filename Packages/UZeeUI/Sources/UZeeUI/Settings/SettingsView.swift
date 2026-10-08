@@ -64,6 +64,12 @@ struct SettingsView: View {
                     SettingsLabel("Export to CSV", symbol: "square.and.arrow.up", color: Color(uiColor: .systemBlue))
                 }
                 .accessibilityIdentifier("settings.export")
+                NavigationLink {
+                    BackupView(session: session)
+                } label: {
+                    SettingsLabel("Backup and restore", symbol: "externaldrive.badge.timemachine", color: Color(uiColor: .systemTeal))
+                }
+                .accessibilityIdentifier("settings.backup")
             } header: {
                 Text("Privacy and data")
             } footer: {
