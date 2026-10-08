@@ -93,7 +93,6 @@ struct ReportsView: View {
         .frame(width: page.width, alignment: .topLeading)
         .background(Color.white)
         .environment(\.colorScheme, .light)
-        .environment(\.accessibilityReduceMotion, true)
         let renderer = ImageRenderer(content: printable)
         renderer.proposedSize = ProposedViewSize(width: page.width, height: nil)
         let name = "UZee report \(DatePresets.text(from: range.start, through: range.end)).pdf".replacingOccurrences(of: "/", with: "-")

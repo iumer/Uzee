@@ -57,7 +57,9 @@ struct BackupTests {
         let file = try world.service.makeBackup(password: "correct horse", appVersion: "1.0 (1)")
         #expect(file.starts(with: Data("UZEE-BACKUP 1\n".utf8)))
         let summary = try world.service.inspect(file, password: "correct horse")
-        #expect(summary.transactions == before[0])
+        // The summary counts live transactions; the backup also keeps Recently Deleted ones (compared below).
+        let live = try world.database.writer.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM txn WHERE deleted_at IS NULL") ?? 0 }
+        #expect(summary.transactions == live)
         #expect(summary.receipts == 1)
 
         try SampleDataService(database: world.database).removeAll()
