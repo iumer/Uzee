@@ -1,4 +1,5 @@
 import LocalAuthentication
+import Security
 import SwiftUI
 import UZeeCore
 
@@ -36,12 +37,24 @@ enum AppLock {
         context.localizedFallbackTitle = "Enter Passcode"
         return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
     }
+
+    /// Asks for the iPhone passcode only, skipping Face ID (for when Face ID can't see you). iOS has no
+    /// passcode-only policy, so this checks a keychain-style access rule that only the passcode can satisfy.
+    @MainActor
+    static func unlockWithPasscode(reason: String = "Unlock UZee") async -> Bool {
+        guard let access = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+                                                           .devicePasscode, nil) else { return false }
+        let context = LAContext()
+        context.localizedCancelTitle = "Not now"
+        return (try? await context.evaluateAccessControl(access, operation: .useItem, localizedReason: reason)) ?? false
+    }
 }
 
 /// Covers the app while it is locked.
 struct LockScreen: View {
     var showsButton = true
     var unlock: () -> Void = {}
+    var unlockWithPasscode: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -58,11 +71,9 @@ struct LockScreen: View {
                     }
                     .buttonStyle(.glassProminent)
                     .accessibilityIdentifier("lock.unlock")
-                    Button("Use iPhone passcode", action: unlock)
+                    Button("Use iPhone passcode", action: unlockWithPasscode)
                         .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.85))
                         .accessibilityIdentifier("lock.passcode")
-                    Text("If \(AppLock.methodName) doesn't see you, tap Enter Passcode.")
-                        .font(.footnote).foregroundStyle(.white.opacity(0.6))
                 }
             }
         }
@@ -154,7 +165,7 @@ final class LockCurtain {
     private var window: UIWindow?
     private var mode: Mode = .none
 
-    func show(_ mode: Mode, unlock: @escaping () -> Void) {
+    func show(_ mode: Mode, unlock: @escaping () -> Void, unlockWithPasscode: @escaping () -> Void = {}) {
         guard mode != self.mode || (mode != .none && window == nil) else { return }
         self.mode = mode
         guard mode != .none else {
@@ -170,7 +181,8 @@ final class LockCurtain {
         let curtain = window ?? UIWindow(windowScene: scene)
         curtain.windowLevel = .alert + 1
         curtain.overrideUserInterfaceStyle = Appearance.current.style
-        curtain.rootViewController = UIHostingController(rootView: LockScreen(showsButton: mode == .locked, unlock: unlock))
+        curtain.rootViewController = UIHostingController(rootView: LockScreen(showsButton: mode == .locked, unlock: unlock,
+                                                                                    unlockWithPasscode: unlockWithPasscode))
         curtain.alpha = 1
         curtain.isHidden = false
         window = curtain

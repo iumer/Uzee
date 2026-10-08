@@ -66,7 +66,7 @@ public struct RootView: View {
         }
         // The lock covers everything, sheets included; with the lock on, the app switcher shows no amounts (SET-02).
         .onChange(of: curtain, initial: true) { _, mode in
-            LockCurtain.shared.show(mode) { unlock() }
+            LockCurtain.shared.show(mode, unlock: { unlock() }, unlockWithPasscode: { unlock(passcodeOnly: true) })
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
@@ -102,11 +102,11 @@ public struct RootView: View {
         return AppLock.isOn && scenePhase != .active ? .privacy : .none
     }
 
-    private func unlock() {
+    private func unlock(passcodeOnly: Bool = false) {
         guard !isUnlocking else { return }
         isUnlocking = true
         Task {
-            let ok = await AppLock.unlock()
+            let ok = passcodeOnly ? await AppLock.unlockWithPasscode() : await AppLock.unlock()
             isUnlocking = false
             if ok { withAnimation(.easeOut(duration: 0.25)) { isLocked = false } }
         }
