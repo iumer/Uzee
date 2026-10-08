@@ -26,7 +26,7 @@ public final class NotificationScheduler: NSObject, UNUserNotificationCenterDele
         self.handler = handler
         center.delegate = self
         let markPaid = UNNotificationAction(identifier: Self.markPaidAction, title: "Mark paid",
-                                            options: [.authenticationRequired], icon: UNNotificationActionIcon(systemImageName: "checkmark.circle"))
+                                            options: [.authenticationRequired, .foreground], icon: UNNotificationActionIcon(systemImageName: "checkmark.circle"))
         let snooze = UNNotificationAction(identifier: Self.snoozeAction, title: "Snooze 1 day", options: [],
                                           icon: UNNotificationActionIcon(systemImageName: "clock.arrow.circlepath"))
         center.setNotificationCategories([UNNotificationCategory(identifier: Self.billCategory, actions: [markPaid, snooze],
@@ -50,6 +50,8 @@ public final class NotificationScheduler: NSObject, UNUserNotificationCenterDele
         center.removePendingNotificationRequests(withIdentifiers: pending.filter { !wanted.contains($0) })
         guard await isAllowed() else { return }
         for reminder in plan {
+            // A newer plan has taken over.
+            if Task.isCancelled { return }
             let content = UNMutableNotificationContent()
             content.title = reminder.title
             content.body = reminder.body
@@ -91,7 +93,8 @@ public final class NotificationScheduler: NSObject, UNUserNotificationCenterDele
         case Self.snoozeAction where item != nil && date != nil && kind == PlannedReminder.Kind.bill.rawValue:
             action = .snooze(item: item!, scheduled: date!)
         default:
-            action = .open(item: kind == PlannedReminder.Kind.bill.rawValue ? item : nil, date: date)
+            action = kind == PlannedReminder.Kind.prayer.rawValue ? .open(item: nil, date: nil)
+                : .open(item: kind == PlannedReminder.Kind.bill.rawValue ? item : nil, date: date)
         }
         await handler?(action)
     }

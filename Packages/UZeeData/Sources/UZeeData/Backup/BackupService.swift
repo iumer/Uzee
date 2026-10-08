@@ -144,7 +144,10 @@ public struct BackupService: Sendable {
         try FileManager.default.createDirectory(at: safety, withIntermediateDirectories: true)
         try database.writer.backup(to: try DatabaseQueue(path: safety.appendingPathComponent(Self.databaseName).path))
         let receiptsCopy = safety.appendingPathComponent("Receipts", isDirectory: true)
-        try? FileManager.default.copyItem(at: attachments.folder, to: receiptsCopy)
+        // No copy of the receipts, no restore: they're deleted next.
+        if FileManager.default.fileExists(atPath: attachments.folder.path) {
+            try FileManager.default.copyItem(at: attachments.folder, to: receiptsCopy)
+        }
 
         try restored.backup(to: database.writer)
         let current = (try? FileManager.default.contentsOfDirectory(atPath: attachments.folder.path)) ?? []

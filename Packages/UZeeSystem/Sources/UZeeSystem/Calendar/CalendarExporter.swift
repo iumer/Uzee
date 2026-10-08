@@ -42,7 +42,7 @@ public final class CalendarExporter: @unchecked Sendable {
         let wanted = calendar == nil ? [] : items
         // An event the owner deleted in Calendar is made again only if it is still wanted.
         let existing = mapping.compactMapValues { $0.first }.filter { store.event(withIdentifier: $0.value) != nil }
-        let dates = mapping.compactMapValues { $0.last.flatMap(LocalDate.init) }
+        let dates = mapping.compactMapValues { $0.last.flatMap { LocalDate($0) } }
         let changes = CalendarExportPlanner.changes(wanted: wanted, existing: existing, existingDates: dates, today: today)
 
         for id in changes.delete {

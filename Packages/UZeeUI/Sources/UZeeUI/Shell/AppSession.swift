@@ -100,6 +100,8 @@ public final class AppSession {
         }
     }
     static let calendarExportKey = "uzee.calendarExport.calendarID"
+    /// The owner turned on UZee's Face ID lock (Siri then doesn't answer money questions).
+    public var isAppLocked: Bool { AppLock.isOn }
 
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
                 activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable,
@@ -150,13 +152,22 @@ public final class AppSession {
 
     /// Re-plans every reminder from the current data (on launch, after each change and on return to the app).
     /// Coalesced, so a burst of saves schedules once.
-    public func rescheduleReminders() {
-        scheduling?.cancel()
+    /// Right away, for a notification action: iOS may suspend UZee as soon as the handler returns.
+    public func rescheduleNow() async {
+        rescheduleReminders(debounce: false)
+        await scheduling?.value
+    }
+
+    public func rescheduleReminders(debounce: Bool = true) {
+        let previous = scheduling
+        previous?.cancel()
         let prayers = prayer.reminders(from: Date(), timeZone: .current)
         let money = ReminderPlanner.plan(recurring: recurring, events: events, loans: loanReminders, settings: reminderSettings,
                                          today: today, minuteNow: Self.minuteNow(), format: { MoneyFormatter.string($0) })
         // Bills come first; prayers fill what's left of the 60 (iOS keeps 64 at most).
-        let plan = money + prayers.prefix(max(0, ReminderPlanner.cap - money.count))
+        // Prayers keep at least 15 places; a daily reminder can't crowd them all out.
+        let room = ReminderPlanner.cap - min(prayers.count, 15)
+        let plan = Array(money.prefix(room)) + prayers.prefix(max(0, ReminderPlanner.cap - min(money.count, room)))
         let calendar = calendar
         let exportID = calendarExportID
         let exportItems = exportID == nil ? [] : CalendarExportPlanner.items(
@@ -164,8 +175,10 @@ public final class AppSession {
             today: today, format: { MoneyFormatter.string($0) })
         let today = today
         scheduling = Task {
-            try? await Task.sleep(for: .milliseconds(400))
+            if debounce { try? await Task.sleep(for: .milliseconds(400)) }
             guard !Task.isCancelled else { return }
+            // A run already adding requests finishes first, so it can't re-add what this plan dropped.
+            await previous?.value
             await calendar.schedule(plan)
             if let exportID { await calendar.exportToCalendar(exportItems, exportID, today) }
         }
@@ -333,8 +346,18 @@ public final class AppSession {
 
     /// "Mark paid" on a bill reminder: posts exactly one payment from the bill's account, at the expected amount.
     /// Without an account (or if it fails) the bill opens instead, so nothing is posted to the wrong place.
+    /// What happened to this occurrence already, if anything (a notification can be tapped long after).
+    private func record(_ item: UUID, _ scheduled: LocalDate) -> OccurrenceRecord? {
+        recurring.records(for: item).first { $0.scheduledDate == scheduled }
+    }
+
     public func markPaidFromReminder(item: UUID, scheduled: LocalDate) {
         reload()
+        // Paid or skipped in the app meanwhile: never pay twice.
+        if let done = record(item, scheduled), done.status == .paid || done.status == .skipped {
+            toasts.show("\(recurring.item(item)?.name ?? "That bill") is already \(done.status == .paid ? "paid" : "skipped")")
+            return
+        }
         guard let bill = recurring.item(item), bill.accountID != nil || bill.paidByID != nil,
               (try? recurringClient.markPaid(item, scheduled, bill.amount(on: scheduled), bill.accountID, Date())) != nil else {
             openReminder(item: item, date: scheduled)
@@ -346,7 +369,11 @@ public final class AppSession {
 
     /// "Snooze 1 day" on a bill reminder: the bill moves to tomorrow and gets a fresh reminder.
     public func snoozeFromReminder(item: UUID, scheduled: LocalDate) {
-        let until = max(today, scheduled).addingDays(1)
+        reload()
+        let existing = record(item, scheduled)
+        if let existing, existing.status == .paid || existing.status == .skipped { return }
+        // From where it is due now: an earlier snooze to the 20th must not move back to tomorrow.
+        let until = max(today, existing?.snoozedUntil ?? scheduled).addingDays(1)
         do {
             try recurringClient.snooze(item, scheduled, until)
         } catch {
@@ -358,6 +385,8 @@ public final class AppSession {
 
     /// Tapping a reminder opens the bill (or the Calendar on that day).
     public func openReminder(item: UUID?, date: LocalDate?) {
+        // A namaz reminder just opens UZee.
+        guard item != nil || date != nil else { return }
         selectedTab = .calendar
         if let item, recurring.item(item) != nil {
             paths[.calendar] = [.bills, .recurring(item)]

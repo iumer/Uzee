@@ -11,6 +11,8 @@ public enum BackupCrypto {
     public enum Failure: Error { case keyDerivation }
 
     static func key(_ password: String, salt: Data, iterations: Int) throws -> SymmetricKey {
+        // The count comes from the file's header: a damaged one must not crash or spin for hours.
+        guard (1...5_000_000).contains(iterations) else { throw Failure.keyDerivation }
         var key = [UInt8](repeating: 0, count: 32)
         let passwordBytes = Array(password.utf8)
         let status = salt.withUnsafeBytes { saltBuffer in

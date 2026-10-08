@@ -42,6 +42,8 @@ final class AppContainer {
                 case .open(let item, let date): session.openReminder(item: item, date: date)
                 }
             }
+            // Before returning: the snoozed bill's new reminder must be in place if iOS suspends UZee now.
+            await session.rescheduleNow()
         }
     }
 

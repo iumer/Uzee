@@ -112,8 +112,9 @@ public enum ReminderPlanner {
         }
 
         for item in recurring.items where item.isActive && !item.type.isIncome {
+            // includeOverdue: a bill snoozed from last week to tomorrow still gets its reminder.
             let occurrences = OccurrenceGenerator.occurrences(item, records: recurring.records(for: item.id), from: today,
-                                                             through: through, today: today)
+                                                             through: through, today: today, includeOverdue: true)
             for occurrence in occurrences where !occurrence.isResolved {
                 guard let (fire, minute) = when(due: occurrence.dueDate, daysBefore: settings.daysBefore, minute: settings.minuteOfDay)
                 else { continue }
@@ -126,7 +127,8 @@ public enum ReminderPlanner {
         }
 
         for event in events where event.wantsReminder {
-            for date in event.dates(from: today, through: through) {
+            // A daily reminder takes its next week, not all 60 places.
+            for date in event.dates(from: today, through: through).prefix(7) {
                 let minute = event.minuteOfDay ?? settings.minuteOfDay
                 guard let (fire, at) = when(due: date, daysBefore: event.remindDaysBefore ?? settings.daysBefore, minute: minute)
                 else { continue }
@@ -143,7 +145,7 @@ public enum ReminderPlanner {
             guard let (fire, minute) = when(due: loan.due, daysBefore: settings.daysBefore, minute: settings.minuteOfDay) else { continue }
             let amount = settings.hideAmounts ? "" : " \(format(loan.outstanding))"
             planned.append(PlannedReminder(
-                id: "\(PlannedReminder.idPrefix)loan.\(loan.name).\(loan.due)", kind: .loan, fireDate: fire, minuteOfDay: minute,
+                id: "\(PlannedReminder.idPrefix)loan.\(loan.name).\(loan.due).\(loan.outstanding.minorUnits)", kind: .loan, fireDate: fire, minuteOfDay: minute,
                 title: loan.owedToMe ? "\(loan.name) should pay you back \(phrase(loan.due, from: fire))"
                                      : "Pay \(loan.name) back \(phrase(loan.due, from: fire))",
                 body: loan.owedToMe ? "\(loan.name) owes you\(amount)." : "You owe\(amount).", itemID: nil, scheduledDate: loan.due))

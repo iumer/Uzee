@@ -204,6 +204,8 @@ struct OnboardingView: View {
                 try session.budgets.setSettings(.salaryCycle(startDay: salaryDay), warn)
             }
         } catch {
+            // Accounts saved before the failure are kept; a retry skips them.
+            session.reload()
             problem = "Couldn't save. Try again."
             return
         }

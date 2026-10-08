@@ -41,6 +41,20 @@ public final class LocationService: NSObject, CLLocationManagerDelegate, @unchec
         let allowed: [CLAuthorizationStatus] = [.authorizedAlways]
         #endif
         guard allowed.contains(manager.authorizationStatus) else { throw Failure.notAllowed }
+        // No fix within 20 seconds (indoors, no signal): give up rather than spin forever.
+        return try await withThrowingTaskGroup(of: Place.self) { group in
+            group.addTask { try await self.firstPlace() }
+            group.addTask {
+                try await Task.sleep(for: .seconds(20))
+                throw Failure.unavailable
+            }
+            defer { group.cancelAll() }
+            guard let place = try await group.next() else { throw Failure.unavailable }
+            return place
+        }
+    }
+
+    private func firstPlace() async throws -> Place {
         for try await update in CLLocationUpdate.liveUpdates() {
             guard let location = update.location else {
                 if update.authorizationDenied { throw Failure.notAllowed }
@@ -59,6 +73,8 @@ public final class LocationService: NSObject, CLLocationManagerDelegate, @unchec
         #if os(iOS)
         guard CLLocationManager.headingAvailable() else { return false }
         lock.withLock { headingHandler = handler }
+        // True north needs a location fix; without one iOS reports only magnetic headings.
+        manager.startUpdatingLocation()
         manager.startUpdatingHeading()
         return true
         #else
@@ -69,6 +85,7 @@ public final class LocationService: NSObject, CLLocationManagerDelegate, @unchec
     public func stopHeading() {
         #if os(iOS)
         manager.stopUpdatingHeading()
+        manager.stopUpdatingLocation()
         #endif
         lock.withLock { headingHandler = nil }
     }

@@ -54,6 +54,8 @@ struct BackupView: View {
                 if restoreData != nil {
                     SecureField("Backup password", text: $restorePassword)
                         .accessibilityIdentifier("backup.restorePassword")
+                        // A checked backup is tied to the password it was checked with.
+                        .onChange(of: restorePassword) { summary = nil }
                     Button("Check backup") { check() }
                         .disabled(working || restorePassword.isEmpty)
                 }
@@ -65,6 +67,7 @@ struct BackupView: View {
                             .font(.subheadline).foregroundStyle(UZColor.label2)
                     }
                     Button("Replace everything with this backup", role: .destructive) { confirmRestore = true }
+                        .disabled(working)
                         .accessibilityIdentifier("backup.replace")
                 }
             } header: {

@@ -6,11 +6,18 @@ struct AskUZeeIntent: AppIntent {
     static var title: LocalizedStringResource { "Ask UZee" }
     static var description: IntentDescription { IntentDescription("Ask about your money: what you owe, your next bill, budget left, spending or a balance.") }
 
+    /// Money answers only on an unlocked iPhone.
+    static var authenticationPolicy: IntentAuthenticationPolicy { .requiresAuthentication }
+
     @Parameter(title: "Question", requestValueDialog: IntentDialog("What would you like to know?"))
     var question: String
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // With UZee's own Face ID lock on, Siri doesn't read amounts out.
+        guard !AppContainer.shared.session.isAppLocked else {
+            return .result(dialog: "UZee is locked. Open it and unlock it to ask.")
+        }
         let answer = await AppContainer.shared.session.answer(question)
         return .result(dialog: "\(answer)")
     }

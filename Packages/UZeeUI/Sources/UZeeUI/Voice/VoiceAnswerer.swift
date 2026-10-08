@@ -128,7 +128,11 @@ struct VoiceAnswerer {
             let expense = session.ledger.categories.filter { $0.type == .expense }
             // "food" finds "Food & Dining"; whole words first, then any part of a name.
             let category = expense.first { NameKey.make($0.name) == key }
-                ?? expense.first { NameKey.make($0.name).split(separator: " ").contains { $0 == key || $0 == key + "s" || $0 + "s" == key } }
+                ?? expense.first { category in
+                    NameKey.make(category.name).split(separator: " ").map(String.init).contains { word in
+                        word == key || word == key + "s" || word + "s" == key
+                    }
+                }
                 ?? expense.first { key.count >= 4 && NameKey.make($0.name).contains(key) }
             guard let category else {
                 return "I couldn't find a category called \(categoryName)."

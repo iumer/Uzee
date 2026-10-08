@@ -113,21 +113,24 @@ public enum PrayerTimes {
         var hours: [String: Double] = ["fajr": 5, "sunrise": 6, "dhuhr": 12, "asr": 13, "sunset": 18, "isha": 18]
         for _ in 0..<2 {
             let f = hours.mapValues { $0 / 24 }
-            guard let fajr = angleTime(method.fajrAngle, f["fajr"]!, before: true),
-                  let sunrise = angleTime(0.833, f["sunrise"]!, before: true),
+            guard let sunrise = angleTime(0.833, f["sunrise"]!, before: true),
                   let asrHour = asrTime(f["asr"]!),
                   let sunset = angleTime(0.833, f["sunset"]!, before: false) else { return nil }
+            // Far north in summer the sun never gets low enough for Fajr or Isha: use the angle-based share of
+            // the night (angle / 60 of it) instead, as most calculators do.
+            let night = mod(sunrise - sunset, 24)
+            let fajr = angleTime(method.fajrAngle, f["fajr"]!, before: true) ?? sunrise - method.fajrAngle / 60 * night
             var isha = sunset + (method.isha.minutesAfterMaghrib ?? 0) / 60
             if let angle = method.isha.angle {
-                guard let value = angleTime(angle, f["isha"]!, before: false) else { return nil }
-                isha = value
+                isha = angleTime(angle, f["isha"]!, before: false) ?? sunset + angle / 60 * night
             }
             hours = ["fajr": fajr, "sunrise": sunrise, "dhuhr": midday(f["dhuhr"]!), "asr": asrHour, "sunset": sunset, "isha": isha]
         }
-        let adjust = offset - longitude / 15
+        // From midnight UTC, so a clock change that day (DST) can't shift the times by an hour.
+        let utcMidnight = date.startDate(in: TimeZone(identifier: "UTC")!)
         func time(_ key: String, extraMinutes: Double = 0) -> Date {
-            let value = hours[key]! + adjust + extraMinutes / 60
-            return date.startDate(in: timeZone).addingTimeInterval((value * 60).rounded() * 60)  // to the nearest minute
+            let value = hours[key]! - longitude / 15 + extraMinutes / 60
+            return utcMidnight.addingTimeInterval((value * 60).rounded() * 60)  // to the nearest minute
         }
         // Dhuhr a minute after the sun passes its highest point.
         return Day(fajr: time("fajr"), sunrise: time("sunrise"), dhuhr: time("dhuhr", extraMinutes: 1), asr: time("asr"),

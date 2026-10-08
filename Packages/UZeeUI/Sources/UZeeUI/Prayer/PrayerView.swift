@@ -77,7 +77,8 @@ struct PrayerView: View {
         .navigationTitle("Namaz & Qibla")
         .onAppear {
             hasCompass = session.location.startHeading { value in
-                Task { @MainActor in heading = value }
+                // Kept continuous (359° → 361°, not back to 1°) so the dial doesn't spin a full turn at north.
+                Task { @MainActor in heading = heading.map { $0 + QiblaCompass.difference(value, $0) } ?? value }
             }
         }
         .onDisappear { session.location.stopHeading() }

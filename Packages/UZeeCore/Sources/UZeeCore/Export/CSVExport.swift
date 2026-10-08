@@ -5,6 +5,9 @@ import Foundation
 public enum CSVExport {
     public static let header = ["Date", "Type", "Account", "Amount", "Currency", "Category", "Payee", "Note", "Status"]
 
+    /// The signed amount, the only field that may start with "-".
+    static let amountColumn = 3
+
     public static func transactions(_ transactions: [MoneyTransaction], ledger: LedgerSnapshot) -> String {
         var lines = [header.joined(separator: ",")]
         let rows = transactions.filter { $0.deletedAt == nil }
@@ -22,7 +25,8 @@ public enum CSVExport {
                     transaction.note ?? "",
                     transaction.status == .pending ? "Pending" : "Posted"
                 ]
-                lines.append(fields.map(escape).joined(separator: ","))
+                // Only the amount column may start with "-": it is a number, not text.
+                lines.append(fields.enumerated().map { escape($1, numeric: $0 == amountColumn) }.joined(separator: ","))
             }
         }
         return lines.joined(separator: "\r\n") + "\r\n"
@@ -30,9 +34,9 @@ public enum CSVExport {
 
     /// Quotes a field when it holds a comma, quote or line break; a leading = + - @ is guarded so a
     /// spreadsheet doesn't run it as a formula (amounts are numbers and stay as they are).
-    static func escape(_ field: String) -> String {
+    static func escape(_ field: String, numeric: Bool = false) -> String {
         var value = field
-        if let first = value.first, "=+@".contains(first) || (first == "-" && Decimal(string: value) == nil) {
+        if let first = value.first, "=+@\t\r".contains(first) || (first == "-" && !(numeric && Decimal(string: value) != nil)) {
             value = "'" + value
         }
         guard value.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" }) else { return value }

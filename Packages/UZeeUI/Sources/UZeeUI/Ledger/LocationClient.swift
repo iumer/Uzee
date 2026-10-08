@@ -1,4 +1,5 @@
 import Foundation
+import UZeeCore
 
 /// Location for namaz times and the compass for Qibla, injected like `LedgerClient`.
 public struct LocationClient: Sendable {

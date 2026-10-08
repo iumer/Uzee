@@ -70,6 +70,13 @@ public enum ReminderPhrase {
         public var date: LocalDate
         public var minuteOfDay: Int?
         public var amount: Money?
+
+        public init(title: String, date: LocalDate, minuteOfDay: Int? = nil, amount: Money? = nil) {
+            self.title = title
+            self.date = date
+            self.minuteOfDay = minuteOfDay
+            self.amount = amount
+        }
     }
 
     /// "Remind me to pay the plumber 5,000 on Friday at 5 pm" → a reminder. Nil when it isn't a reminder
