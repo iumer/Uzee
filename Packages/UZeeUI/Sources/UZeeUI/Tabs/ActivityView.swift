@@ -30,7 +30,7 @@ struct ActivityView: View {
                         Text(day.date.listTitle(today: today))
                         Spacer()
                         if !day.spending.isZero {
-                            Text(MoneyFormatter.string(day.spending)).monospacedDigit()
+                            Text("spent \(MoneyFormatter.string(day.spending))").monospacedDigit()
                         }
                     }
                     .accessibilityElement(children: .combine)

@@ -18,6 +18,12 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 
 ### Fixed
 - Receipt scanning: the amount is taken from the value next to or under its label ("Amount", "Grand Total"), even on a tilted photo or a table; numbers in addresses, phone numbers, tracking and order numbers are ignored; "1,830/-" reads as money. On courier labels the shipper is the shop. A category is suggested from the shop and the items (more Pakistani shops and item words).
+- Add: Save saves straight away (no second "Save this expense?" sheet); the amount groups with commas as you type; the number pad has a Done key.
+- The + button hides on pushed screens and lists leave room for it, so it no longer covers amounts; the undo toast sits above it.
+- Home: with no spending yet the card says "Nothing spent yet" instead of a green "Rs 0 less than…"; Insights says "nothing yet" instead of "net Rs 0".
+- Reports: the six-month chart includes this month; a zero net is not coloured as a gain.
+- Activity: rows without a payee are titled with the category name ("Groceries", not "Food › Gro…"); day totals say "spent".
+- Settings: the developer "Design components" row is hidden on the phone.
 
 ## [0.9.4] build 13 — 2026-10-08 — Statement readers for MCB, HBL, Meezan, SadaPay, NayaPay and Wise
 

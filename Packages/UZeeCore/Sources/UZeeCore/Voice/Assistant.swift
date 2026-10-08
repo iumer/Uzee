@@ -62,7 +62,7 @@ public enum AssistantReply {
     public static func isGoodbye(_ text: String) -> Bool {
         let t = " " + VoiceRuleParser.normalise(text) + " "
         guard t.split(separator: " ").count <= 5 else { return false }
-        return [" bye ", " goodbye ", " that's all ", " thats all ", " that is all ", " nothing else ", " stop listening ",
+        return [" bye ", " goodbye ", " that all ", " thats all ", " that is all ", " nothing else ", " stop listening ",
                 " thank you ", " thanks ", " shukriya "].contains { t.contains($0) }
     }
 }

@@ -26,7 +26,6 @@ struct AddSheet: View {
     @State private var date = Date()
     @State private var isPending = false
     @State private var problem: String?
-    @State private var review: MoneyTransaction?
     /// Split with people or a group (SPL-03); nil = not split.
     @State private var splitDraft: SplitDraft?
     @State private var reviewSplit: Split?
@@ -86,6 +85,15 @@ struct AddSheet: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // The number pad has no return key: Done hides it so Date, Note and Pending can be reached.
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { amountFocused = false; hideKeyboard() }
+                        .fontWeight(.semibold)
+                        .accessibilityIdentifier("add.keyboardDone")
+                }
+            }
+            .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                         .accessibilityIdentifier("add.close")
@@ -93,18 +101,6 @@ struct AddSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", action: prepare)
                         .accessibilityIdentifier("add.save")
-                }
-            }
-            .sheet(item: $review) { transaction in
-                ConfirmSheet(title: confirmTitle, amount: transaction.amount, rows: confirmRows(transaction),
-                             confirmTitle: editing == nil ? "Save" : "Save changes") {
-                    let saved = reviewSplit != nil || hadSplit
-                        ? session.save(transaction, split: reviewSplit, isNew: editing == nil)
-                        : session.save(transaction, isNew: editing == nil)
-                    if saved {
-                        attachReceipt(to: transaction.id)
-                        session.isAddPresented = false
-                    }
                 }
             }
             .onAppear(perform: load)
@@ -155,6 +151,10 @@ struct AddSheet: View {
                     .monospacedDigit()
                     .accessibilityLabel(kind == .transfer ? "Amount sent" : "Amount")
                     .accessibilityIdentifier("add.amount")
+                    .onChange(of: amountText) { _, typed in
+                        let grouped = AmountTyping.grouped(typed)
+                        if grouped != typed { amountText = grouped }
+                    }
             }
             if kind != .transfer && editing == nil { scanRow }
         }
@@ -360,7 +360,6 @@ struct AddSheet: View {
         return "New \(kind.name.lowercased())"
     }
 
-    private var confirmTitle: String { editing == nil ? "Save this \(kind.name.lowercased())?" : "Save changes?" }
 
     private func categoryType(for kind: TransactionKind) -> CategoryType {
         kind == .income ? .income : .expense
@@ -494,40 +493,21 @@ struct AddSheet: View {
                     return
                 }
             }
-            review = built
+            commit(built)
         } catch {
             problem = ProblemText.message(error)
         }
     }
 
-    private func confirmRows(_ transaction: MoneyTransaction) -> [ConfirmSheet.Row] {
-        var rows: [ConfirmSheet.Row] = []
-        if transaction.kind == .transfer {
-            if let out = transaction.legs.first(where: { $0.role == .transferOut }), let from = ledger.account(out.accountID) {
-                rows.append(.init("From", from.name))
-            }
-            if let into = transaction.legs.first(where: { $0.role == .transferIn }), let to = ledger.account(into.accountID) {
-                rows.append(.init("To", "\(to.name) · \(MoneyFormatter.string(into.amount))"))
-            }
-            if let rate = transaction.fxRate { rows.append(.init("Rate", ExchangeRate.display(rate))) }
-        } else {
-            if let leg = transaction.legs.first, let account = ledger.account(leg.accountID) { rows.append(.init("Account", account.name)) }
-            if let path = ledger.categoryPath(transaction.categoryID) { rows.append(.init("Category", path)) }
-            if let payee = transaction.payeeName { rows.append(.init(transaction.kind == .income ? "From" : "Paid to", payee)) }
+    /// Saves straight away; the toast's Undo takes it back (no second "Save this?" step).
+    private func commit(_ transaction: MoneyTransaction) {
+        let saved = reviewSplit != nil || hadSplit
+            ? session.save(transaction, split: reviewSplit, isNew: editing == nil)
+            : session.save(transaction, isNew: editing == nil)
+        if saved {
+            attachReceipt(to: transaction.id)
+            session.isAddPresented = false
         }
-        if let split = reviewSplit {
-            let me = session.people.selfID
-            let with = session.people.group(split.groupID)?.name
-                ?? split.people.filter { $0 != me }.compactMap { session.people.person($0)?.name }.joined(separator: ", ")
-            rows.append(.init("Split with", with))
-            if let payer = split.payers.first, split.payers.count == 1, payer.personID != me {
-                rows.append(.init(transaction.kind == .income ? "Received by" : "Paid by", session.people.person(payer.personID)?.name ?? "Someone"))
-            }
-            rows.append(.init("Your share", MoneyFormatter.string(split.share(of: me) ?? .zero(transaction.amount.currency))))
-        }
-        rows.append(.init("Date", transaction.occurredAt.formatted(date: .abbreviated, time: .shortened)))
-        if transaction.status == .pending { rows.append(.init("Status", "Pending")) }
-        return rows
     }
 }
 
@@ -575,4 +555,30 @@ struct CategoryPicker: View {
         .accessibilityIdentifier("category.\(category.name)")
         .accessibilityAddTraits(selection == category.id ? .isSelected : [])
     }
+}
+
+/// Thousands separators while typing an amount: "2500" → "2,500", "1234567.5" → "1,234,567.5".
+enum AmountTyping {
+    static func grouped(_ text: String) -> String {
+        let plain = text.filter { $0 != "," && !$0.isWhitespace }
+        guard !plain.isEmpty, plain.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == ".") }),
+              plain.filter({ $0 == "." }).count <= 1 else { return text }
+        let parts = plain.split(separator: ".", omittingEmptySubsequences: false)
+        let whole = String(parts[0])
+        // Leave leading zeros ("05") alone; they are being typed or corrected.
+        guard whole.count > 3, !whole.hasPrefix("0") else { return text.contains(",") && whole.count <= 3 ? plain : text }
+        var groups: [String] = []
+        var rest = Substring(whole)
+        while rest.count > 3 {
+            groups.insert(String(rest.suffix(3)), at: 0)
+            rest = rest.dropLast(3)
+        }
+        groups.insert(String(rest), at: 0)
+        let joined = groups.joined(separator: ",")
+        return parts.count > 1 ? joined + "." + parts[1] : joined
+    }
+}
+
+private func hideKeyboard() {
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 }

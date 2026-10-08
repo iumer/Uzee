@@ -98,7 +98,8 @@ struct ToastOverlay: ViewModifier {
                         .id(toast.id)
                 }
             }
-            .padding(.bottom, 72)
+            // Above the floating "+" (and the tab bar under it).
+            .padding(.bottom, 128)
             .animation(UZMotion.pick(UZMotion.toast, reduceMotion: reduceMotion), value: center.current)
             .onChange(of: focused) { _, isFocused in center.hold(isFocused) }
         }

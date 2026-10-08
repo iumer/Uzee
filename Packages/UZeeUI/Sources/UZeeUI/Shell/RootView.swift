@@ -23,11 +23,16 @@ public struct RootView: View {
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.never)
         // A sixth Tab would push People into "More" on iPhone, so "+" floats above the tab bar instead.
+        // Only on each tab's first screen; detail screens and Settings keep their full width.
         .overlay(alignment: .bottomTrailing) {
-            AddButton { session.isAddPresented = true }
-                .padding(.trailing, UZSpacing.xxl)
-                .padding(.bottom, 72)
+            if session.path(for: session.selectedTab).wrappedValue.isEmpty {
+                AddButton { session.isAddPresented = true }
+                    .padding(.trailing, UZSpacing.xxl)
+                    .padding(.bottom, 72)
+                    .transition(.scale.combined(with: .opacity))
+            }
         }
+        .animation(.easeOut(duration: 0.2), value: session.path(for: session.selectedTab).wrappedValue.isEmpty)
         .sheet(isPresented: $session.isAddPresented) {
             AddSheet(session: session)
         }
@@ -81,6 +86,8 @@ struct TabRoot: View {
     var body: some View {
         NavigationStack(path: session.path(for: tab)) {
             screen
+                // Room under the last row so the floating "+" never covers an amount.
+                .contentMargins(.bottom, 64, for: .scrollContent)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if session.isSampleMode {
                         SampleBanner { session.removeSampleData() }

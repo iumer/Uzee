@@ -42,7 +42,7 @@ struct ReportsView: View {
                 HStack(spacing: UZSpacing.l) {
                     kpi("Income", totals.income, color: UZColor.positive)
                     kpi("Spending", totals.spending, color: UZColor.label)
-                    kpi("Net", net, color: net.isNegative ? UZColor.negative : UZColor.positive, signed: true)
+                    kpi("Net", net, color: net.isZero ? UZColor.label : net.isNegative ? UZColor.negative : UZColor.positive, signed: true)
                 }
                 .accessibilityIdentifier("reports.kpis")
                 categories(range)
@@ -123,8 +123,8 @@ struct ReportsView: View {
     // MARK: Six months
 
     private var incomeVsSpending: some View {
-        let months = ReportCalculator.months(session.transactions, from: today.firstOfMonth.addingMonths(-6),
-                                             through: today.firstOfMonth.addingMonths(-1), base: base, rates: rates)
+        let months = ReportCalculator.months(session.transactions, from: today.firstOfMonth.addingMonths(-5),
+                                             through: today.firstOfMonth, base: base, rates: rates)
         let scale = Double(Money.scale(base.minorUnits)) * 1_000
         return VStack(alignment: .leading, spacing: UZSpacing.m) {
             HStack(alignment: .firstTextBaseline) {

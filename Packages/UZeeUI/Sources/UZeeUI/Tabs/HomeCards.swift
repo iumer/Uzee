@@ -71,9 +71,15 @@ struct HomeCards: View {
                             .minimumScaleFactor(0.7).lineLimit(1)
                         let difference = spent.now.minorUnits - spent.before.minorUnits
                         let amount = MoneyFormatter.string(Money(minorUnits: difference.magnitudeClamped, currency: base))
-                        Text(difference <= 0 ? "\(amount) less than this time in \(previousName)"
-                                             : "\(amount) more than this time in \(previousName)")
-                            .font(.caption).foregroundStyle(difference <= 0 ? UZColor.positive : UZColor.warning)
+                        if spent.before.minorUnits == 0 && spent.now.minorUnits == 0 {
+                            Text("Nothing spent yet").font(.caption).foregroundStyle(UZColor.label2)
+                        } else if difference == 0 {
+                            Text("Same as this time in \(previousName)").font(.caption).foregroundStyle(UZColor.label2)
+                        } else {
+                            Text(difference < 0 ? "\(amount) less than this time in \(previousName)"
+                                                : "\(amount) more than this time in \(previousName)")
+                                .font(.caption).foregroundStyle(difference < 0 ? UZColor.positive : UZColor.warning)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -282,7 +288,7 @@ struct HomeCards: View {
                     HStack {
                         Image(systemName: "chart.bar.xaxis").font(.title3).foregroundStyle(UZColor.tint).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: UZSpacing.xxs) {
-                            Text("\(name) · net \(MoneyFormatter.string(net, sign: .always))").font(.subheadline.weight(.semibold))
+                            Text(totals.income.isZero && totals.spending.isZero ? "\(name) · nothing yet" : "\(name) · net \(MoneyFormatter.string(net, sign: .always))").font(.subheadline.weight(.semibold))
                             Text("Income \(MoneyFormatter.string(totals.income)) · spending \(MoneyFormatter.string(totals.spending))")
                                 .font(.caption).foregroundStyle(UZColor.label2)
                         }

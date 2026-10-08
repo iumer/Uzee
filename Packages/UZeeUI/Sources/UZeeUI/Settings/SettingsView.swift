@@ -94,6 +94,8 @@ struct SettingsView: View {
             }
 
             #if DEBUG
+            // Only for development runs started with -uzee-developer, never on the owner's phone.
+            if ProcessInfo.processInfo.arguments.contains("-uzee-developer") {
             Section {
                 NavigationLink(value: Route.componentGallery) {
                     SettingsLabel("Design components", symbol: "paintpalette", color: Color(uiColor: .systemIndigo))
@@ -103,6 +105,7 @@ struct SettingsView: View {
                 Text("Developer")
             } footer: {
                 Text("Shown in development builds only.")
+            }
             }
             #endif
         }

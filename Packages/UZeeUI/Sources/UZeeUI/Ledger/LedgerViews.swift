@@ -122,7 +122,7 @@ struct TransactionRow: View {
             let to = ledger.account(transaction.legs.first { $0.role == .transferIn }?.accountID)?.name ?? "?"
             return "\(from) → \(to)"
         }
-        return ledger.categoryPath(transaction.categoryID) ?? transaction.kind.name
+        return ledger.category(transaction.categoryID)?.name ?? transaction.kind.name
     }
 
     private var subtitle: String {

@@ -78,7 +78,6 @@ final class TransactionSmokeTests: XCTestCase {
         tap("add.category")
         tap("category.Groceries")
         tap("add.save")
-        tap("confirm.primary")
         XCTAssertTrue(element("add.sheet").waitForNonExistence(timeout: 30), "Add sheet still open")
     }
 
@@ -94,11 +93,10 @@ final class TransactionSmokeTests: XCTestCase {
         addHBL()
         addExpense("1500")
         tapTab("Activity")
-        tap("txn.Food › Groceries")
+        tap("txn.Groceries")
         tap("detail.edit")
         type("1650", into: "add.amount", clearing: true)
         tap("add.save")
-        tap("confirm.primary")
         XCTAssertTrue(element("add.sheet").waitForNonExistence(timeout: 30))
         XCTAssertEqual(element("detail.amount").label, "1,650 rupees")
         tap("detail.delete")
