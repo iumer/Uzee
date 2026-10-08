@@ -28,6 +28,24 @@ public struct SmartClient: Sendable {
     /// Says a reply aloud, then calls back.
     public var speak: @Sendable (String, @escaping @Sendable () -> Void) -> Void
     public var stopSpeaking: @Sendable () -> Void
+    /// Installed English voices for UZee to speak with, best first.
+    public var voices: @Sendable () -> [VoiceChoice]
+    public var previewVoice: @Sendable (String) -> Void
+
+    public struct VoiceChoice: Hashable, Sendable, Identifiable {
+        public let id: String
+        public let name: String
+        public let detail: String
+
+        public init(id: String, name: String, detail: String) {
+            self.id = id
+            self.name = name
+            self.detail = detail
+        }
+    }
+
+    /// Where the chosen voice is kept (read by the speaker in UZeeSystem too).
+    public static let chosenVoiceKey = "uzee.voice.id"
 
     public init(readReceipt: @escaping @Sendable (Data) throws -> [ReceiptPiece],
                 readStatement: @escaping @Sendable (URL, String?) throws -> StatementText,
@@ -40,7 +58,9 @@ public struct SmartClient: Sendable {
                 canListen: @escaping @Sendable () -> Bool = { false },
                 startAssistant: @escaping @Sendable (AssistantActions, VoiceVocabulary, LocalDate) -> (any AssistantChat)? = { _, _, _ in nil },
                 speak: @escaping @Sendable (String, @escaping @Sendable () -> Void) -> Void = { _, done in done() },
-                stopSpeaking: @escaping @Sendable () -> Void = {}) {
+                stopSpeaking: @escaping @Sendable () -> Void = {},
+                voices: @escaping @Sendable () -> [VoiceChoice] = { [] },
+                previewVoice: @escaping @Sendable (String) -> Void = { _ in }) {
         self.readReceipt = readReceipt
         self.readStatement = readStatement
         self.understand = understand
@@ -53,6 +73,8 @@ public struct SmartClient: Sendable {
         self.startAssistant = startAssistant
         self.speak = speak
         self.stopSpeaking = stopSpeaking
+        self.voices = voices
+        self.previewVoice = previewVoice
     }
 
     /// Previews and tests: rules only, no camera text, no microphone.

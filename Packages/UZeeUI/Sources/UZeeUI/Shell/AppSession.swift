@@ -144,20 +144,39 @@ public final class AppSession {
     }
 
     /// After a restore: everything, including sample mode, comes from the backup.
+    /// Settings › Erase everything: a fresh start, then first-launch setup again.
+    public func eraseEverything() -> Bool {
+        do {
+            try backup.eraseEverything()
+        } catch {
+            errorMessage = "Couldn't erase. Nothing was changed."
+            return false
+        }
+        for key in ["uzee.onboarded", Self.calendarExportKey, "uzee.voice.history"] { UserDefaults.standard.removeObject(forKey: key) }
+        calendarExportID = nil
+        reloadAfterRestore()
+        rescheduleReminders()
+        isOnboardingRequested = true
+        return true
+    }
+
+    /// Set after an erase, so the shell shows first-launch setup again.
+    public var isOnboardingRequested = false
+
     public func reloadAfterRestore() {
         isSampleMode = (try? sampleData.isActive()) ?? false
         paths = [:]
         reload()
     }
 
-    /// Re-plans every reminder from the current data (on launch, after each change and on return to the app).
-    /// Coalesced, so a burst of saves schedules once.
     /// Right away, for a notification action: iOS may suspend UZee as soon as the handler returns.
     public func rescheduleNow() async {
         rescheduleReminders(debounce: false)
         await scheduling?.value
     }
 
+    /// Re-plans every reminder from the current data (on launch, after each change and on return to the app).
+    /// Coalesced, so a burst of saves schedules once.
     public func rescheduleReminders(debounce: Bool = true) {
         let previous = scheduling
         previous?.cancel()

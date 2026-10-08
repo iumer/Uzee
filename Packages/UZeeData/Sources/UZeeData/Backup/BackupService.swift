@@ -161,6 +161,22 @@ public struct BackupService: Sendable {
         return summary
     }
 
+    /// Starts UZee over (SET-04): every account, transaction, person, bill and receipt goes; the default
+    /// categories and settings come back as on first launch. A safety copy is kept first, like a restore.
+    public func eraseEverything(safetyFolder: URL, now: Date = Date()) throws {
+        let stamp = ISO8601DateFormatter().string(from: now).replacingOccurrences(of: ":", with: "-")
+        let safety = safetyFolder.appendingPathComponent("Before reset \(stamp)", isDirectory: true)
+        try FileManager.default.createDirectory(at: safety, withIntermediateDirectories: true)
+        try database.writer.backup(to: try DatabaseQueue(path: safety.appendingPathComponent(Self.databaseName).path))
+        if FileManager.default.fileExists(atPath: attachments.folder.path) {
+            try FileManager.default.copyItem(at: attachments.folder, to: safety.appendingPathComponent("Receipts", isDirectory: true))
+        }
+        let fresh = try AppDatabase.inMemory()
+        try fresh.writer.backup(to: database.writer)
+        let current = (try? FileManager.default.contentsOfDirectory(atPath: attachments.folder.path)) ?? []
+        attachments.remove(current)
+    }
+
     // MARK: Helpers
 
     private func receiptNames() throws -> [String] {

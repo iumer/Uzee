@@ -89,6 +89,11 @@ public struct RootView: View {
         .onChange(of: showingSplash, initial: true) { _, splash in
             if !splash, OnboardingView.isNeeded(session) { showingOnboarding = true }
         }
+        .onChange(of: session.isOnboardingRequested) { _, requested in
+            guard requested else { return }
+            session.isOnboardingRequested = false
+            showingOnboarding = true
+        }
     }
 
     private var curtain: LockCurtain.Mode {

@@ -3,6 +3,8 @@ import SwiftUI
 /// Siri & voice (SCR-40): what to say, where else Ask UZee lives, and whether Apple Intelligence is on (VOX-01, VOX-08).
 struct SiriVoiceView: View {
     @Bindable var session: AppSession
+    @AppStorage(SmartClient.chosenVoiceKey) private var chosenVoice = ""
+    @State private var voices: [SmartClient.VoiceChoice] = []
 
     var body: some View {
         List {
@@ -32,10 +34,35 @@ struct SiriVoiceView: View {
                 Text("Apple Intelligence")
             }
             Section {
+                ForEach(voices) { voice in
+                    Button {
+                        chosenVoice = voice.id
+                        session.smart.previewVoice(voice.id)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(voice.name).foregroundStyle(UZColor.label)
+                                Text(voice.detail).font(.footnote).foregroundStyle(UZColor.label2)
+                            }
+                            Spacer()
+                            if voice.id == chosenVoice || (chosenVoice.isEmpty && voice.id == voices.first?.id) {
+                                Image(systemName: "checkmark").foregroundStyle(UZColor.tint)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("siri.voice")
+                }
+            } header: {
+                Text("UZee's voice")
+            } footer: {
+                Text("Tap to hear it. For a more natural voice, download a Premium or Enhanced one (such as Ava, Zoe or Evan) in the iPhone's Settings › Accessibility › Read & Speak › Voices › English, then pick it here.")
+            }
+            Section {
                 Button("Try Ask UZee") { session.openVoice() }
                     .accessibilityIdentifier("siri.try")
             }
         }
+        .task { voices = session.smart.voices() }
         .navigationTitle("Siri & voice")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("screen.siriVoice")

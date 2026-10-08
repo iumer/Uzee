@@ -18,6 +18,10 @@ public final class VoiceSpeaker: NSObject, AVSpeechSynthesizerDelegate, @uncheck
 
     /// Speaks `text`, then calls `done` (also when stopped).
     public func speak(_ text: String, done: @escaping @Sendable () -> Void) {
+        speak(text, voiceID: nil, done: done)
+    }
+
+    func speak(_ text: String, voiceID: String?, done: @escaping @Sendable () -> Void) {
         // A new reply replaces the old one; the old one's "done" (start listening) would fire mid-sentence.
         lock.lock()
         onDone = nil
@@ -30,8 +34,10 @@ public final class VoiceSpeaker: NSObject, AVSpeechSynthesizerDelegate, @uncheck
         try? session.setActive(true)
         #endif
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = Self.bestVoice()
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.05
+        utterance.voice = voiceID.flatMap(AVSpeechSynthesisVoice.init(identifier:)) ?? Self.bestVoice()
+        // A touch slower and warmer than the default reads money more naturally.
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.98
+        utterance.pitchMultiplier = 1.05
         utterance.postUtteranceDelay = 0.1
         lock.lock()
         onDone = done
@@ -45,8 +51,40 @@ public final class VoiceSpeaker: NSObject, AVSpeechSynthesizerDelegate, @uncheck
         finish(nil)
     }
 
-    /// The best installed English voice: premium, then enhanced, then the default.
+    /// The voice the owner picked in Settings › Siri & voice (an AVSpeechSynthesisVoice identifier).
+    public static let chosenVoiceKey = "uzee.voice.id"
+
+    /// Installed English voices, best first: (identifier, name, accent and quality).
+    public static func voices() -> [(id: String, name: String, detail: String)] {
+        let english = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("en") }
+        let rank: (AVSpeechSynthesisVoice) -> Int = { voice in
+            switch voice.quality {
+            case .premium: 0
+            case .enhanced: 1
+            default: 2
+            }
+        }
+        return english
+            // Novelty voices (Bells, Bubbles, Whisper…) aren't for reading money out.
+            .filter { !$0.voiceTraits.contains(.isNoveltyVoice) }
+            .sorted { (rank($0), $0.name) < (rank($1), $1.name) }
+            .map { voice in
+                let accent = Locale.current.localizedString(forIdentifier: voice.language) ?? voice.language
+                let quality = voice.quality == .premium ? "Premium" : voice.quality == .enhanced ? "Enhanced" : "Standard"
+                return (voice.identifier, voice.name, "\(accent) · \(quality)")
+            }
+    }
+
+    /// Says a sample sentence in a voice, for picking one.
+    public func preview(_ identifier: String) {
+        speak("Hi, I'm UZee. You spent 2,500 rupees on groceries this week.", voiceID: identifier) {}
+    }
+
+    /// The chosen voice, else the best installed English voice: premium, then enhanced, then the default.
     static func bestVoice() -> AVSpeechSynthesisVoice? {
+        if let id = UserDefaults.standard.string(forKey: chosenVoiceKey), let chosen = AVSpeechSynthesisVoice(identifier: id) {
+            return chosen
+        }
         let english = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("en") }
         let preferred = ["en-US", "en-GB", "en-IN", "en-AU"]
         for quality in [AVSpeechSynthesisVoiceQuality.premium, .enhanced] {

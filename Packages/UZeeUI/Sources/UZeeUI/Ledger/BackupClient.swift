@@ -8,13 +8,17 @@ public struct BackupClient: Sendable {
     public var makeBackup: @Sendable (_ password: String) throws -> URL
     public var inspect: @Sendable (_ file: Data, _ password: String) throws -> BackupSummary
     public var restore: @Sendable (_ file: Data, _ password: String) throws -> BackupSummary
+    /// Erases everything (a safety copy is kept on the iPhone first).
+    public var eraseEverything: @Sendable () throws -> Void
 
     public init(makeBackup: @escaping @Sendable (String) throws -> URL,
                 inspect: @escaping @Sendable (Data, String) throws -> BackupSummary,
-                restore: @escaping @Sendable (Data, String) throws -> BackupSummary) {
+                restore: @escaping @Sendable (Data, String) throws -> BackupSummary,
+                eraseEverything: @escaping @Sendable () throws -> Void = { throw BackupProblem.failed }) {
         self.makeBackup = makeBackup
         self.inspect = inspect
         self.restore = restore
+        self.eraseEverything = eraseEverything
     }
 
     public static let unavailable = BackupClient(makeBackup: { _ in throw BackupProblem.failed },

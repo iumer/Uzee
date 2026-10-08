@@ -32,6 +32,8 @@ enum AppLock {
     static func unlock(reason: String = "Unlock UZee") async -> Bool {
         let context = LAContext()
         context.localizedCancelTitle = "Not now"
+        // When Face ID can't see you, iOS offers this button and asks for the iPhone passcode.
+        context.localizedFallbackTitle = "Enter Passcode"
         return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
     }
 }
@@ -56,6 +58,11 @@ struct LockScreen: View {
                     }
                     .buttonStyle(.glassProminent)
                     .accessibilityIdentifier("lock.unlock")
+                    Button("Use iPhone passcode", action: unlock)
+                        .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.85))
+                        .accessibilityIdentifier("lock.passcode")
+                    Text("If \(AppLock.methodName) doesn't see you, tap Enter Passcode.")
+                        .font(.footnote).foregroundStyle(.white.opacity(0.6))
                 }
             }
         }
