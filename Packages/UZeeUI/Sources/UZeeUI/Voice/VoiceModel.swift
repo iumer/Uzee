@@ -257,7 +257,12 @@ final class VoiceModel {
         }
         isThinking = true
         Task {
-            let reply = await chat.reply(to: sentence)
+            // The on-device model can be slow or stuck (busy, simulator): after 8 seconds UZee's own rules answer.
+            let reply: String? = await withCheckedContinuation { continuation in
+                let once = Once()
+                Task { let answer = await chat.reply(to: sentence); if once.claim() { continuation.resume(returning: answer) } }
+                Task { try? await Task.sleep(for: .seconds(8)); if once.claim() { continuation.resume(returning: nil) } }
+            }
             isThinking = false
             if let reply, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 say(reply)
@@ -631,6 +636,20 @@ extension AppSession {
             return "Sorry, I didn't get that. Try asking how much you owe someone, your next bill or your budget."
         default:
             return "To add something, say \"Add to UZee\". I'll open UZee so you can check it before it's saved."
+        }
+    }
+}
+
+/// Lets exactly one of several racing tasks finish a continuation.
+private final class Once: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+
+    func claim() -> Bool {
+        lock.withLock {
+            guard !done else { return false }
+            done = true
+            return true
         }
     }
 }

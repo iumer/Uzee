@@ -96,7 +96,11 @@ struct AddSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    Button("Close") {
+                        amountFocused = false
+                        dismiss()
+                        session.isAddPresented = false
+                    }
                         .accessibilityIdentifier("add.close")
                 }
                 ToolbarItem(placement: .confirmationAction) {
