@@ -75,7 +75,23 @@ extension AppDatabase {
         var config = Configuration()
         config.foreignKeysEnabled = true
         let pool = try DatabasePool(path: folder.appendingPathComponent("uzee.sqlite").path, configuration: config)
+        try safetyCopyBeforeMigrating(pool, into: folder.appendingPathComponent("Safety copies", isDirectory: true))
         return try AppDatabase(pool)
+    }
+
+    /// DATA-05: before an update changes the schema of a database that already has data, keep a copy of it
+    /// as it was. Only the three newest copies are kept.
+    static func safetyCopyBeforeMigrating(_ writer: any DatabaseWriter, into folder: URL, now: Date = Date()) throws {
+        let (applied, complete) = try writer.read { db in
+            (try migrator.appliedMigrations(db), try migrator.hasCompletedMigrations(db))
+        }
+        guard !applied.isEmpty, !complete else { return }
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        let stamp = ISO8601DateFormatter().string(from: now).replacingOccurrences(of: ":", with: "-")
+        try writer.backup(to: try DatabaseQueue(path: folder.appendingPathComponent("Before update \(stamp).sqlite").path))
+        let copies = (try? fileManager.contentsOfDirectory(atPath: folder.path))?.filter { $0.hasPrefix("Before update") }.sorted() ?? []
+        for old in copies.dropLast(3) { try? fileManager.removeItem(at: folder.appendingPathComponent(old)) }
     }
 
     /// Empty in-memory database for tests and previews.

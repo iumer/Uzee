@@ -15,6 +15,10 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 
 ### Added
 - Reminders (M7): one notification for each bill, subscription, installment and kameti, each loan due back, and your own reminders, by default a day before at 10:00 (Settings › Reminders: lead time, time, hide amounts). "Mark paid" on a bill notification posts the payment once from the bill's account; "Snooze 1 day" moves it to tomorrow; tapping opens the bill. At most 60 are queued, nearest first, refreshed on every change and whenever UZee opens. Permission is asked after setup or when you add your first bill or reminder.
+- UZee helper: "Remind me to pay the plumber 5,000 on Friday at 5" adds a reminder to the calendar (with or without Apple Intelligence).
+- Before an update changes the database, a safety copy of it is kept on the phone (the three newest).
+- The Face ID lock now also covers open sheets (Add, Ask UZee, import).
+- iPad: ⌘N opens Add.
 - Namaz times and Qibla (Settings › Namaz times & Qibla): today's five prayers for where you are, each with its start and end ("Asr · now · ends 6:12 pm"), worked out on the phone (Karachi method and Hanafi Asr by default; Muslim World League, ISNA, Umm al-Qura and Egyptian methods too), so it works offline. A Qibla compass turns with the phone and buzzes when you face the Kaaba. Optional notification at each prayer's start. Once set up, Home shows the current prayer.
 - Ask UZee from anywhere: a Control Center control (also for the Lock Screen and the Action Button) and a round Lock Screen widget, both opening Ask UZee ready to listen. They're in a new UZeeWidgets extension; they show no money, so no data is shared outside the app.
 - Reports: "Export PDF" makes an A4 PDF of the report on screen, to save, print or share.

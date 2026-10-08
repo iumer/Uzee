@@ -136,3 +136,35 @@ struct ExportView: View {
         }
     }
 }
+
+/// Shows the lock (or the app-switcher cover) in its own window above everything, so open sheets such as
+/// Add or Ask UZee are covered too.
+@MainActor
+final class LockCurtain {
+    enum Mode: Equatable { case none, privacy, locked }
+
+    static let shared = LockCurtain()
+    private var window: UIWindow?
+    private var mode: Mode = .none
+
+    func show(_ mode: Mode, unlock: @escaping () -> Void) {
+        guard mode != self.mode || (mode != .none && window == nil) else { return }
+        self.mode = mode
+        guard mode != .none else {
+            UIView.animate(withDuration: 0.25, animations: { self.window?.alpha = 0 }, completion: { _ in
+                if self.mode == .none { self.window?.isHidden = true; self.window = nil }
+            })
+            return
+        }
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive }
+            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        guard let scene else { return }
+        let curtain = window ?? UIWindow(windowScene: scene)
+        curtain.windowLevel = .alert + 1
+        curtain.rootViewController = UIHostingController(rootView: LockScreen(showsButton: mode == .locked, unlock: unlock))
+        curtain.alpha = 1
+        curtain.isHidden = false
+        window = curtain
+    }
+}

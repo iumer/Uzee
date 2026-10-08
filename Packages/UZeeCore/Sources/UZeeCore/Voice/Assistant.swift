@@ -16,19 +16,25 @@ public struct AssistantActions: Sendable {
     public var search: @Sendable (_ text: String, _ period: VoicePeriod?) async -> String
     /// Balances, this month's spending, budget left and the next bill.
     public var overview: @Sendable () async -> String
+    /// Adds a reminder to the calendar ("Remind me to pay the plumber 5,000 on Friday at 5").
+    public var remind: @Sendable (_ title: String, _ date: LocalDate, _ minuteOfDay: Int?, _ amount: Money?) async -> String
 
     public init(answer: @escaping @Sendable (VoiceQuestion) async -> String,
                 prepare: @escaping @Sendable (VoiceCommand) async -> String,
                 confirm: @escaping @Sendable () async -> String,
                 cancel: @escaping @Sendable () async -> String,
                 search: @escaping @Sendable (String, VoicePeriod?) async -> String,
-                overview: @escaping @Sendable () async -> String) {
+                overview: @escaping @Sendable () async -> String,
+                remind: @escaping @Sendable (String, LocalDate, Int?, Money?) async -> String = { _, _, _, _ in
+                    "Reminders can't be added here."
+                }) {
         self.answer = answer
         self.prepare = prepare
         self.confirm = confirm
         self.cancel = cancel
         self.search = search
         self.overview = overview
+        self.remind = remind
     }
 }
 

@@ -45,7 +45,8 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
         transferred, lent, borrowed, paid back) call prepareEntry. It shows a card; then tell the user what is on it \
         and ask them to confirm. Only call confirmEntry after the user clearly agrees, and cancelEntry if they say no. \
         If they want a change, call prepareEntry again with the corrected details. If prepareEntry says something is \
-        missing, ask the user for it. For questions use answerQuestion, findTransactions or overview.
+        missing, ask the user for it. For questions use answerQuestion, findTransactions or overview. To be reminded \
+        of something later ("remind me to pay the plumber on Friday"), call addReminder.
 
         The user's people: \(vocabulary.people.prefix(30).joined(separator: ", ")).
         Accounts: \(vocabulary.accounts.prefix(15).joined(separator: ", ")).
@@ -60,7 +61,8 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
             CancelEntryTool(actions: actions),
             AnswerQuestionTool(actions: actions, vocabulary: vocabulary),
             FindTransactionsTool(actions: actions),
-            OverviewTool(actions: actions)
+            OverviewTool(actions: actions),
+            AddReminderTool(actions: actions, today: today)
         ]
         return LanguageModelSession(tools: tools, instructions: instructions(vocabulary: vocabulary, today: today))
     }
@@ -192,6 +194,34 @@ struct FindTransactionsTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         await actions.search(arguments.text, VoicePeriod(rawValue: arguments.period))
+    }
+}
+
+@available(iOS 26.0, macOS 26.0, *)
+struct AddReminderTool: Tool {
+    let actions: AssistantActions
+    let today: LocalDate
+    let name = "addReminder"
+    let description = "Adds a reminder to the user's UZee calendar for a future day, optionally at a time and with an amount."
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "What to remind about, short, such as Pay the plumber or Car tuning.")
+        var title: String
+        @Guide(description: "The day as the user said it, such as tomorrow, Friday, in 3 days or 20 October.")
+        var when: String
+        @Guide(description: "The time as the user said it, such as 5 pm or in the evening. Empty if not said.")
+        var time: String
+        @Guide(description: "An amount if the user said one, such as 5,000 or 2k. Empty otherwise.")
+        var amount: String
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        guard let date = ReminderPhrase.date(arguments.when, today: today) else {
+            return "The day isn't clear. Ask the user which day."
+        }
+        let amount = AmountPhrase.find(in: arguments.amount).flatMap { try? Money.fromMajor($0.value, $0.currency ?? .pkr) }
+        return await actions.remind(arguments.title, date, ReminderPhrase.minuteOfDay(arguments.time + " " + arguments.when), amount)
     }
 }
 

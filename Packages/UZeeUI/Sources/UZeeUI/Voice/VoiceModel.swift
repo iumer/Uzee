@@ -273,6 +273,10 @@ final class VoiceModel {
     /// Overviews and searches the rules don't cover: "How am I doing?", "Find Careem", "What did I spend on Foodpanda this month?".
     private func quickAnswer(_ sentence: String) -> String? {
         let answerer = VoiceAnswerer(session: session)
+        if let request = ReminderPhrase.request(sentence, today: session.today, currency: session.ledger.base) {
+            return addReminder(request)
+        }
+        if sentence.lowercased().hasPrefix("remind me") { return "Which day should I remind you? Say it with the day, like tomorrow or Friday." }
         var t = sentence.lowercased().trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         if ["how am i doing", "overview", "summary", "how's my month", "how is my month", "how are my finances"].contains(where: t.contains) {
             return answerer.overview()
@@ -325,6 +329,10 @@ final class VoiceModel {
             overview: { [weak self] in
                 guard let self else { return "" }
                 return await self.overviewForModel()
+            },
+            remind: { [weak self] title, date, minute, amount in
+                guard let self else { return "" }
+                return await self.remindForModel(title, date: date, minute: minute, amount: amount)
             })
     }
 
@@ -334,6 +342,19 @@ final class VoiceModel {
 
     private func searchForModel(_ text: String, period: VoicePeriod?) -> String {
         VoiceAnswerer(session: session).search(text, period: period)
+    }
+
+    private func remindForModel(_ title: String, date: LocalDate, minute: Int?, amount: Money?) -> String {
+        addReminder(ReminderPhrase.Request(title: title, date: date, minuteOfDay: minute, amount: amount))
+    }
+
+    /// Saves a reminder said out loud (VOX-04) and says when it is.
+    private func addReminder(_ request: ReminderPhrase.Request) -> String {
+        let event = CalendarEvent(title: request.title, date: request.date, minuteOfDay: request.minuteOfDay, amount: request.amount)
+        guard session.saveEvent(event) else { return "Couldn't add that reminder." }
+        var when = DateText.short(request.date)
+        if let minute = request.minuteOfDay { when += " at " + String(format: "%d:%02d", minute / 60, minute % 60) }
+        return "Added \(request.title) to your calendar for \(when). I'll remind you."
     }
 
     private func overviewForModel() -> String {

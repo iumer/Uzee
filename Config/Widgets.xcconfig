@@ -1,5 +1,6 @@
 // Ask UZee control and Lock Screen widget (Widgets/). Bundle id is the app's plus ".widgets".
 #include "Version.xcconfig"
+#include? "Signing.xcconfig"
 
 PRODUCT_NAME = UZeeWidgets
 IPHONEOS_DEPLOYMENT_TARGET = 26.0

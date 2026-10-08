@@ -161,3 +161,43 @@ struct AssistantReplyTests {
         #expect(!AssistantReply.isGoodbye("How much did I spend on fuel this month?"))
     }
 }
+
+@Suite("Reminder phrases")
+struct ReminderPhraseTests {
+    let today = LocalDate(year: 2026, month: 10, day: 8)  // a Thursday
+
+    @Test("Future dates as people say them")
+    func dates() {
+        #expect(ReminderPhrase.date("tomorrow", today: today) == LocalDate(year: 2026, month: 10, day: 9))
+        #expect(ReminderPhrase.date("day after tomorrow", today: today) == LocalDate(year: 2026, month: 10, day: 10))
+        #expect(ReminderPhrase.date("on Friday", today: today) == LocalDate(year: 2026, month: 10, day: 9))
+        #expect(ReminderPhrase.date("Thursday", today: today) == LocalDate(year: 2026, month: 10, day: 15))
+        #expect(ReminderPhrase.date("in 3 days", today: today) == LocalDate(year: 2026, month: 10, day: 11))
+        #expect(ReminderPhrase.date("next week", today: today) == LocalDate(year: 2026, month: 10, day: 15))
+        #expect(ReminderPhrase.date("on the 5th", today: today) == LocalDate(year: 2026, month: 11, day: 5))
+        #expect(ReminderPhrase.date("20 October", today: today) == LocalDate(year: 2026, month: 10, day: 20))
+        #expect(ReminderPhrase.date("whenever", today: today) == nil)
+    }
+
+    @Test("Times: 5 pm, 5:30, at 5, evening; not '3 days'")
+    func times() {
+        #expect(ReminderPhrase.minuteOfDay("at 5 pm") == 17 * 60)
+        #expect(ReminderPhrase.minuteOfDay("5:30 am") == 5 * 60 + 30)
+        #expect(ReminderPhrase.minuteOfDay("at 5") == 17 * 60)
+        #expect(ReminderPhrase.minuteOfDay("at 10") == 10 * 60)
+        #expect(ReminderPhrase.minuteOfDay("in the evening") == 18 * 60)
+        #expect(ReminderPhrase.minuteOfDay("in 3 days") == nil)
+    }
+
+    @Test("VOX-004 'Remind me to …' becomes a reminder with day, time and amount")
+    func request() throws {
+        let request = try #require(ReminderPhrase.request("Remind me to pay the plumber 5,000 on Friday at 5 pm", today: today, currency: .pkr))
+        #expect(request.title == "Pay the plumber 5,000")
+        #expect(request.date == LocalDate(year: 2026, month: 10, day: 9))
+        #expect(request.minuteOfDay == 17 * 60)
+        #expect(request.amount == Money(major: 5_000, .pkr))
+        #expect(ReminderPhrase.request("Remind me about car tuning tomorrow", today: today, currency: .pkr)?.title == "Car tuning")
+        #expect(ReminderPhrase.request("Remind me to call Ammi", today: today, currency: .pkr) == nil)
+        #expect(ReminderPhrase.request("How much did I spend", today: today, currency: .pkr) == nil)
+    }
+}

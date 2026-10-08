@@ -33,6 +33,31 @@ struct MigrationTests {
         #expect(count == 1)
     }
 
+    // DATA-05: an older database gets a safety copy before the update migrates it; a new or current one doesn't.
+    @Test("Safety copy before migrating older data")
+    func safetyCopy() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("uzee-safety-\(UUID().uuidString)")
+        let old = try DatabaseQueue()
+        var partial = DatabaseMigrator()
+        partial.registerMigration("v1_baseline") { db in
+            try db.create(table: "settings") { t in
+                t.primaryKey("id", .text)
+                t.column("key", .text).notNull().unique()
+                t.column("value", .text).notNull()
+                t.column("createdAt", .datetime).notNull()
+                t.column("updatedAt", .datetime).notNull()
+            }
+        }
+        try partial.migrate(old)
+        try AppDatabase.safetyCopyBeforeMigrating(old, into: folder)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).count == 1)
+        let current = try AppDatabase.inMemory()
+        try AppDatabase.safetyCopyBeforeMigrating(current.writer, into: folder)
+        try AppDatabase.safetyCopyBeforeMigrating(try DatabaseQueue(), into: folder)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).count == 1)
+        _ = try AppDatabase(old)
+    }
+
     @Test("Settings keys are unique")
     func uniqueKey() throws {
         let db = try AppDatabase.inMemory()

@@ -63,13 +63,9 @@ public struct RootView: View {
                 LaunchSplash(isShowing: $showingSplash).transition(.opacity)
             }
         }
-        .overlay {
-            if isLocked {
-                LockScreen { unlock() }.transition(.opacity)
-            } else if AppLock.isOn && scenePhase != .active {
-                // App switcher privacy (SET-02): no amounts in the snapshot while the lock is on.
-                LockScreen(showsButton: false)
-            }
+        // The lock covers everything, sheets included; with the lock on, the app switcher shows no amounts (SET-02).
+        .onChange(of: curtain, initial: true) { _, mode in
+            LockCurtain.shared.show(mode) { unlock() }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
@@ -91,6 +87,11 @@ public struct RootView: View {
         .onChange(of: showingSplash, initial: true) { _, splash in
             if !splash, OnboardingView.isNeeded(session) { showingOnboarding = true }
         }
+    }
+
+    private var curtain: LockCurtain.Mode {
+        if isLocked { return .locked }
+        return AppLock.isOn && scenePhase != .active ? .privacy : .none
     }
 
     private func unlock() {
@@ -121,6 +122,7 @@ struct AddButton: View {
         }
         .buttonStyle(.glassProminent)
         .buttonBorderShape(.circle)
+        .keyboardShortcut("n", modifiers: .command)  // ⌘N on an iPad keyboard
         .accessibilityLabel(AppTab.add.title)
         .accessibilityIdentifier("tab.add")
     }

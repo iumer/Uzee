@@ -11,3 +11,4 @@ build/
 *.mobileprovision
 *.cer
 .env
+Config/Signing.xcconfig
