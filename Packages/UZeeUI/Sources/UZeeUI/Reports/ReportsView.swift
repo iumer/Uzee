@@ -7,6 +7,7 @@ import UZeeCore
 struct ReportsView: View {
     @Bindable var session: AppSession
     @State private var choice: Choice = .lastMonth
+    @State private var pdf: SharedFile?
 
     enum Choice: String, CaseIterable, Identifiable {
         case thisMonth = "This month"
@@ -38,21 +39,7 @@ struct ReportsView: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("reports.period")
-                Text(DatePresets.text(from: range.start, through: range.end)).font(.footnote).foregroundStyle(UZColor.label2)
-                HStack(spacing: UZSpacing.l) {
-                    kpi("Income", totals.income, color: UZColor.positive)
-                    kpi("Spending", totals.spending, color: UZColor.label)
-                    kpi("Net", net, color: net.isZero ? UZColor.label : net.isNegative ? UZColor.negative : UZColor.positive, signed: true)
-                }
-                .accessibilityIdentifier("reports.kpis")
-                categories(range)
-                incomeVsSpending
-                budgetKept
-                commitments
-                people
-                accounts
-                Text("Your shares only · transfers excluded" + (session.ledger.footnote.map { " · " + $0 } ?? ""))
-                    .font(.caption).foregroundStyle(UZColor.label2)
+                content(range: range, totals: totals, net: net)
             }
             .padding(.horizontal, UZSpacing.xxl)
             .padding(.bottom, 96)
@@ -60,7 +47,71 @@ struct ReportsView: View {
         .background(UZColor.bg)
         .navigationTitle("Reports")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Export PDF", systemImage: "square.and.arrow.up") { exportPDF(range: range, totals: totals, net: net) }
+                    .accessibilityIdentifier("reports.pdf")
+            }
+        }
+        .sheet(item: $pdf) { ShareSheet(items: [$0.url]) }
         .accessibilityIdentifier("screen.reports")
+    }
+
+    @ViewBuilder
+    private func content(range: (start: LocalDate, end: LocalDate), totals: (income: Money, spending: Money), net: Money) -> some View {
+        Text(DatePresets.text(from: range.start, through: range.end)).font(.footnote).foregroundStyle(UZColor.label2)
+        HStack(spacing: UZSpacing.l) {
+            kpi("Income", totals.income, color: UZColor.positive)
+            kpi("Spending", totals.spending, color: UZColor.label)
+            kpi("Net", net, color: net.isZero ? UZColor.label : net.isNegative ? UZColor.negative : UZColor.positive, signed: true)
+        }
+        .accessibilityIdentifier("reports.kpis")
+        categories(range)
+        incomeVsSpending
+        budgetKept
+        commitments
+        people
+        accounts
+        Text("Your shares only · transfers excluded" + (session.ledger.footnote.map { " · " + $0 } ?? ""))
+            .font(.caption).foregroundStyle(UZColor.label2)
+    }
+
+    /// The report as an A4 PDF (RPT, M8): the same cards as on screen, in light mode, split across pages.
+    private func exportPDF(range: (start: LocalDate, end: LocalDate), totals: (income: Money, spending: Money), net: Money) {
+        let page = CGSize(width: 595, height: 842), margin: CGFloat = 32
+        let printable = VStack(alignment: .leading, spacing: UZSpacing.xl) {
+            HStack {
+                UZeeLogo(size: 36, tile: true)
+                VStack(alignment: .leading) {
+                    Text("UZee report · \(choice.rawValue)").font(.title3.bold())
+                    Text("Made \(Date().formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(UZColor.label2)
+                }
+            }
+            content(range: range, totals: totals, net: net)
+        }
+        .padding(margin)
+        .frame(width: page.width, alignment: .topLeading)
+        .background(Color.white)
+        .environment(\.colorScheme, .light)
+        .environment(\.accessibilityReduceMotion, true)
+        let renderer = ImageRenderer(content: printable)
+        renderer.proposedSize = ProposedViewSize(width: page.width, height: nil)
+        let name = "UZee report \(DatePresets.text(from: range.start, through: range.end)).pdf".replacingOccurrences(of: "/", with: "-")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        var box = CGRect(origin: .zero, size: page)
+        renderer.render { size, draw in
+            guard let file = CGContext(url as CFURL, mediaBox: &box, nil) else { return }
+            let pages = max(1, Int((size.height / page.height).rounded(.up)))
+            for index in 0..<pages {
+                file.beginPDFPage(nil)
+                // PDF space starts bottom-left: shift so page `index` of the tall view is in the box.
+                file.translateBy(x: 0, y: page.height - size.height + CGFloat(index) * page.height)
+                draw(file)
+                file.endPDFPage()
+            }
+            file.closePDF()
+        }
+        pdf = SharedFile(url: url)
     }
 
     private func kpi(_ title: String, _ money: Money, color: Color, signed: Bool = false) -> some View {
@@ -283,4 +334,21 @@ struct ReportsView: View {
             .accessibilityIdentifier("reports.accounts")
         }
     }
+}
+
+/// A file to hand to the share sheet.
+struct SharedFile: Identifiable {
+    let url: URL
+    var id: URL { url }
+}
+
+/// The system share sheet (Save to Files, AirDrop, Mail, Print).
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
