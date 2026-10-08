@@ -260,3 +260,16 @@ struct VoiceReviewTests {
         #expect(parse("How much did I spend this month?").question == .spent(category: nil, period: .thisMonth))
     }
 }
+
+@Suite("Voice fixes from the Mac run")
+struct VoiceMacRunTests {
+    @Test("Paying back, borrowing from family, '&', curly quotes, 'stop', 'anything due'")
+    func fixes() {
+        #expect(parse("returned 1000 to Sara").action == .repaidByMe)
+        #expect(parse("I took 2k from my mother").action == .borrow)
+        #expect(VoiceRuleParser.normalise("Tea & snacks") == "tea and snacks")
+        #expect(AssistantReply.isGoodbye("that\u{2019}s all"))
+        #expect(AssistantReply.isGoodbye("stop"))
+        #expect(parse("anything due this week").question == .upcoming)
+    }
+}

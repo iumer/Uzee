@@ -35,7 +35,12 @@ public final class LocationService: NSObject, CLLocationManagerDelegate, @unchec
                 manager.requestWhenInUseAuthorization()
             }
         }
-        guard [.authorizedWhenInUse, .authorizedAlways].contains(manager.authorizationStatus) else { throw Failure.notAllowed }
+        #if os(iOS)
+        let allowed: [CLAuthorizationStatus] = [.authorizedWhenInUse, .authorizedAlways]
+        #else
+        let allowed: [CLAuthorizationStatus] = [.authorizedAlways]
+        #endif
+        guard allowed.contains(manager.authorizationStatus) else { throw Failure.notAllowed }
         for try await update in CLLocationUpdate.liveUpdates() {
             guard let location = update.location else {
                 if update.authorizationDenied { throw Failure.notAllowed }
@@ -51,14 +56,20 @@ public final class LocationService: NSObject, CLLocationManagerDelegate, @unchec
 
     /// True-north heading in degrees, as the phone turns; nil when the phone has no compass.
     public func startHeading(_ handler: @escaping @Sendable (Double) -> Void) -> Bool {
+        #if os(iOS)
         guard CLLocationManager.headingAvailable() else { return false }
         lock.withLock { headingHandler = handler }
         manager.startUpdatingHeading()
         return true
+        #else
+        return false
+        #endif
     }
 
     public func stopHeading() {
+        #if os(iOS)
         manager.stopUpdatingHeading()
+        #endif
         lock.withLock { headingHandler = nil }
     }
 

@@ -278,3 +278,24 @@ struct ReceiptReviewTests {
         #expect(ReceiptParser.read(["Shop", "05/10/26 14:32"], currency: .pkr, today: today).date == LocalDate(year: 2026, month: 10, day: 5))
     }
 }
+
+@Suite("Receipt fixes from the Mac run")
+struct ReceiptMacRunTests {
+    let today = LocalDate(year: 2026, month: 10, day: 8)
+
+    @Test("Electricity bill: within due date, and the due date")
+    func electricityBill() {
+        let reading = ReceiptParser.read(["LESCO", "Bill Month SEP-2026", "Due Date: 15-OCT-2026",
+                                          "Payable Within Due Date Rs 18,420", "Payable After Due Date Rs 20,262"],
+                                         currency: .pkr, today: today)
+        #expect(reading.amount == Money(minorUnits: 1_842_000, currency: .pkr))
+        #expect(reading.date == LocalDate(year: 2026, month: 10, day: 15))
+    }
+
+    @Test("A seller name stops at the next label")
+    func sellerName() {
+        let reading = ReceiptParser.read(["PostEx", "Shipper", "Name: SAMPLE MOTORS Return City: Lahore", "COD Amount 1,829.96"],
+                                         currency: .pkr, today: today)
+        #expect(reading.merchant == "Sample Motors")
+    }
+}

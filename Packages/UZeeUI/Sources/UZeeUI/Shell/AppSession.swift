@@ -87,6 +87,19 @@ public final class AppSession {
         }
     }
     static let prayerKey = "uzee.prayer"
+    /// The Apple Calendar UZee copies its dates into (CAL-06); nil = off. Kept on the phone.
+    public var calendarExportID: String? = UserDefaults.standard.string(forKey: AppSession.calendarExportKey) {
+        didSet {
+            UserDefaults.standard.set(calendarExportID, forKey: Self.calendarExportKey)
+            // Turning it off removes UZee's future events from the calendar.
+            if calendarExportID == nil, oldValue != nil {
+                let calendar = calendar, today = today
+                Task { await calendar.exportToCalendar([], nil, today) }
+            }
+            rescheduleReminders()
+        }
+    }
+    static let calendarExportKey = "uzee.calendarExport.calendarID"
 
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
                 activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable,
@@ -145,10 +158,16 @@ public final class AppSession {
         // Bills come first; prayers fill what's left of the 60 (iOS keeps 64 at most).
         let plan = money + prayers.prefix(max(0, ReminderPlanner.cap - money.count))
         let calendar = calendar
+        let exportID = calendarExportID
+        let exportItems = exportID == nil ? [] : CalendarExportPlanner.items(
+            recurring: recurring, events: events, loans: loanReminders, hideAmounts: reminderSettings.hideAmounts,
+            today: today, format: { MoneyFormatter.string($0) })
+        let today = today
         scheduling = Task {
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
             await calendar.schedule(plan)
+            if let exportID { await calendar.exportToCalendar(exportItems, exportID, today) }
         }
     }
 

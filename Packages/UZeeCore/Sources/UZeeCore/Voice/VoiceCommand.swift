@@ -80,7 +80,8 @@ public struct VoiceVocabulary: Sendable {
 /// when Apple's on-device model is unavailable (VOX-08), so the common sentences never depend on the model.
 public enum VoiceRuleParser {
     static let questionStarts = ["how much", "how many", "what", "whats", "when", "which", "do i", "does", "did i", "is ", "am i",
-                                 "tell me", "show me", "who ", "where", "can i", "hows", "how is", "have i", "are there", "any "]
+                                 "tell me", "show me", "who ", "where", "can i", "hows", "how is", "have i", "are there", "any ", "anything",
+                                 "is there", "do we", "whos", "list "]
     static let stopWords: Set<String> = [
         "i", "me", "my", "a", "an", "the", "to", "from", "for", "on", "at", "in", "of", "it", "them", "him", "her", "they", "he",
         "she", "back", "friend", "cash", "account", "bank", "card", "today", "yesterday", "rs", "pkr", "usd", "dollars", "rupees",
@@ -158,6 +159,9 @@ public enum VoiceRuleParser {
 
     /// Lowercase words separated by single spaces, punctuation removed except inside numbers and "'".
     static func normalise(_ text: String) -> String {
+        // Typed on iOS, "that’s" has a curly apostrophe; "Tea & snacks" is said "tea and snacks".
+        let text = text.replacingOccurrences(of: "\u{2019}", with: "'").replacingOccurrences(of: "\u{2018}", with: "'")
+            .replacingOccurrences(of: "&", with: " and ")
         let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
         var result = ""
         let chars = Array(folded)
@@ -357,6 +361,10 @@ public enum VoiceRuleParser {
         let iSaid = has(t, [" i paid", " i gave", " i returned", " i sent", " i repaid", " i have paid", " i have returned"])
         if t.contains(" back ") || has(t, [" returned ", " repaid ", " return "]) {
             if iSaid && has(t, [" back ", " returned ", " repaid "]) { return .repaidByMe }
+            // "Returned 1,000 to Sara", "paid Bilal back": I paid someone back.
+            if has(t, [" returned ", " repaid ", " paid back ", " gave back "]), t.contains(" to "), !has(t, [" to me ", " me back "]) {
+                return .repaidByMe
+            }
             if has(t, [" paid me", " gave me", " returned ", " repaid ", " got ", " received ", " sent me", " back from "])
                 && !has(t, [" will return", " will give it back", " will pay me back", " will pay back", " return it later"]) {
                 return .repaidToMe
@@ -369,6 +377,8 @@ public enum VoiceRuleParser {
             if has(t, [" lent me", " loaned me"]) { return .borrow }
             return .lend
         }
+        // "I took 2k from my mother" (a person, not an account) is borrowing.
+        if t.contains(" took "), t.contains(" from "), accounts.isEmpty, !has(t, [" took out ", " withdrew"]) { return .borrow }
         if has(t, [" borrowed", " took a loan", " loan from", " i will return", " i will pay it back", " i will pay back",
                    " i need to return", " i have to return", " gave me a loan", " lent me", " loaned me"]) {
             return .borrow

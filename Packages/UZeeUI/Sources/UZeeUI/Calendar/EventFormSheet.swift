@@ -145,6 +145,8 @@ struct EventFormSheet: View {
 struct ReminderSettingsView: View {
     @Bindable var session: AppSession
     @State private var allowed: Bool?
+    @State private var calendars: [CalendarChoice] = []
+    @State private var calendarDenied = false
 
     var body: some View {
         let settings = session.reminderSettings
@@ -178,9 +180,45 @@ struct ReminderSettingsView: View {
                     Text("Notifications are off for UZee. The Calendar still shows everything that's due.")
                 }
             }
+            appleCalendar
         }
         .navigationTitle("Reminders")
-        .task { allowed = await session.calendar.notificationsAllowed() }
+        .task {
+            allowed = await session.calendar.notificationsAllowed()
+            if session.calendarExportID != nil { calendars = session.calendar.calendars() }
+        }
+    }
+
+    /// CAL-06: copy bills, events and loan dates into a calendar of the owner's choice.
+    private var appleCalendar: some View {
+        Section {
+            Toggle("Add to Apple Calendar", isOn: Binding(get: { session.calendarExportID != nil }, set: { on in
+                if on {
+                    Task {
+                        guard await session.calendar.requestCalendarAccess() else { calendarDenied = true; return }
+                        calendarDenied = false
+                        calendars = session.calendar.calendars()
+                        session.calendarExportID = session.calendar.defaultCalendarID() ?? calendars.first?.id
+                    }
+                } else {
+                    session.calendarExportID = nil
+                }
+            }))
+            .accessibilityIdentifier("reminders.appleCalendar")
+            if session.calendarExportID != nil, !calendars.isEmpty {
+                Picker("Calendar", selection: Binding(get: { session.calendarExportID ?? "" }, set: { session.calendarExportID = $0 })) {
+                    ForEach(calendars) { Text("\($0.title) (\($0.source))").tag($0.id) }
+                }
+                .accessibilityIdentifier("reminders.calendarPicker")
+            }
+            if calendarDenied {
+                Button("Allow Calendar in Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                }
+            }
+        } footer: {
+            Text("UZee adds the next two months of bills, events and loan dates to the calendar you pick and keeps them up to date. It never changes your own events.")
+        }
     }
 
     private func binding<Value>(_ path: WritableKeyPath<ReminderSettings, Value>) -> Binding<Value> {

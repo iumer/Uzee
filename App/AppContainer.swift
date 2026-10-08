@@ -93,7 +93,13 @@ final class AppContainer {
             setReminderSettings: { try store.setReminderSettings($0) },
             requestNotifications: { await notifications.requestAccess() },
             notificationsAllowed: { await notifications.isAllowed() },
-            schedule: { await notifications.schedule($0) })
+            schedule: { await notifications.schedule($0) },
+            requestCalendarAccess: { await CalendarExporter.shared.requestAccess() },
+            calendars: { CalendarExporter.shared.calendars() },
+            defaultCalendarID: { CalendarExporter.shared.defaultCalendarID },
+            exportToCalendar: { items, calendarID, today in
+                await Task.detached { CalendarExporter.shared.sync(items, calendarID: calendarID, today: today) }.value
+            })
     }
 
     /// The one container, shared by the app scene and Siri (App Intents run in the app's process).

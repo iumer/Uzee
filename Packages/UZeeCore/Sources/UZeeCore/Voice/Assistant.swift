@@ -87,6 +87,7 @@ public enum AssistantReply {
         guard t.split(separator: " ").count <= 5 else { return false }
         // "Paid 2,000 for petrol, thanks" is an entry, not a goodbye.
         guard AmountPhrase.find(in: t) == nil else { return false }
+        if [" stop ", " stop it ", " ok stop ", " that will do "].contains(t) { return true }
         return [" bye ", " goodbye ", " that all ", " thats all ", " that is all ", " nothing else ", " stop listening ",
                 " thank you ", " thanks ", " shukriya "].contains { t.contains($0) }
     }

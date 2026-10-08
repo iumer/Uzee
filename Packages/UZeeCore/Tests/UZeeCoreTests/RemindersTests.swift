@@ -71,3 +71,30 @@ struct RemindersTests {
         #expect(zip(plan, plan.dropFirst()).allSatisfy { $0.fireDate <= $1.fireDate })
     }
 }
+
+@Suite("Apple Calendar export")
+struct CalendarExportTests {
+    let today = LocalDate(year: 2026, month: 10, day: 8)
+
+    @Test("Creates new, updates known, removes only UZee's future events that no longer apply")
+    func changes() {
+        let a = CalendarExportItem(key: "bill.a", title: "Rent due", date: LocalDate(year: 2026, month: 10, day: 10), notes: "")
+        let b = CalendarExportItem(key: "event.b", title: "Car tuning", date: LocalDate(year: 2026, month: 10, day: 20), notes: "")
+        let existing = ["bill.a": "id-a", "bill.old": "id-old", "bill.past": "id-past"]
+        let dates = ["bill.a": LocalDate(year: 2026, month: 10, day: 10), "bill.old": LocalDate(year: 2026, month: 10, day: 12),
+                     "bill.past": LocalDate(year: 2026, month: 9, day: 1)]
+        let changes = CalendarExportPlanner.changes(wanted: [a, b], existing: existing, existingDates: dates, today: today)
+        #expect(changes.create == [b])
+        #expect(changes.update.map(\.id) == ["id-a"])
+        #expect(changes.delete == ["id-old"])
+    }
+
+    @Test("Custom events in range become calendar items")
+    func items() {
+        let event = CalendarEvent(title: "Ammi's birthday", date: LocalDate(year: 2026, month: 10, day: 15))
+        let items = CalendarExportPlanner.items(recurring: .empty, events: [event], loans: [], hideAmounts: false, today: today,
+                                                format: { "\($0.minorUnits)" })
+        #expect(items.map(\.title) == ["Ammi's birthday"])
+        #expect(items.first?.key == "event.\(event.id.uuidString).2026-10-15")
+    }
+}

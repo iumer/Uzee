@@ -57,7 +57,7 @@ public enum ReceiptParser {
                            "total discount", "total tax", "total gst", "total saving", "items total", "amount paid",
                            "amount tendered", "amount received", "account", "net weight", "net wt", "paid amount", "tendered",
                            "cash amount", "card amount", "change", "amount returned", "cash received", "received amount",
-                           "customer paid", "cash paid", "total paid"]
+                           "customer paid", "cash paid", "total paid", "after due date", "after due", "late payment", "late surcharge"]
     static let notAmountLines = ["change", "tendered", "cash received", "tel", "phone", "ntn", "strn", "invoice", "receipt no",
                                  "bill no", "order no", "card no", "pos", "qty", "house", "block", "street", "road", "sector",
                                  "phase", "plot", "flat", "floor", "address", "contact", "mobile", "cell", "tracking", "ref",
@@ -217,6 +217,11 @@ public enum ReceiptParser {
         for line in labelled + lines {
             if let date = TextScan.dates(in: line, defaultYear: today.year).map(\.date).first(where: plausible) { return date }
         }
+        // A bill shows only when it's due ("Due Date: 15-OCT-2026"), which can be ahead.
+        for line in lines where line.lowercased().contains("due") {
+            if let date = TextScan.dates(in: line, defaultYear: today.year).map(\.date)
+                .first(where: { $0 > today && $0 <= today.addingDays(60) }) { return date }
+        }
         return nil
     }
 
@@ -224,7 +229,9 @@ public enum ReceiptParser {
     static func merchant(_ lines: [String]) -> String? {
         if let seller = lines.firstIndex(where: { line in sellerWords.contains { line.lowercased().contains($0) } }) {
             for line in lines.dropFirst(seller + 1).prefix(4) {
+                // "UMER MOTORS   Return City: Lahore": the next label on the line ends the name.
                 let value = line.replacingOccurrences(of: #"(?i)^\s*name\s*:?\s*"#, with: "", options: .regularExpression)
+                    .replacingOccurrences(of: #"\s+[A-Za-z]+(\s+[A-Za-z]+)?\s*:.*$"#, with: "", options: .regularExpression)
                 if let name = shopName(value), !couriers.contains(where: { name.lowercased().contains($0) }) { return name }
             }
         }
