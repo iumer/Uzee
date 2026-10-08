@@ -32,7 +32,7 @@ final class SmokeTests: XCTestCase {
     }
 
     private func element(_ identifier: String) -> XCUIElement {
-        app.descendants(matching: .any)[identifier].firstMatch
+        app.find(identifier)
     }
 
     private func openSettings() {
