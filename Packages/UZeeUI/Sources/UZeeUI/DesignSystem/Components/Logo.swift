@@ -7,6 +7,8 @@ struct UZeeLogo: View {
     var size: CGFloat = 64
     /// Draw the green tile behind the wallet, like the app icon.
     var tile = false
+    /// The mouth opens and closes as if singing (the Ask UZee mic, and while UZee speaks).
+    var singing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var start = Date()
 
@@ -99,10 +101,20 @@ struct UZeeLogo: View {
                 faceLayer.fill(Path(ellipseIn: CGRect(x: cx - 2, y: 514, width: 24, height: 24)), with: .color(.white.opacity(0.9)))
             }
         }
-        var smile = Path()
-        smile.move(to: CGPoint(x: 372, y: 644))
-        smile.addQuadCurve(to: CGPoint(x: 542, y: 644), control: CGPoint(x: 457, y: 722))
-        faceLayer.stroke(smile.trimmedPath(from: 0, to: face), with: .color(ink), style: StrokeStyle(lineWidth: 40, lineCap: .round))
+        if singing {
+            // An open "ooh" mouth that opens wider on the beat.
+            let beat = still ? 0.6 : CGFloat(abs(sin(t * 4.4))) * 0.8 + CGFloat(abs(sin(t * 2.2 + 1))) * 0.2
+            let mouthHeight = (54 + 72 * beat) * face
+            let mouth = CGRect(x: 457 - 62, y: 650 - mouthHeight * 0.35, width: 124, height: mouthHeight)
+            faceLayer.fill(Path(ellipseIn: mouth), with: .color(ink))
+            faceLayer.fill(Path(ellipseIn: CGRect(x: mouth.midX - 36, y: mouth.maxY - mouthHeight * 0.42, width: 72, height: mouthHeight * 0.34)),
+                           with: .color(h(0xF87171)))
+        } else {
+            var smile = Path()
+            smile.move(to: CGPoint(x: 372, y: 644))
+            smile.addQuadCurve(to: CGPoint(x: 542, y: 644), control: CGPoint(x: 457, y: 722))
+            faceLayer.stroke(smile.trimmedPath(from: 0, to: face), with: .color(ink), style: StrokeStyle(lineWidth: 40, lineCap: .round))
+        }
     }
 
     /// 1 when the eyes are open; dips towards 0.1 for a quick blink every few seconds.

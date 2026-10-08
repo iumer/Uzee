@@ -31,6 +31,8 @@ public struct SmartClient: Sendable {
     /// Installed English voices for UZee to speak with, best first.
     public var voices: @Sendable () -> [VoiceChoice]
     public var previewVoice: @Sendable (String) -> Void
+    /// How loud the microphone is right now, 0…1, while listening (drives the orb's glow and end-of-speech).
+    public var listeningLevel: @Sendable () -> Float
 
     public struct VoiceChoice: Hashable, Sendable, Identifiable {
         public let id: String
@@ -60,7 +62,8 @@ public struct SmartClient: Sendable {
                 speak: @escaping @Sendable (String, @escaping @Sendable () -> Void) -> Void = { _, done in done() },
                 stopSpeaking: @escaping @Sendable () -> Void = {},
                 voices: @escaping @Sendable () -> [VoiceChoice] = { [] },
-                previewVoice: @escaping @Sendable (String) -> Void = { _ in }) {
+                previewVoice: @escaping @Sendable (String) -> Void = { _ in },
+                listeningLevel: @escaping @Sendable () -> Float = { 0 }) {
         self.readReceipt = readReceipt
         self.readStatement = readStatement
         self.understand = understand
@@ -75,6 +78,7 @@ public struct SmartClient: Sendable {
         self.stopSpeaking = stopSpeaking
         self.voices = voices
         self.previewVoice = previewVoice
+        self.listeningLevel = listeningLevel
     }
 
     /// Previews and tests: rules only, no camera text, no microphone.

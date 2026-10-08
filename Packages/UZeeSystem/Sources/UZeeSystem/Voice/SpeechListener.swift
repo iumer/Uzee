@@ -16,6 +16,10 @@ public final class SpeechListener: @unchecked Sendable {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private var currentLevel: Float = 0
+
+    /// How loud the microphone is, 0 (quiet) … 1 (loud speech), smoothed. 0 when not listening.
+    public var level: Float { lock.withLock { currentLevel } }
 
     public init() {}
 
@@ -51,8 +55,9 @@ public final class SpeechListener: @unchecked Sendable {
 
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             request.append(buffer)
+            self?.measure(buffer)
         }
         engine.prepare()
         try engine.start()
@@ -91,7 +96,20 @@ public final class SpeechListener: @unchecked Sendable {
         task?.cancel()
     }
 
+    /// Loudness of one buffer, as a smoothed 0…1 level (about -55 dB is 0, -10 dB is 1).
+    private func measure(_ buffer: AVAudioPCMBuffer) {
+        guard let samples = buffer.floatChannelData?[0] else { return }
+        let count = Int(buffer.frameLength)
+        guard count > 0 else { return }
+        var sum: Float = 0
+        for index in 0..<count { sum += samples[index] * samples[index] }
+        let decibels = 20 * log10(max(sqrt(sum / Float(count)), 0.000_001))
+        let value = max(0, min(1, (decibels + 55) / 45))
+        lock.withLock { currentLevel = currentLevel * 0.4 + value * 0.6 }
+    }
+
     private func stopAudio() {
+        lock.withLock { currentLevel = 0 }
         if engine.isRunning { engine.stop() }
         engine.inputNode.removeTap(onBus: 0)
         #if os(iOS)

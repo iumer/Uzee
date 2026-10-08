@@ -32,26 +32,30 @@ struct VoiceCard: Equatable {
     }
 }
 
-/// The UZee helper (SCR-03, J5): a spoken conversation like Siri. It listens, works out when you've finished,
-/// answers aloud and listens again. Apple's on-device model holds the conversation and uses the app through
-/// tools (answer, look up, prepare a card, save it); without it, UZee's own rules understand common sentences.
+/// The UZee helper (SCR-03, J5): a spoken conversation. Tapping the mic opens voice mode: UZee listens, works out
+/// when you've finished from the pause in your voice, answers aloud, and listens again only when it asked you
+/// something. Apple's on-device model holds the conversation and uses the app through tools (answer, look up,
+/// prepare a card, save it); without it, UZee's own rules understand common sentences. Every chat is kept in
+/// `VoiceHistory`.
 @MainActor
 @Observable
 final class VoiceModel {
-    struct Line: Identifiable, Equatable {
-        enum Speaker { case me, uzee }
-        let id = UUID()
-        let speaker: Speaker
-        let text: String
-    }
+    typealias Line = VoiceHistory.Line
 
     let session: AppSession
-    var lines: [Line] = []
+    var lines: [Line] = [] {
+        didSet { remember() }
+    }
+    /// What the user is typing.
     var draft = ""
+    /// What UZee is hearing right now, shown as a caption in voice mode.
+    var liveText = ""
     var isListening = false
     var isThinking = false
     var isSpeaking = false
-    /// Listening again after each reply, until the user says bye, stops it or goes quiet.
+    /// The big voice orb is on screen instead of the typing bar.
+    var voiceMode = false
+    /// In a spoken conversation: replies are said aloud, and UZee listens again after a question.
     var handsFree = false
     /// Replies are shown but not spoken.
     var muted = false
@@ -66,9 +70,52 @@ final class VoiceModel {
     private var turn = 0
     private var cardTurn = 0
     private var lastSentence = ""
+    /// When the user last made a sound or a new word was recognised, for end-of-speech.
+    private var lastSound = Date()
+    /// Voice mode closes once the goodbye has been said.
+    private var closeAfterSpeaking = false
+    private var history = VoiceHistory()
+    private var chatID = UUID()
+    private var chatStarted = Date()
 
     init(session: AppSession) {
         self.session = session
+        history = VoiceHistory.load()
+        if let recent = history.recentChat() {
+            chatID = recent.id
+            chatStarted = recent.started
+            lines = recent.lines
+        }
+    }
+
+    // MARK: History
+
+    /// Earlier chats, newest first.
+    var pastChats: [VoiceHistory.Chat] { history.past(excluding: chatID) }
+
+    private func remember() {
+        guard !lines.isEmpty else { return }
+        history.store(VoiceHistory.Chat(id: chatID, started: chatStarted, lines: lines))
+        history.save()
+    }
+
+    /// Starts a fresh conversation; the current one stays under Past chats.
+    func newChat() {
+        cancelListening()
+        voiceMode = false
+        card = nil
+        pending = nil
+        need = nil
+        chat = nil
+        triedChat = false
+        chatID = UUID()
+        chatStarted = Date()
+        lines = []
+    }
+
+    func deleteChat(_ id: UUID) {
+        history.remove(id)
+        history.save()
     }
 
     var modelProblem: String? { session.smart.voiceModelProblem() }
@@ -79,23 +126,29 @@ final class VoiceModel {
 
     // MARK: Listening
 
-    /// Opening the helper starts listening straight away when the microphone is already allowed.
-    func begin() {
-        guard lines.isEmpty, card == nil, session.smart.canListen() else { return }
+    /// The mic button: opens voice mode and starts listening.
+    func startVoice() {
+        voiceMode = true
         handsFree = true
+        closeAfterSpeaking = false
         Task { await startListening() }
     }
 
-    /// The big button: stop talking, stop listening, or start a hands-free conversation.
+    /// The X in voice mode: back to typing, nothing listening or speaking.
+    func endVoice() {
+        cancelListening()
+        voiceMode = false
+    }
+
+    /// The big orb: interrupt UZee, finish what you're saying now, or start talking.
     func toggleListening() {
         if isSpeaking {
             session.smart.stopSpeaking()
             return
         }
         if isListening {
-            handsFree = false
             stopListening()
-        } else {
+        } else if !isThinking {
             handsFree = true
             Task { await startListening() }
         }
@@ -108,12 +161,13 @@ final class VoiceModel {
             say("I can't hear you yet. Allow the microphone and speech recognition for UZee in Settings, or type instead.")
             return
         }
-        draft = ""
+        liveText = ""
         do {
             try session.smart.startListening { text, isFinal in
                 Task { @MainActor in self.heard(text, isFinal: isFinal) }
             }
             isListening = true
+            watchForEndOfSpeech()
         } catch {
             handsFree = false
             say("Voice isn't available right now. Use the keyboard instead.")
@@ -133,31 +187,53 @@ final class VoiceModel {
         session.smart.stopSpeaking()
         isListening = false
         isSpeaking = false
+        liveText = ""
     }
 
     private func heard(_ text: String, isFinal: Bool) {
         guard isListening else { return }
-        if !text.isEmpty { draft = text }
-        if isFinal {
-            silence?.cancel()
-            isListening = false
-            let sentence = draft
-            draft = ""
-            if sentence.trimmingCharacters(in: .whitespaces).isEmpty {
-                // Nothing said: end the hands-free loop quietly.
-                handsFree = false
-            } else {
-                submit(sentence)
-            }
-            return
+        if !text.isEmpty, text != liveText {
+            liveText = text
+            lastSound = Date()
         }
-        // Finished speaking = a short pause after some words (or a longer one before any).
+        guard isFinal else { return }
         silence?.cancel()
-        let wait: Duration = draft.isEmpty ? .seconds(6) : .milliseconds(1_300)
+        isListening = false
+        let sentence = liveText
+        liveText = ""
+        if sentence.trimmingCharacters(in: .whitespaces).isEmpty {
+            // Nothing said: wait quietly for a tap.
+            handsFree = false
+        } else {
+            submit(sentence)
+        }
+    }
+
+    /// Works out when the user has finished: about a second of quiet after some words (judged from the
+    /// microphone level as well as the words), a few seconds of nothing at the start, or 45 seconds at most.
+    private func watchForEndOfSpeech() {
+        silence?.cancel()
+        let started = Date()
+        lastSound = started
+        let level = session.smart.listeningLevel
         silence = Task { [weak self] in
-            try? await Task.sleep(for: wait)
-            guard !Task.isCancelled, let self, self.isListening else { return }
-            self.session.smart.stopListening()
+            var floor: Float = 1
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+                guard let self, self.isListening, !Task.isCancelled else { return }
+                // A slowly rising noise floor, so a fan or traffic doesn't count as talking.
+                let now = level()
+                floor = now < floor ? now : floor + (now - floor) * 0.02
+                if now > floor + 0.18 { self.lastSound = Date() }
+                let quiet = Date().timeIntervalSince(self.lastSound)
+                let elapsed = Date().timeIntervalSince(started)
+                let saidSomething = !self.liveText.trimmingCharacters(in: .whitespaces).isEmpty
+                let done = saidSomething ? quiet > 1.2 : (elapsed > 7 && quiet > 2)
+                if done || elapsed > 45 {
+                    self.session.smart.stopListening()
+                    return
+                }
+            }
         }
     }
 
@@ -185,8 +261,10 @@ final class VoiceModel {
         if AssistantReply.isGoodbye(sentence) {
             pending = nil
             need = nil
+            closeAfterSpeaking = voiceMode
             say("Anytime. Bye for now!")
             handsFree = false
+            if muted || !voiceMode { closeAfterSpeaking = false; voiceMode = false }
             return
         }
         if usesModel, pending == nil {
@@ -228,11 +306,13 @@ final class VoiceModel {
         speakThenListen(text)
     }
 
-    /// Speaks the reply in a hands-free conversation, then listens for the next sentence.
+    /// Speaks the reply in a spoken conversation, then listens again only when UZee is waiting for an answer:
+    /// it asked a question, or a card is waiting for yes or no.
     private func speakThenListen(_ text: String) {
         guard handsFree else { return }
+        let listenAgain = expectsAnswer(text)
         guard !muted else {
-            Task { if handsFree { await startListening() } }
+            finishedSpeaking(listenAgain: listenAgain)
             return
         }
         isSpeaking = true
@@ -240,9 +320,22 @@ final class VoiceModel {
             Task { @MainActor in
                 guard let self else { return }
                 self.isSpeaking = false
-                if self.handsFree { await self.startListening() }
+                self.finishedSpeaking(listenAgain: listenAgain)
             }
         }
+    }
+
+    private func finishedSpeaking(listenAgain: Bool) {
+        if closeAfterSpeaking {
+            closeAfterSpeaking = false
+            voiceMode = false
+            return
+        }
+        if handsFree, voiceMode, listenAgain { Task { await startListening() } }
+    }
+
+    private func expectsAnswer(_ text: String) -> Bool {
+        card != nil || pending != nil || text.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("?")
     }
 
     /// One turn with the on-device model; falls back to the rules if it can't answer.

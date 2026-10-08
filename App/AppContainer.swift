@@ -154,7 +154,8 @@ final class AppContainer {
             speak: { text, done in VoiceSpeaker.shared.speak(text, done: done) },
             stopSpeaking: { VoiceSpeaker.shared.stop() },
             voices: { VoiceSpeaker.voices().map { SmartClient.VoiceChoice(id: $0.id, name: $0.name, detail: $0.detail) } },
-            previewVoice: { VoiceSpeaker.shared.preview($0) })
+            previewVoice: { VoiceSpeaker.shared.preview($0) },
+            listeningLevel: { SpeechListener.shared.level })
     }
 
     private static func sampleDataActions(_ database: AppDatabase) -> AppSession.SampleDataActions {

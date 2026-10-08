@@ -1,13 +1,15 @@
 import SwiftUI
 import UZeeCore
 
-/// The UZee helper (SCR-03): talk to it like Siri, or type. It answers aloud from the data on this iPhone and
-/// keeps listening until you're done; anything that would save shows a card first (VOX-01…08).
+/// The UZee helper (SCR-03): type, or tap the singing mic for voice mode, where a big orb at the bottom glows
+/// while you talk, spins while UZee thinks and pulses while it answers aloud. Anything that would save shows a
+/// card first (VOX-01…08). Chats are kept, with earlier ones under Past chats.
 struct VoiceSheet: View {
     @Bindable var session: AppSession
     @State private var model: VoiceModel
     @Environment(\.dismiss) private var dismiss
     @FocusState private var typing: Bool
+    @State private var showsPast = false
 
     init(session: AppSession) {
         self.session = session
@@ -21,20 +23,14 @@ struct VoiceSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 conversation
-                if !model.lines.isEmpty, model.handsFree || mood != .idle {
-                    HStack(spacing: UZSpacing.m) {
-                        HelperOrb(mood: mood, size: 30)
-                            .frame(width: 48, height: 48)
-                        Text(status).font(.subheadline).foregroundStyle(UZColor.label2).lineLimit(2)
-                        Spacer()
-                    }
-                    .padding(.horizontal, UZSpacing.xxl)
-                    .contentShape(.rect)
-                    .onTapGesture { model.toggleListening() }
-                    .accessibilityIdentifier("voice.statusBar")
+                if model.voiceMode {
+                    voicePanel
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    inputBar
                 }
-                inputBar
             }
+            .animation(.spring(duration: 0.4), value: model.voiceMode)
             .background(UZColor.bg)
             .navigationTitle("UZee")
             .navigationBarTitleDisplayMode(.inline)
@@ -47,22 +43,26 @@ struct VoiceSheet: View {
                     .accessibilityIdentifier("voice.close")
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        model.muted.toggle()
-                        if model.muted { session.smart.stopSpeaking() }
+                    Menu {
+                        Button("New chat", systemImage: "square.and.pencil") { model.newChat() }
+                            .disabled(model.lines.isEmpty)
+                            .accessibilityIdentifier("voice.newChat")
+                        Button("Past chats", systemImage: "clock.arrow.circlepath") { showsPast = true }
+                            .accessibilityIdentifier("voice.pastChats")
                     } label: {
-                        Image(systemName: model.muted ? "speaker.slash" : "speaker.wave.2")
+                        Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel(model.muted ? "Speak replies" : "Mute replies")
-                    .accessibilityIdentifier("voice.mute")
+                    .accessibilityLabel("Chats")
+                    .accessibilityIdentifier("voice.menu")
                 }
+            }
+            .sheet(isPresented: $showsPast) {
+                PastChatsView(model: model)
             }
             .onAppear {
                 if let request = session.voiceRequest {
                     session.voiceRequest = nil
                     model.submit(request)
-                } else {
-                    model.begin()
                 }
             }
             .onChange(of: session.voiceRequest) { _, request in
@@ -86,19 +86,7 @@ struct VoiceSheet: View {
                 VStack(alignment: .leading, spacing: UZSpacing.l) {
                     if model.lines.isEmpty && model.card == nil { intro }
                     ForEach(model.lines) { line in bubble(line).id(line.id) }
-                    if model.isListening, !model.draft.isEmpty, !model.lines.isEmpty {
-                        // What UZee is hearing, live.
-                        HStack {
-                            Spacer(minLength: 48)
-                            Text(model.draft)
-                                .padding(.horizontal, UZSpacing.l)
-                                .padding(.vertical, UZSpacing.m)
-                                .background(UZColor.tint.opacity(0.35), in: .rect(cornerRadius: UZRadius.chip, style: .continuous))
-                                .foregroundStyle(Color.white)
-                        }
-                        .id("live")
-                    }
-                    if model.isThinking {
+                    if model.isThinking, !model.voiceMode {
                         HStack(spacing: UZSpacing.m) {
                             ProgressView()
                             Text("Thinking…").foregroundStyle(UZColor.label2)
@@ -134,27 +122,27 @@ struct VoiceSheet: View {
         model.isSpeaking ? .speaking : model.isThinking ? .thinking : model.isListening ? .listening : .idle
     }
 
+    /// The caption under the voice orb.
     private var status: String {
         switch mood {
-        case .listening: model.draft.isEmpty ? "Listening…" : model.draft
+        case .listening: model.liveText.isEmpty ? "Listening…" : model.liveText
         case .thinking: "Thinking…"
-        case .speaking: "Tap to interrupt"
-        case .idle: "Tap the orb and talk, or type below"
+        case .speaking: model.lines.last { $0.speaker == .uzee }?.text ?? "Tap to interrupt"
+        case .idle: model.card != nil ? "Say yes to save, or tap the orb to talk" : "Tap UZee to talk"
         }
     }
 
     private var intro: some View {
         VStack(spacing: UZSpacing.l) {
-            Button { model.toggleListening() } label: { HelperOrb(mood: mood, size: 120) }
-                .buttonStyle(.plain)
-                .accessibilityLabel(model.isListening ? "Stop listening" : "Talk to UZee")
-                .accessibilityIdentifier("voice.orb")
-            Text(status)
-                .font(model.isListening && !model.draft.isEmpty ? .title3.weight(.medium) : .headline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(model.isListening && !model.draft.isEmpty ? UZColor.label : UZColor.label2)
-                .animation(.easeOut(duration: 0.15), value: status)
-                .accessibilityIdentifier("voice.status")
+            if !model.voiceMode {
+                Button { model.startVoice() } label: { HelperOrb(mood: mood, size: 110) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Talk to UZee")
+                    .accessibilityIdentifier("voice.orb")
+                Text("Hi, I'm UZee")
+                    .font(.title2.bold())
+                    .accessibilityIdentifier("voice.status")
+            }
             Text("Ask about your money, log spending, loans or transfers, or find a transaction. Everything stays on this iPhone, and nothing is saved until you say yes.")
                 .font(.subheadline).foregroundStyle(UZColor.label2).multilineTextAlignment(.center)
             if let problem = model.modelProblem {
@@ -197,7 +185,7 @@ struct VoiceSheet: View {
 
     private var inputBar: some View {
         HStack(spacing: UZSpacing.m) {
-            TextField(model.isListening ? "Listening…" : "Ask or log something", text: $model.draft, axis: .vertical)
+            TextField("Ask or log something", text: $model.draft, axis: .vertical)
                 .lineLimit(1...4)
                 .focused($typing)
                 .submitLabel(.send)
@@ -205,9 +193,8 @@ struct VoiceSheet: View {
                 .padding(.horizontal, UZSpacing.l)
                 .padding(.vertical, UZSpacing.m)
                 .background(UZColor.card, in: .rect(cornerRadius: UZRadius.field, style: .continuous))
-                .disabled(model.isListening)
                 .accessibilityIdentifier("voice.input")
-            if !model.draft.isEmpty && !model.isListening {
+            if !model.draft.isEmpty {
                 Button {
                     model.submit(model.draft)
                 } label: {
@@ -218,26 +205,75 @@ struct VoiceSheet: View {
             }
             Button {
                 typing = false
-                model.toggleListening()
+                model.startVoice()
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(colors: [Color(red: 0.20, green: 0.78, blue: 0.55), Color(red: 0.25, green: 0.55, blue: 0.98)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 40, height: 40)
-                        .shadow(color: mood == .idle ? .clear : Color(red: 0.25, green: 0.55, blue: 0.98).opacity(0.6), radius: 10)
-                    Image(systemName: model.isSpeaking ? "speaker.wave.2.fill" : model.isListening ? "waveform" : "mic.fill")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .symbolEffect(.variableColor.iterative, isActive: model.isListening || model.isSpeaking)
-                }
+                SingingMic(size: 40)
             }
-            .accessibilityLabel(model.isSpeaking ? "Stop speaking" : model.isListening ? "Stop listening" : "Talk to UZee")
+            .buttonStyle(.plain)
+            .accessibilityLabel("Talk to UZee")
             .accessibilityIdentifier("voice.mic")
         }
         .padding(.horizontal, UZSpacing.xxl)
         .padding(.vertical, UZSpacing.m)
         .background(.bar)
+    }
+
+    // MARK: Voice mode
+
+    /// Replaces the typing bar while talking: a caption of what's heard or said, the big orb, mute and close.
+    private var voicePanel: some View {
+        VStack(spacing: UZSpacing.m) {
+            Text(status)
+                .font(mood == .listening && !model.liveText.isEmpty ? .title3.weight(.medium) : .headline)
+                .foregroundStyle(mood == .idle || mood == .thinking ? UZColor.label2 : UZColor.label)
+                .multilineTextAlignment(.center)
+                .lineLimit(4)
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .padding(.horizontal, UZSpacing.xxl)
+                .contentTransition(.opacity)
+                .animation(.easeOut(duration: 0.15), value: status)
+                .accessibilityIdentifier("voice.caption")
+            if model.isThinking {
+                // Kept for UI tests and VoiceOver.
+                Text("Thinking…").font(.caption2).opacity(0.01).accessibilityIdentifier("voice.thinking")
+            }
+            HStack {
+                roundButton(model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                            label: model.muted ? "Speak replies" : "Mute replies", identifier: "voice.mute") {
+                    model.muted.toggle()
+                    if model.muted { session.smart.stopSpeaking() }
+                }
+                Spacer()
+                Button { model.toggleListening() } label: {
+                    VoiceBlob(mood: mood, size: 130, level: session.smart.listeningLevel)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.isSpeaking ? "Stop speaking" : model.isListening ? "Done talking" : "Talk")
+                .accessibilityIdentifier("voice.blob")
+                Spacer()
+                roundButton("xmark", label: "End voice", identifier: "voice.endVoice") { model.endVoice() }
+            }
+            .padding(.horizontal, UZSpacing.xxl)
+        }
+        .padding(.bottom, UZSpacing.m)
+        .background(alignment: .bottom) {
+            LinearGradient(colors: [UZColor.bg.opacity(0), Color(red: 0.25, green: 0.55, blue: 0.98).opacity(0.10)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+        }
+    }
+
+    private func roundButton(_ symbol: String, label: String, identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .semibold))
+                .frame(width: 56, height: 56)
+                .background(UZColor.card, in: .circle)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(UZColor.label)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(identifier)
     }
 }
 
@@ -344,5 +380,76 @@ struct VoiceCardView: View {
             }
         }
         .accessibilityIdentifier(identifier)
+    }
+}
+
+/// Earlier Ask UZee chats, newest first; open one to read it, swipe to delete.
+struct PastChatsView: View {
+    @Bindable var model: VoiceModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var chats: [VoiceHistory.Chat] = []
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if chats.isEmpty {
+                    Text("No earlier chats yet. When you start a new chat, or come back the next day, the last one is kept here.")
+                        .foregroundStyle(UZColor.label2)
+                }
+                ForEach(chats) { chat in
+                    NavigationLink {
+                        PastChatView(chat: chat)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(chat.title).lineLimit(1)
+                            Text(chat.started.formatted(date: .abbreviated, time: .shortened))
+                                .font(.footnote).foregroundStyle(UZColor.label2)
+                        }
+                    }
+                    .accessibilityIdentifier("voice.pastChat")
+                }
+                .onDelete { offsets in
+                    for index in offsets { model.deleteChat(chats[index].id) }
+                    chats.remove(atOffsets: offsets)
+                }
+            }
+            .navigationTitle("Past chats")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .onAppear { chats = model.pastChats }
+        }
+    }
+}
+
+/// One earlier chat, read-only.
+struct PastChatView: View {
+    let chat: VoiceHistory.Chat
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: UZSpacing.l) {
+                ForEach(chat.lines) { line in
+                    HStack {
+                        if line.speaker == .me { Spacer(minLength: 48) }
+                        Text(line.text)
+                            .padding(.horizontal, UZSpacing.l)
+                            .padding(.vertical, UZSpacing.m)
+                            .background(line.speaker == .me ? UZColor.tint : UZColor.card,
+                                        in: .rect(cornerRadius: UZRadius.chip, style: .continuous))
+                            .foregroundStyle(line.speaker == .me ? Color.white : UZColor.label)
+                            .textSelection(.enabled)
+                        if line.speaker == .uzee { Spacer(minLength: 48) }
+                    }
+                }
+            }
+            .padding(UZSpacing.xxl)
+        }
+        .background(UZColor.bg)
+        .navigationTitle(chat.started.formatted(date: .abbreviated, time: .shortened))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
