@@ -58,6 +58,12 @@ struct SettingsView: View {
                 }
                 .accessibilityIdentifier("settings.prayer")
                 NavigationLink {
+                    UZeeVoiceView(session: session)
+                } label: {
+                    SettingsLabel("UZee's voice", symbol: "person.wave.2", color: Color(uiColor: .systemPink))
+                }
+                .accessibilityIdentifier("settings.uzeeVoice")
+                NavigationLink {
                     SiriVoiceView(session: session)
                 } label: {
                     SettingsLabel("Siri & voice", symbol: "waveform", color: Color(uiColor: .systemPurple))

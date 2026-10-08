@@ -153,9 +153,13 @@ final class AppContainer {
             },
             speak: { text, done in VoiceSpeaker.shared.speak(text, done: done) },
             stopSpeaking: { VoiceSpeaker.shared.stop() },
-            voices: { VoiceSpeaker.voices().map { SmartClient.VoiceChoice(id: $0.id, name: $0.name, detail: $0.detail) } },
+            voices: { VoiceSpeaker.voices().map { SmartClient.VoiceChoice(id: $0.id, name: $0.name, detail: $0.detail, quality: $0.quality) } },
             previewVoice: { VoiceSpeaker.shared.preview($0) },
-            listeningLevel: { SpeechListener.shared.level })
+            listeningLevel: { SpeechListener.shared.level },
+            wiseRate: { currency, base, day in
+                guard let day else { return await WiseRateFetcher.shared.live(currency, in: base) }
+                return await WiseRateFetcher.shared.rate(currency, in: base, on: day, today: LocalDate(Date(), in: .current))
+            })
     }
 
     private static func sampleDataActions(_ database: AppDatabase) -> AppSession.SampleDataActions {
@@ -240,7 +244,7 @@ final class AppContainer {
                                      at: date, dueDate: due, note: note)
             },
             recordRepayment: { loan, amount, account, date in
-                try store.recordRepayment(loanID: loan, amount: amount, accountID: account, on: day(date), at: date)
+                _ = try store.recordRepayment(loanID: loan, amount: amount, accountID: account, on: day(date), at: date)
             },
             setWrittenOff: { writtenOff, loan in try store.setWrittenOff(writtenOff, loanID: loan) },
             setDueDate: { due, interest, loan in try store.setDueDate(due, interestBasisPoints: interest, loanID: loan) },

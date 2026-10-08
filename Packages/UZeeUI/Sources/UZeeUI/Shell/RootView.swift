@@ -80,6 +80,7 @@ public struct RootView: View {
                 }
                 if isLocked, promptOnActive { promptOnActive = false; unlock() }
                 session.rescheduleReminders()
+                Task { await session.refreshWiseRates() }
             default: break
             }
         }

@@ -425,6 +425,7 @@ struct RepaymentSheet: View {
                     }
                     Section {
                         Picker(loan.direction == .lent ? "Into" : "From", selection: $accountID) {
+                            Text("No account, just a record").tag(UUID?.none)
                             ForEach(session.ledger.activeAccounts.filter { $0.currency == loan.principal.currency }) { account in
                                 Text(account.name).tag(UUID?.some(account.id))
                             }
@@ -432,14 +433,15 @@ struct RepaymentSheet: View {
                         .accessibilityIdentifier("repay.account")
                         DatePicker("Date", selection: $date, displayedComponents: .date)
                     } footer: {
-                        Text("Not spending or income. The loan's balance goes down.")
+                        Text(accountID == nil ? "Only the balance goes down; no account changes. Use this for cash or money paid outside UZee."
+                             : "Not spending or income. The loan's balance goes down.")
                     }
                 }
                 if let problem {
                     Section { Label(problem, systemImage: "exclamationmark.circle.fill").foregroundStyle(UZColor.negative) }
                 }
             }
-            .navigationTitle("Record repayment")
+            .navigationTitle(loan?.direction == .lent ? "They paid you" : "You paid back")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -451,7 +453,8 @@ struct RepaymentSheet: View {
                 guard !didLoad, let loan else { return }
                 didLoad = true
                 amount = plainNumber(LoanCalculator.outstanding(loan))
-                accountID = session.ledger.activeAccounts.first { $0.currency == loan.principal.currency }?.id
+                // A debt kept as a record (no account when it started) is paid down the same way.
+                accountID = loan.transactionID == nil ? nil : session.ledger.activeAccounts.first { $0.currency == loan.principal.currency }?.id
             }
         }
         .presentationDetents([.medium, .large])
@@ -459,7 +462,6 @@ struct RepaymentSheet: View {
 
     private func save() {
         guard let loan else { return }
-        guard let accountID else { problem = "Choose an account."; return }
         let money: Money
         do {
             money = try AmountParser.parse(amount, currency: loan.principal.currency)
@@ -481,7 +483,9 @@ struct RepaymentSheet: View {
         if session.perform("Couldn't save. Nothing was changed. Try again.", {
             try session.peopleClient.recordRepayment(loan.id, money, accountID, date)
         }) {
-            session.toasts.show("Repayment saved")
+            let name = session.people.person(loan.personID)?.name ?? "them"
+            let left = session.people.loans.first { $0.id == loan.id }.map { LoanCalculator.outstanding($0) }
+            session.toasts.show(left.map { $0.isZero ? "All settled with \(name)" : "\(MoneyFormatter.string($0)) left with \(name)" } ?? "Saved")
             dismiss()
         }
     }

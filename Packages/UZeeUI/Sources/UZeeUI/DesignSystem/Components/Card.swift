@@ -3,10 +3,13 @@ import SwiftUI
 /// Opaque content card: `card` fill, 20 pt continuous corners, 16 pt padding, no shadow (DESIGN_SYSTEM §14).
 public struct UZCard<Content: View>: View {
     let padding: CGFloat
+    /// A soft wash of colour over the card (red for money you owe, green for money owed to you).
+    let tint: Color?
     let content: Content
 
-    public init(padding: CGFloat = UZSpacing.xxl, @ViewBuilder content: () -> Content) {
+    public init(padding: CGFloat = UZSpacing.xxl, tint: Color? = nil, @ViewBuilder content: () -> Content) {
         self.padding = padding
+        self.tint = tint
         self.content = content()
     }
 
@@ -14,7 +17,13 @@ public struct UZCard<Content: View>: View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(UZColor.card, in: .rect(cornerRadius: UZRadius.card, style: .continuous))
+            .background {
+                let shape = RoundedRectangle(cornerRadius: UZRadius.card, style: .continuous)
+                ZStack {
+                    shape.fill(UZColor.card)
+                    if let tint { shape.fill(tint.opacity(0.12)) }
+                }
+            }
     }
 }
 

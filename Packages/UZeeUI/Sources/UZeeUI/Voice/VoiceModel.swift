@@ -53,8 +53,8 @@ final class VoiceModel {
     var isListening = false
     var isThinking = false
     var isSpeaking = false
-    /// The big voice orb is on screen instead of the typing bar.
-    var voiceMode = false
+    /// The big voice orb is on screen instead of the typing bar (the default; the keyboard button switches).
+    var voiceMode = true
     /// In a spoken conversation: replies are said aloud, and UZee listens again after a question.
     var handsFree = false
     /// Replies are shown but not spoken.
@@ -72,8 +72,6 @@ final class VoiceModel {
     private var lastSentence = ""
     /// When the user last made a sound or a new word was recognised, for end-of-speech.
     private var lastSound = Date()
-    /// Voice mode closes once the goodbye has been said.
-    private var closeAfterSpeaking = false
     private var history = VoiceHistory()
     private var chatID = UUID()
     private var chatStarted = Date()
@@ -102,7 +100,6 @@ final class VoiceModel {
     /// Starts a fresh conversation; the current one stays under Past chats.
     func newChat() {
         cancelListening()
-        voiceMode = false
         card = nil
         pending = nil
         need = nil
@@ -130,11 +127,10 @@ final class VoiceModel {
     func startVoice() {
         voiceMode = true
         handsFree = true
-        closeAfterSpeaking = false
         Task { await startListening() }
     }
 
-    /// The X in voice mode: back to typing, nothing listening or speaking.
+    /// The keyboard button in voice mode: switch to typing, nothing listening or speaking.
     func endVoice() {
         cancelListening()
         voiceMode = false
@@ -261,10 +257,8 @@ final class VoiceModel {
         if AssistantReply.isGoodbye(sentence) {
             pending = nil
             need = nil
-            closeAfterSpeaking = voiceMode
             say("Anytime. Bye for now!")
             handsFree = false
-            if muted || !voiceMode { closeAfterSpeaking = false; voiceMode = false }
             return
         }
         if usesModel, pending == nil {
@@ -326,11 +320,6 @@ final class VoiceModel {
     }
 
     private func finishedSpeaking(listenAgain: Bool) {
-        if closeAfterSpeaking {
-            closeAfterSpeaking = false
-            voiceMode = false
-            return
-        }
         if handsFree, voiceMode, listenAgain { Task { await startListening() } }
     }
 
@@ -526,8 +515,9 @@ final class VoiceModel {
         if let named = command.account, accountID == nil {
             // An account that isn't in UZee ("JazzCash") must be picked, not swapped for another one quietly.
             problem = "There's no account called \(named). Pick one."
-        } else if command.noMoneyMoved {
-            // "I owe Ammi 250,000": only a record of the debt; no account balance changes.
+        } else if command.noMoneyMoved || paysDownRecord(command) {
+            // "I owe Ammi 250,000": only a record of the debt; no account balance changes. Paying such a debt
+            // down ("Ammi got 50k back") is a record too, unless an account is named.
             accountID = nil
         } else if accountID == nil {
             // "$20" goes to a dollar account; otherwise the last used account.
@@ -584,6 +574,17 @@ final class VoiceModel {
         }
         if let problem { intro = problem + " " + intro }
         if announce { say(intro) }
+    }
+
+    /// A repayment towards someone whose open loan was kept as a record only.
+    private func paysDownRecord(_ command: VoiceCommand) -> Bool {
+        guard command.action == .repaidToMe || command.action == .repaidByMe, let name = command.person,
+              let person = VoiceAnswerer(session: session).person(named: name) else { return false }
+        let direction: LoanDirection = command.action == .repaidToMe ? .lent : .borrowed
+        guard let loan = session.people.loans
+            .filter({ $0.personID == person.id && $0.direction == direction && $0.writtenOffAt == nil && LoanCalculator.outstanding($0).minorUnits > 0 })
+            .min(by: { $0.startDate < $1.startDate }) else { return false }
+        return loan.transactionID == nil
     }
 
     func cancelCard() {
@@ -704,16 +705,16 @@ final class VoiceModel {
                     : "You have no open loan from \(name). Record it in People instead."
                 return nil
             }
-            guard let accountID = card.accountID else {
-                card.problem = "Choose an account."
-                return nil
-            }
+            // No account: the debt was only a record ("I owe Ammi"), so only its balance goes down.
+            let accountID = card.accountID
             let date = card.date
             guard session.perform("Couldn't save. Check the amount isn't more than what's left on the loan.", {
                 try session.peopleClient.recordRepayment(loan.id, amount, accountID, date)
             }) else { return nil }
-            session.toasts.show("Repayment saved")
-            return "Saved · \(direction == .lent ? "\(name) paid you back" : "You paid \(name) back") \(MoneyFormatter.string(amount))."
+            let left = session.people.loans.first { $0.id == loan.id }.map(LoanCalculator.outstanding)
+            let leftText = left.map { $0.isZero ? " All settled." : " \(MoneyFormatter.string($0)) left." } ?? ""
+            session.toasts.show("Payment saved")
+            return "Saved · \(direction == .lent ? "\(name) paid you back" : "You paid \(name) back") \(MoneyFormatter.string(amount))." + leftText
         }
     }
 }

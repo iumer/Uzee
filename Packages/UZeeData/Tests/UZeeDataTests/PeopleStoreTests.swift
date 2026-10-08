@@ -105,6 +105,19 @@ struct PeopleStoreTests {
         #expect(try balances(world).0.net(of: usama.id) == rs(15_000))
     }
 
+    @Test("LOAN-009 a debt kept as a record: I owe Ammi Rs 150,000, pay Rs 50,000 outside my accounts, Rs 100,000 left")
+    func debtPaidDownWithoutAccount() throws {
+        let world = try empty()
+        let ammi = try world.people.createPerson(name: "Ammi")
+        let loan = try world.people.recordLoan(direction: .borrowed, personID: ammi.id, amount: rs(150_000), accountID: nil, on: day(10, 1))
+        let transaction = try world.people.recordRepayment(loanID: loan.id, amount: rs(50_000), accountID: nil, on: day(10, 8))
+        #expect(transaction == nil)
+        let (ledger, snapshot) = try balances(world)
+        #expect(ledger.net(of: ammi.id) == Money(minorUnits: -rs(100_000).minorUnits, currency: .pkr))
+        #expect(LoanCalculator.outstanding(snapshot.loans[0]) == rs(100_000))
+        #expect(try world.ledger.transactions().isEmpty)
+    }
+
     @Test("LOAN-008 existing balances: no money moves, matching names add up, write-off zeroes")
     func existingBalances() throws {
         let world = try empty()

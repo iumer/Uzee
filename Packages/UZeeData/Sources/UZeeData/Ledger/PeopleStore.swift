@@ -148,13 +148,22 @@ public struct PeopleStore: Sendable {
         }
     }
 
-    /// A repayment (LOAN-03): money in for a loan I gave, money out for one I took.
+    /// A repayment (LOAN-03): money in for a loan I gave, money out for one I took. Without an account it only
+    /// brings the balance down ("Ammi got Rs 50,000 back in cash, outside my accounts"): no transaction.
     @discardableResult
-    public func recordRepayment(loanID: UUID, amount: Money, accountID: UUID, on date: LocalDate, at time: Date = Date(),
-                                timeZone: TimeZone = .current) throws -> MoneyTransaction {
+    public func recordRepayment(loanID: UUID, amount: Money, accountID: UUID?, on date: LocalDate, at time: Date = Date(),
+                                timeZone: TimeZone = .current) throws -> MoneyTransaction? {
         try database.writer.write { db in
             guard let loan = try Self.fetchLoans(db).first(where: { $0.id == loanID }) else { throw Problem.notFound }
             try LoanCalculator.validatePayment(amount, for: loan)
+            let now = Timestamp.now()
+            guard let accountID else {
+                try db.execute(sql: """
+                    INSERT INTO loan_payment (id, created_at, updated_at, is_sample, loan_id, txn_id, amount_minor, paid_on)
+                    VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
+                    """, arguments: [UUID().uuidString, now, now, loan.isSample, loanID.uuidString, amount.minorUnits, date.description])
+                return nil
+            }
             let name = try loan.personID.map { try Self.personName($0, db) } ?? loan.institution ?? "Loan"
             let transaction = MoneyTransaction(
                 kind: .repayment, occurredAt: time, localDate: date, timeZoneID: timeZone.identifier, amount: amount,
@@ -162,7 +171,6 @@ public struct PeopleStore: Sendable {
                 legs: [TransactionLeg(accountID: accountID, amount: loan.direction == .lent ? amount : Money(minorUnits: -amount.minorUnits, currency: amount.currency),
                                       role: .main)])
             try LedgerStore.save(transaction, db)
-            let now = Timestamp.now()
             try db.execute(sql: """
                 INSERT INTO loan_payment (id, created_at, updated_at, is_sample, loan_id, txn_id, amount_minor, paid_on)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)

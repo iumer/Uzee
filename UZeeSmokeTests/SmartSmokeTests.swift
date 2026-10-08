@@ -53,6 +53,8 @@ final class SmartSmokeTests: XCTestCase {
     private func openVoice() {
         app.navigationBars["Settings"].buttons.element(boundBy: 0).tap()
         tap("home.voice")
+        // Ask UZee opens in voice mode; the keyboard button switches to typing.
+        tap("voice.keyboard")
         XCTAssertTrue(element("voice.input").waitForExistence(timeout: 30), "Ask UZee did not open")
     }
 

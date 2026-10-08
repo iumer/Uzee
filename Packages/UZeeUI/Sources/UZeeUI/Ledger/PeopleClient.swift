@@ -14,7 +14,7 @@ public struct PeopleClient: Sendable {
     public var saveSplit: @Sendable (MoneyTransaction, Split?) throws -> Void
     public var recordLoan: @Sendable (_ direction: LoanDirection, _ person: UUID, _ amount: Money, _ account: UUID?, _ date: Date,
                                       _ due: LocalDate?, _ note: String?) throws -> Void
-    public var recordRepayment: @Sendable (_ loan: UUID, _ amount: Money, _ account: UUID, _ date: Date) throws -> Void
+    public var recordRepayment: @Sendable (_ loan: UUID, _ amount: Money, _ account: UUID?, _ date: Date) throws -> Void
     public var setWrittenOff: @Sendable (_ writtenOff: Bool, _ loan: UUID) throws -> Void
     public var setDueDate: @Sendable (_ due: LocalDate?, _ interestBasisPoints: Int?, _ loan: UUID) throws -> Void
     public var addExistingBalances: @Sendable ([BalanceRow]) throws -> Void
@@ -27,7 +27,7 @@ public struct PeopleClient: Sendable {
                 updateGroup: @escaping @Sendable (SplitGroup) throws -> Void,
                 saveSplit: @escaping @Sendable (MoneyTransaction, Split?) throws -> Void,
                 recordLoan: @escaping @Sendable (LoanDirection, UUID, Money, UUID?, Date, LocalDate?, String?) throws -> Void,
-                recordRepayment: @escaping @Sendable (UUID, Money, UUID, Date) throws -> Void,
+                recordRepayment: @escaping @Sendable (UUID, Money, UUID?, Date) throws -> Void,
                 setWrittenOff: @escaping @Sendable (Bool, UUID) throws -> Void,
                 setDueDate: @escaping @Sendable (LocalDate?, Int?, UUID) throws -> Void,
                 addExistingBalances: @escaping @Sendable ([BalanceRow]) throws -> Void,

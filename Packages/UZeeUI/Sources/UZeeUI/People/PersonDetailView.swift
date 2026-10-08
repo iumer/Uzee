@@ -63,7 +63,7 @@ struct PersonDetailView: View {
     }
 
     private func header(_ person: Person, net: Money, balance: PersonBalance, model: PeopleModel) -> some View {
-        UZCard {
+        UZCard(tint: net.isZero ? nil : SplitText.color(net)) {
             HStack(spacing: UZSpacing.xl) {
                 PersonAvatar(name: person.name, size: 56)
                 VStack(alignment: .leading, spacing: UZSpacing.xs) {
@@ -87,7 +87,8 @@ struct PersonDetailView: View {
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: UZSpacing.m) {
                 if let loan = open.first {
-                    actionButton("Record repayment", "arrow.uturn.backward.circle", id: "person.repay") { sheet = .repay(loan.id) }
+                    actionButton(loan.direction == .lent ? "They paid you" : "You paid back", "arrow.uturn.backward.circle",
+                                 id: "person.repay") { sheet = .repay(loan.id) }
                 }
                 actionButton("Lend", "arrow.up.circle", id: "person.lend") { sheet = .lend(.lent) }
                 actionButton("Borrow", "arrow.down.circle", id: "person.borrow") { sheet = .lend(.borrowed) }
@@ -139,15 +140,20 @@ struct PersonDetailView: View {
                 Text(status.name).font(.caption.weight(.semibold))
                     .foregroundStyle(status == .settled || status == .writtenOff ? UZColor.label2 : UZColor.warning)
                 if status == .open || status == .partiallyPaid {
-                    Text("\(MoneyFormatter.string(LoanCalculator.outstanding(loan))) left").font(.footnote).monospacedDigit()
+                    // Red: money you owe them. Green: money they owe you.
+                    Text("\(MoneyFormatter.string(LoanCalculator.outstanding(loan))) left").font(.subheadline.weight(.semibold)).monospacedDigit()
+                        .foregroundStyle(loan.direction == .lent ? UZColor.positive : UZColor.negative)
                 }
             }
         }
         .padding(.vertical, UZSpacing.m)
         .contentShape(.rect)
+        .onTapGesture {
+            if status == .open || status == .partiallyPaid { sheet = .repay(loan.id) }
+        }
         .contextMenu {
             if status == .open || status == .partiallyPaid {
-                Button("Record repayment", systemImage: "arrow.uturn.backward") { sheet = .repay(loan.id) }
+                Button(loan.direction == .lent ? "They paid you" : "You paid back", systemImage: "arrow.uturn.backward") { sheet = .repay(loan.id) }
             }
             Button("Due date and interest", systemImage: "calendar") { sheet = .due(loan.id) }
             Button(loan.writtenOffAt == nil ? "Write off" : "Undo write-off", systemImage: "xmark.seal") {
@@ -171,19 +177,12 @@ struct PersonDetailView: View {
                 } else {
                     VStack(spacing: 0) {
                         ForEach(items) { item in
-                            NavigationLink(value: Route.transaction(item.id)) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.title).foregroundStyle(UZColor.label)
-                                        Text(item.meta).font(.footnote).foregroundStyle(UZColor.label2)
-                                    }
-                                    Spacer()
-                                    Text(item.amount).monospacedDigit().foregroundStyle(UZColor.label)
-                                }
-                                .padding(.vertical, UZSpacing.m)
-                                .contentShape(.rect)
+                            if item.opensTransaction {
+                                NavigationLink(value: Route.transaction(item.id)) { historyRow(item) }
+                                    .buttonStyle(.plain)
+                            } else {
+                                historyRow(item)
                             }
-                            .buttonStyle(.plain)
                             if item.id != items.last?.id { Divider() }
                         }
                     }
@@ -192,37 +191,61 @@ struct PersonDetailView: View {
         }
     }
 
+    private func historyRow(_ item: HistoryItem) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title).foregroundStyle(UZColor.label)
+                Text(item.meta).font(.footnote).foregroundStyle(UZColor.label2)
+            }
+            Spacer()
+            Text(item.amount).monospacedDigit().fontWeight(.semibold)
+                .foregroundStyle(item.theyOwe ? UZColor.positive : UZColor.negative)
+        }
+        .padding(.vertical, UZSpacing.m)
+        .contentShape(.rect)
+    }
+
+    /// One line of history. Green when it is about money they owe you, red when it is about money you owe them.
     struct HistoryItem: Identifiable {
         let id: UUID
         let title: String
         let meta: String
         let amount: String
+        var theyOwe = true
+        var date = Date.distantPast
+        /// Records kept without an account have no transaction to open.
+        var opensTransaction = true
     }
 
-    /// Everything that moved this balance, newest first.
+    /// Everything that moved this balance, newest first, including debts and payments kept as records only.
     private func history(_ model: PeopleModel) -> [HistoryItem] {
         let name = session.people.person(personID)?.name ?? "They"
         let loanByTransaction = Dictionary(session.people.loans.compactMap { loan in loan.transactionID.map { ($0, loan) } },
                                            uniquingKeysWith: { a, _ in a })
         var paymentLoans: [UUID: Loan] = [:]
         for loan in session.people.loans { for payment in loan.payments { if let id = payment.transactionID { paymentLoans[id] = loan } } }
-        return session.transactions.compactMap { (transaction: MoneyTransaction) -> HistoryItem? in
+        func negated(_ money: Money) -> Money { Money(minorUnits: -money.minorUnits, currency: money.currency) }
+        var items = session.transactions.compactMap { (transaction: MoneyTransaction) -> HistoryItem? in
             let meta = model.dateLine(transaction)
+            let when = transaction.occurredAt
             if transaction.counterpartyID == personID || loanByTransaction[transaction.id]?.personID == personID {
                 switch transaction.kind {
-                case .loanOut: return HistoryItem(id: transaction.id, title: "You lent", meta: meta, amount: MoneyFormatter.string(transaction.amount, sign: .always))
+                case .loanOut:
+                    return HistoryItem(id: transaction.id, title: "You lent", meta: meta,
+                                       amount: MoneyFormatter.string(transaction.amount, sign: .always), theyOwe: true, date: when)
                 case .loanIn:
                     return HistoryItem(id: transaction.id, title: "You borrowed", meta: meta,
-                                       amount: MoneyFormatter.string(Money(minorUnits: -transaction.amount.minorUnits, currency: transaction.amount.currency)))
+                                       amount: MoneyFormatter.string(negated(transaction.amount)), theyOwe: false, date: when)
                 case .repayment:
                     let lent = paymentLoans[transaction.id]?.direction != .borrowed
-                    return HistoryItem(id: transaction.id, title: lent ? "\(name) repaid" : "You repaid", meta: meta,
-                                       amount: MoneyFormatter.string(lent ? Money(minorUnits: -transaction.amount.minorUnits, currency: transaction.amount.currency)
-                                                                          : transaction.amount, sign: .always))
+                    return HistoryItem(id: transaction.id, title: lent ? "\(name) paid you" : "You paid back", meta: meta,
+                                       amount: MoneyFormatter.string(lent ? negated(transaction.amount) : transaction.amount, sign: .always),
+                                       theyOwe: lent, date: when)
                 case .settlement:
                     guard let settlement = Settlement.from(transaction) else { return nil }
                     return HistoryItem(id: transaction.id, title: settlement.amount.isNegative ? "\(name) paid you" : "You paid \(name)",
-                                       meta: meta, amount: "✓ " + MoneyFormatter.string(SplitText.magnitude(settlement.amount)))
+                                       meta: meta, amount: "✓ " + MoneyFormatter.string(SplitText.magnitude(settlement.amount)),
+                                       theyOwe: settlement.amount.isNegative, date: when)
                 default: break
                 }
             }
@@ -230,8 +253,27 @@ struct PersonDetailView: View {
                   let effect = model.effect(of: split, isIncome: SpendingRules.countsAsIncome(transaction.kind), with: personID),
                   !effect.isZero else { return nil }
             return HistoryItem(id: transaction.id, title: transaction.payeeName ?? "Shared expense", meta: meta,
-                               amount: (effect.isNegative ? "you owe " : "owes you ") + MoneyFormatter.string(SplitText.magnitude(effect)))
+                               amount: (effect.isNegative ? "you owe " : "owes you ") + MoneyFormatter.string(SplitText.magnitude(effect)),
+                               theyOwe: !effect.isNegative, date: when)
         }
+        // "I owe Ammi Rs 250,000" and "paid Rs 50,000 in cash" have no transaction: show them from the loan.
+        let today = LocalDate(Date(), in: .current)
+        for loan in session.people.loans where loan.personID == personID {
+            let lent = loan.direction == .lent
+            if loan.transactionID == nil {
+                items.append(HistoryItem(id: loan.id, title: lent ? "\(name) owes you" : "You owe \(name)",
+                                         meta: loan.startDate.listTitle(today: today) + " · record",
+                                         amount: MoneyFormatter.string(loan.principal), theyOwe: lent,
+                                         date: loan.startDate.startDate(in: .current), opensTransaction: false))
+            }
+            for payment in loan.payments where payment.transactionID == nil {
+                items.append(HistoryItem(id: payment.id, title: lent ? "\(name) paid you" : "You paid back",
+                                         meta: payment.paidOn.listTitle(today: today) + " · record",
+                                         amount: "−" + MoneyFormatter.string(payment.amount), theyOwe: lent,
+                                         date: payment.paidOn.startDate(in: .current), opensTransaction: false))
+            }
+        }
+        return items.sorted { $0.date > $1.date }
     }
 
     private func toggleArchive(_ person: Person) {

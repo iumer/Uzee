@@ -57,7 +57,8 @@ public enum ReceiptParser {
                            "total discount", "total tax", "total gst", "total saving", "items total", "amount paid",
                            "amount tendered", "amount received", "account", "net weight", "net wt", "paid amount", "tendered",
                            "cash amount", "card amount", "change", "amount returned", "cash received", "received amount",
-                           "customer paid", "cash paid", "total paid", "after due date", "after due", "late payment", "late surcharge"]
+                           "customer paid", "cash paid", "total paid", "after due date", "after due", "late payment", "late surcharge",
+                           "item count", "no. of items", "no of items"]
     static let notAmountLines = ["change", "tendered", "cash received", "tel", "phone", "ntn", "strn", "invoice", "receipt no",
                                  "bill no", "order no", "card no", "pos", "qty", "house", "block", "street", "road", "sector",
                                  "phase", "plot", "flat", "floor", "address", "contact", "mobile", "cell", "tracking", "ref",
@@ -70,6 +71,15 @@ public enum ReceiptParser {
     static let notMerchant = ["receipt", "invoice", "tax", "ntn", "strn", "gst", "tel", "phone", "ph", "date", "time", "welcome",
                               "www", "http", "@", "cashier", "order", "table", "bill", "fbr", "customer", "copy", "duplicate",
                               "sales", "address", "thank", "pos", "counter", "terminal", "branch", "no."]
+    /// Whole words that mark an address line (Pakistani and Malaysian slips); "Broadway" is still a shop.
+    static let addressWords: Set<String> = ["jalan", "lot", "taman", "street", "st", "road", "rd", "plot", "sector", "floor",
+                                            "block", "phase", "lorong", "persiaran"]
+    /// A line saying it is a business is the shop name, even below a logo or a cashier's name.
+    static let businessWords = ["sdn bhd", "sdn. bhd", "bhd", "enterprise", "trading", "traders", "restaurant", "store",
+                                "mart", "pharmacy", "(pvt)", "pvt", "ltd", "limited", "company", "bakery", "cafe", "hotel",
+                                "supermarket", "super market", "motors", "foods", "sweets", "hardware", "stationery", "boutique"]
+    /// The line after one of these is a person, not the shop.
+    static let personLabels = ["cashier", "served by", "operator", "salesman", "salesperson", "waiter", "staff"]
 
     public static func read(_ lines: [String], currency: Currency, today: LocalDate) -> ReceiptReading {
         let cleaned = lines.map { fixDigits($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -116,11 +126,16 @@ public enum ReceiptParser {
         text.lowercased().split(whereSeparator: { $0 == " " || $0 == "\t" }).joined(separator: " ")
     }
 
+    /// "Total Incl. GST @6%" is about a 6 % tax, not Rs 6: percentages are taken out before reading figures.
+    static func withoutPercents(_ text: String) -> String {
+        text.replacingOccurrences(of: #"@?\s*\d+(?:[.,]\d+)?\s*%"#, with: " ", options: .regularExpression)
+    }
+
     static func labelledAmount(_ pieces: [ReceiptPiece]) -> Decimal? {
         func money(_ piece: ReceiptPiece) -> [TextScan.FoundAmount] {
             let lower = piece.text.lowercased()
             guard !notAmountLines.contains(where: { containsWord(lower, $0) }) else { return [] }
-            return TextScan.amounts(in: piece.text).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
+            return TextScan.amounts(in: withoutPercents(piece.text)).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
         }
         for (tier, words) in totalWords.enumerated() {
             var best: Decimal?
@@ -133,7 +148,7 @@ public enum ReceiptParser {
                     && abs($0.midY - label.midY) < max(label.height, 0.005) * 0.7 }
                     .max { $0.maxX < $1.maxX }.map { plain($0.text) } ?? ""
                 if !leftWord.isEmpty, notTotal.contains(where: { (leftWord + " " + lower).contains($0) }) { continue }
-                if let own = TextScan.amounts(in: label.text).filter({ !$0.isNegative && $0.value > 0 }).last {
+                if let own = TextScan.amounts(in: withoutPercents(label.text)).filter({ !$0.isNegative && $0.value > 0 }).last {
                     if tier == 0 || own.value > (best ?? 0) { best = own.value }
                     continue
                 }
@@ -168,11 +183,11 @@ public enum ReceiptParser {
                 let lower = plain(line)
                 guard words.contains(where: { containsWord(lower, $0) }), !notTotal.contains(where: { lower.contains($0) }) else { continue }
                 // The figure is on the same line, or on one of the next two when the reader split the columns.
-                var candidates = TextScan.amounts(in: line).filter { !$0.isNegative && $0.value > 0 }
+                var candidates = TextScan.amounts(in: withoutPercents(line)).filter { !$0.isNegative && $0.value > 0 }
                 for next in lines.dropFirst(index + 1).prefix(2) where candidates.isEmpty {
                     let nextLower = next.lowercased()
                     guard !notAmountLines.contains(where: { containsWord(nextLower, $0) }) else { continue }
-                    candidates = TextScan.amounts(in: next).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
+                    candidates = TextScan.amounts(in: withoutPercents(next)).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
                 }
                 if let value = candidates.last?.value, tier == 0 || value > (best ?? 0) { best = value }
             }
@@ -185,7 +200,7 @@ public enum ReceiptParser {
         for line in lines {
             let lower = line.lowercased()
             guard !notAmountLines.contains(where: { containsWord(lower, $0) }) else { continue }
-            for found in TextScan.amounts(in: line) where found.looksLikeMoney && !found.isNegative && found.value > 0 {
+            for found in TextScan.amounts(in: withoutPercents(line)) where found.looksLikeMoney && !found.isNegative && found.value > 0 {
                 if found.hasDecimals || found.currencyMarker != nil {
                     if found.value > (strong ?? 0) { strong = found.value }
                 } else if found.value > (weak ?? 0) {
@@ -235,10 +250,16 @@ public enum ReceiptParser {
                 if let name = shopName(value), !couriers.contains(where: { name.lowercased().contains($0) }) { return name }
             }
         }
-        for line in lines.prefix(8) {
-            if let name = shopName(line), !couriers.contains(where: { name.lowercased() == $0 || name.lowercased().hasPrefix($0 + " ") }) {
-                return name
-            }
+        let top = Array(lines.prefix(10))
+        func isCourier(_ name: String) -> Bool { couriers.contains { name.lowercased() == $0 || name.lowercased().hasPrefix($0 + " ") } }
+        // "ABC TRADING SDN BHD" under a logo and a cashier's name.
+        for line in top where businessWords.contains(where: { containsWord(line.lowercased(), $0) }) {
+            if let name = shopName(line), !isCourier(name) { return name }
+        }
+        for (index, line) in top.prefix(8).enumerated() {
+            // The name under "Cashier:" is a person.
+            if index > 0, personLabels.contains(where: { plain(top[index - 1]).hasSuffix($0) || plain(top[index - 1]).hasSuffix($0 + ":") }) { continue }
+            if let name = shopName(line), !isCourier(name) { return name }
         }
         return nil
     }
@@ -248,13 +269,29 @@ public enum ReceiptParser {
         let wordsOnly = lower.split(whereSeparator: { !$0.isLetter && $0 != "." && $0 != "@" }).map(String.init)
         guard !notMerchant.contains(where: { word in wordsOnly.contains(word) || (word.count > 3 && lower.contains(word)) }),
               !wordsOnly.contains("name"), !wordsOnly.contains("information"),
+              !wordsOnly.contains(where: addressWords.contains),
               // A form label ("Amount:", "Order Type") is not a shop.
               !line.trimmingCharacters(in: .whitespaces).hasSuffix(":"),
               !(wordsOnly.count <= 3 && wordsOnly.contains(where: labelWords.contains)) else { return nil }
         let letters = line.filter(\.isLetter).count
         let visible = line.filter { !$0.isWhitespace }.count
         guard letters >= 3, visible > 0, Double(letters) / Double(visible) >= 0.6 else { return nil }
+        // A postcode ("81100 Johor Bahru") means an address.
+        guard line.range(of: #"\b\d{5}\b"#, options: .regularExpression) == nil else { return nil }
+        // A misread logo ("FRwOnL", "RSk"): letters switching case inside a word.
+        let words = line.split(whereSeparator: { !$0.isLetter })
+        guard !words.contains(where: isJumbled) else { return nil }
         return tidy(line)
+    }
+
+    /// "FRwOnL", "RSk", "aBc": not upper, lower, Capitalised or CamelCase ("McDonald", "PostEx", "FoodPanda").
+    static func isJumbled(_ word: Substring) -> Bool {
+        guard word.count >= 2, !word.allSatisfy(\.isUppercase), !word.allSatisfy(\.isLowercase) else { return false }
+        var parts: [String] = []
+        for letter in word {
+            if letter.isUppercase || parts.isEmpty { parts.append(String(letter)) } else { parts[parts.count - 1].append(letter) }
+        }
+        return parts.contains { $0.count < 2 || !($0.first?.isUppercase ?? false) }
     }
 
     /// "** IMTIAZ SUPER MARKET **" → "Imtiaz Super Market".

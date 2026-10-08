@@ -15,6 +15,8 @@ struct AddSheet: View {
     @State private var kind: TransactionKind = .expense
     @State private var amountText = ""
     @State private var receivedText = ""
+    /// What arrived, filled in from Wise's rate on the transfer's day; replaced while the user hasn't typed over it.
+    @State private var wiseFill: (text: String, note: String)?
     @State private var accountID: UUID?
     @State private var toAccountID: UUID?
     @State private var categoryID: UUID?
@@ -127,6 +129,7 @@ struct AddSheet: View {
                     .ignoresSafeArea()
             }
             .onChange(of: accountID) { problem = nil }
+            .task(id: wiseKey) { await fillFromWise() }
             .onChange(of: kind) { _, newKind in
                 problem = nil
                 if let category = ledger.category(categoryID), category.type != categoryType(for: newKind) { categoryID = nil }
@@ -352,6 +355,9 @@ struct AddSheet: View {
                         .accessibilityIdentifier("add.received")
                 }
                 if let rateLine { Text(rateLine).font(.footnote).foregroundStyle(UZColor.label2).accessibilityIdentifier("add.rate") }
+                if let wiseFill, wiseFill.text == receivedText {
+                    Text(wiseFill.note).font(.footnote).foregroundStyle(UZColor.label2).accessibilityIdentifier("add.wise")
+                }
             }
         } footer: {
             Text("Transfers move your own money. They are not spending or income.")
@@ -403,6 +409,29 @@ struct AddSheet: View {
             result.append(category)
         }
         return result
+    }
+
+    private var wiseKey: String {
+        "\(needsReceived)|\(amountText)|\(LocalDate(date, in: .current))|\(accountID?.uuidString ?? "")|\(toAccountID?.uuidString ?? "")"
+    }
+
+    /// Wise to HBL: what arrived, at Wise's rate on the transfer's day (CUR-03). Only fills an empty field or
+    /// one it filled itself; the user can always type what really arrived.
+    private func fillFromWise() async {
+        guard needsReceived, let account, let toAccount, receivedText.isEmpty || receivedText == wiseFill?.text,
+              let sent = try? AmountParser.parse(amountText, currency: account.currency), sent.minorUnits > 0 else { return }
+        try? await Task.sleep(for: .milliseconds(500))
+        guard !Task.isCancelled else { return }
+        let foreign = account.currency == ledger.base ? toAccount.currency : account.currency
+        let day = LocalDate(date, in: .current)
+        guard let rate = await session.wiseRate(foreign, on: day), rate > 0, !Task.isCancelled,
+              receivedText.isEmpty || receivedText == wiseFill?.text else { return }
+        let value = account.currency == ledger.base ? sent.decimalValue / rate : sent.decimalValue * rate
+        guard let received = try? Money.fromMajor(Rounding.halfUp(value, scale: toAccount.currency.minorUnits), toAccount.currency) else { return }
+        let text = plainNumber(received)
+        let when = day >= session.today ? "today" : "on \(DateText.short(day))"
+        wiseFill = (text, "Filled in at Wise's rate \(when), \(ExchangeRate.display(rate)). Change it to what actually arrived.")
+        receivedText = text
     }
 
     /// "Rate 278.70 · Rs 650 less than at 280" for a cross-currency transfer (TXN-03).

@@ -33,21 +33,30 @@ public struct SmartClient: Sendable {
     public var previewVoice: @Sendable (String) -> Void
     /// How loud the microphone is right now, 0…1, while listening (drives the orb's glow and end-of-speech).
     public var listeningLevel: @Sendable () -> Float
+    /// Wise's rate for 1 `currency` in `base` on a day (nil = live), or nil when Wise can't be reached.
+    public var wiseRate: @Sendable (_ currency: Currency, _ base: Currency, _ day: LocalDate?) async -> Decimal?
 
     public struct VoiceChoice: Hashable, Sendable, Identifiable {
         public let id: String
         public let name: String
+        /// The accent, such as "English (United States)".
         public let detail: String
+        /// "Premium", "Enhanced" or "Standard".
+        public let quality: String
 
-        public init(id: String, name: String, detail: String) {
+        public init(id: String, name: String, detail: String, quality: String = "Standard") {
             self.id = id
             self.name = name
             self.detail = detail
+            self.quality = quality
         }
+
+        public var isNatural: Bool { quality != "Standard" }
     }
 
     /// Where the chosen voice is kept (read by the speaker in UZeeSystem too).
     public static let chosenVoiceKey = "uzee.voice.id"
+    public static let speedKey = "uzee.voice.speed"
 
     public init(readReceipt: @escaping @Sendable (Data) throws -> [ReceiptPiece],
                 readStatement: @escaping @Sendable (URL, String?) throws -> StatementText,
@@ -63,7 +72,8 @@ public struct SmartClient: Sendable {
                 stopSpeaking: @escaping @Sendable () -> Void = {},
                 voices: @escaping @Sendable () -> [VoiceChoice] = { [] },
                 previewVoice: @escaping @Sendable (String) -> Void = { _ in },
-                listeningLevel: @escaping @Sendable () -> Float = { 0 }) {
+                listeningLevel: @escaping @Sendable () -> Float = { 0 },
+                wiseRate: @escaping @Sendable (Currency, Currency, LocalDate?) async -> Decimal? = { _, _, _ in nil }) {
         self.readReceipt = readReceipt
         self.readStatement = readStatement
         self.understand = understand
@@ -79,6 +89,7 @@ public struct SmartClient: Sendable {
         self.voices = voices
         self.previewVoice = previewVoice
         self.listeningLevel = listeningLevel
+        self.wiseRate = wiseRate
     }
 
     /// Previews and tests: rules only, no camera text, no microphone.

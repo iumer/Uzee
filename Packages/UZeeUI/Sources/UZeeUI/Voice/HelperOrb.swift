@@ -52,6 +52,8 @@ struct VoiceBlob: View {
     var size: CGFloat = 150
     /// The microphone level, 0…1, read every frame.
     var level: @Sendable () -> Float = { 0 }
+    /// Dozing before the helper wakes up: small, grey, eyes shut, a few z's.
+    var asleep = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var start = Date()
 
@@ -60,8 +62,11 @@ struct VoiceBlob: View {
             let t = reduceMotion ? 0 : timeline.date.timeIntervalSince(start)
             let loud = mood == .listening ? CGFloat(level()) : 0
             ZStack {
-                glow(t: t, loud: loud)
+                glow(t: t, loud: loud).opacity(asleep ? 0 : 1)
                 blob(t: t, loud: loud)
+                    .saturation(asleep ? 0.15 : 1)
+                    .scaleEffect(asleep ? 0.78 + 0.02 * CGFloat(sin(t * 1.4)) : 1)
+                if asleep, !reduceMotion { snores(t: t) }
                 if mood == .thinking {
                     Circle()
                         .trim(from: 0, to: 0.28)
@@ -69,13 +74,27 @@ struct VoiceBlob: View {
                         .frame(width: size * 0.86, height: size * 0.86)
                         .rotationEffect(.degrees(t * 400))
                 }
-                UZeeLogo(size: size * 0.5, singing: mood == .speaking)
+                UZeeLogo(size: size * 0.5, singing: mood == .speaking && !asleep, sleeping: asleep)
                     .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
                     .scaleEffect(mood == .listening ? 1 + loud * 0.12 : 1)
             }
             .frame(width: size * 1.5, height: size * 1.5)
         }
         .accessibilityHidden(true)
+    }
+
+    /// Three z's drifting up and fading, one after another.
+    private func snores(t: Double) -> some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { index in
+                let cycle = (t / 2.1 + Double(index) / 3).truncatingRemainder(dividingBy: 1)
+                Text("z")
+                    .font(.system(size: size * (0.12 + 0.05 * CGFloat(index)), weight: .bold, design: .rounded))
+                    .foregroundStyle(UZColor.label2)
+                    .opacity(sin(cycle * .pi))
+                    .offset(x: size * (0.32 + 0.18 * CGFloat(cycle)), y: -size * (0.3 + 0.35 * CGFloat(cycle)))
+            }
+        }
     }
 
     private func glow(t: Double, loud: CGFloat) -> some View {

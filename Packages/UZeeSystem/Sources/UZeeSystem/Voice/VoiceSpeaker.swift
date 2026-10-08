@@ -36,7 +36,8 @@ public final class VoiceSpeaker: NSObject, AVSpeechSynthesizerDelegate, @uncheck
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = voiceID.flatMap(AVSpeechSynthesisVoice.init(identifier:)) ?? Self.bestVoice()
         // A touch slower and warmer than the default reads money more naturally.
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.98
+        let speed = UserDefaults.standard.double(forKey: Self.speedKey)
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * Float(speed > 0 ? min(max(speed, 0.8), 1.2) : 0.98)
         utterance.pitchMultiplier = 1.05
         utterance.postUtteranceDelay = 0.1
         lock.lock()
@@ -53,9 +54,11 @@ public final class VoiceSpeaker: NSObject, AVSpeechSynthesizerDelegate, @uncheck
 
     /// The voice the owner picked in Settings › Siri & voice (an AVSpeechSynthesisVoice identifier).
     public static let chosenVoiceKey = "uzee.voice.id"
+    /// Speaking speed, 0.8 (slower) … 1.2 (faster) of the normal rate; set in Settings › UZee's voice.
+    public static let speedKey = "uzee.voice.speed"
 
     /// Installed English voices, best first: (identifier, name, accent and quality).
-    public static func voices() -> [(id: String, name: String, detail: String)] {
+    public static func voices() -> [(id: String, name: String, detail: String, quality: String)] {
         let english = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("en") }
         let rank: (AVSpeechSynthesisVoice) -> Int = { voice in
             switch voice.quality {
@@ -71,7 +74,7 @@ public final class VoiceSpeaker: NSObject, AVSpeechSynthesizerDelegate, @uncheck
             .map { voice in
                 let accent = Locale.current.localizedString(forIdentifier: voice.language) ?? voice.language
                 let quality = voice.quality == .premium ? "Premium" : voice.quality == .enhanced ? "Enhanced" : "Standard"
-                return (voice.identifier, voice.name, "\(accent) · \(quality)")
+                return (voice.identifier, voice.name, accent, quality)
             }
     }
 

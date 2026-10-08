@@ -299,3 +299,41 @@ struct ReceiptMacRunTests {
         #expect(reading.merchant == "Sample Motors")
     }
 }
+
+/// Misses from 20 real shop receipts (public SROIE scans), rebuilt here as made-up slips with the same layouts.
+@Suite("Receipt fixes from internet receipts")
+struct ReceiptInternetFixTests {
+    let today = LocalDate(year: 2026, month: 10, day: 8)
+
+    @Test("A tax percentage next to Total is not the amount")
+    func percentNotAmount() {
+        let reading = ReceiptParser.read(["SAMPLE TEA HOUSE", "Total Incl. GST @6%", "8.60", "Cash 10.00", "Change 1.40"],
+                                         currency: .usd, today: today)
+        #expect(reading.amount == Money(minorUnits: 860, currency: .usd))
+        let sameLine = ReceiptParser.read(["SAMPLE HARDWARE", "Total (6% GST)   42.90"], currency: .usd, today: today)
+        #expect(sameLine.amount == Money(minorUnits: 4_290, currency: .usd))
+    }
+
+    @Test("The shop, not the cashier, the address or a misread logo")
+    func shopName() {
+        let cashier = ReceiptParser.read(["Cashier:", "TAN SAMPLE YEE", "SAMPLE BOOK STORE", "Total 9.00"], currency: .usd, today: today)
+        #expect(cashier.merchant == "Sample Book Store")
+        let address = ReceiptParser.read(["Lot 12, Jalan Sample 3", "81100 Johor Bahru", "SAMPLE TRADING SDN BHD", "Total 9.00"],
+                                         currency: .usd, today: today)
+        #expect(address.merchant == "Sample Trading Sdn Bhd")
+        let logo = ReceiptParser.read(["FRwOnL", "Sample Kitchen", "Total 9.00"], currency: .usd, today: today)
+        #expect(logo.merchant == "Sample Kitchen")
+        let broadway = ReceiptParser.read(["Broadway Pizza", "Grand Total 2,450"], currency: .pkr, today: today)
+        #expect(broadway.merchant == "Broadway Pizza")
+    }
+
+    @Test("Jumbled words")
+    func jumbled() {
+        #expect(ReceiptParser.isJumbled("FRwOnL"))
+        #expect(ReceiptParser.isJumbled("RSk"))
+        #expect(!ReceiptParser.isJumbled("McDonald"))
+        #expect(!ReceiptParser.isJumbled("PostEx"))
+        #expect(!ReceiptParser.isJumbled("KFC"))
+        #expect(!ReceiptParser.isJumbled("Imtiaz"))
+    }
+}

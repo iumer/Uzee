@@ -54,8 +54,9 @@ struct HomeView: View {
                 Button {
                     session.isVoicePresented = true
                 } label: {
-                    Image(systemName: "mic")
+                    SingingMic(size: 30)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Ask UZee")
                 .accessibilityIdentifier("home.voice")
                 NavigationLink(value: Route.settings) {

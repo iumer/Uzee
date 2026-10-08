@@ -10,6 +10,8 @@ struct VoiceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var typing: Bool
     @State private var showsPast = false
+    /// UZee dozes for a moment when the sheet opens, then wakes up to listen.
+    @State private var asleep = true
 
     init(session: AppSession) {
         self.session = session
@@ -62,7 +64,10 @@ struct VoiceSheet: View {
             .onAppear {
                 if let request = session.voiceRequest {
                     session.voiceRequest = nil
+                    asleep = false
                     model.submit(request)
+                } else {
+                    wakeUp()
                 }
             }
             .onChange(of: session.voiceRequest) { _, request in
@@ -210,7 +215,7 @@ struct VoiceSheet: View {
                 SingingMic(size: 40)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Talk to UZee")
+            .accessibilityLabel("Talk instead")
             .accessibilityIdentifier("voice.mic")
         }
         .padding(.horizontal, UZSpacing.xxl)
@@ -232,26 +237,38 @@ struct VoiceSheet: View {
                 .padding(.horizontal, UZSpacing.xxl)
                 .contentTransition(.opacity)
                 .animation(.easeOut(duration: 0.15), value: status)
+                .opacity(asleep ? 0 : 1)
                 .accessibilityIdentifier("voice.caption")
             if model.isThinking {
                 // Kept for UI tests and VoiceOver.
                 Text("Thinking…").font(.caption2).opacity(0.01).accessibilityIdentifier("voice.thinking")
             }
             HStack {
-                roundButton(model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                            label: model.muted ? "Speak replies" : "Mute replies", identifier: "voice.mute") {
-                    model.muted.toggle()
-                    if model.muted { session.smart.stopSpeaking() }
+                roundButton("keyboard", label: "Type instead", identifier: "voice.keyboard") {
+                    asleep = false
+                    model.endVoice()
                 }
                 Spacer()
-                Button { model.toggleListening() } label: {
-                    VoiceBlob(mood: mood, size: 130, level: session.smart.listeningLevel)
+                Button {
+                    if asleep {
+                        withAnimation(.spring(duration: 0.5, bounce: 0.45)) { asleep = false }
+                        model.startVoice()
+                    } else {
+                        model.toggleListening()
+                    }
+                } label: {
+                    VoiceBlob(mood: mood, size: 130, level: session.smart.listeningLevel, asleep: asleep)
+                        .offset(y: asleep ? 24 : 0)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(model.isSpeaking ? "Stop speaking" : model.isListening ? "Done talking" : "Talk")
                 .accessibilityIdentifier("voice.blob")
                 Spacer()
-                roundButton("xmark", label: "End voice", identifier: "voice.endVoice") { model.endVoice() }
+                roundButton(model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                            label: model.muted ? "Speak replies" : "Mute replies", identifier: "voice.mute") {
+                    model.muted.toggle()
+                    if model.muted { session.smart.stopSpeaking() }
+                }
             }
             .padding(.horizontal, UZSpacing.xxl)
         }
@@ -260,6 +277,18 @@ struct VoiceSheet: View {
             LinearGradient(colors: [UZColor.bg.opacity(0), Color(red: 0.25, green: 0.55, blue: 0.98).opacity(0.10)],
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
+        }
+    }
+
+    /// Opening Ask UZee: the dozing UZee wakes up with a bounce, then listens (when the mic is already allowed;
+    /// otherwise the first tap asks for it).
+    private func wakeUp() {
+        guard model.voiceMode, asleep else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(750))
+            withAnimation(.spring(duration: 0.55, bounce: 0.5)) { asleep = false }
+            try? await Task.sleep(for: .milliseconds(300))
+            if session.smart.canListen(), model.voiceMode, !model.isListening, !model.isThinking { model.startVoice() }
         }
     }
 
@@ -342,7 +371,7 @@ struct VoiceCardView: View {
         }
         accountPicker(action == .transfer ? "From" : action == .income || action == .repaidToMe || action == .borrow ? "Into" : "From",
                       selection: card.accountID, identifier: "voiceCard.account",
-                      none: action == .lend || action == .borrow ? "No account, just a record" : "Choose")
+                      none: action.isLoan ? "No account, just a record" : "Choose")
         if action == .transfer {
             accountPicker("To", selection: card.toAccountID, identifier: "voiceCard.to")
         }

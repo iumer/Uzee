@@ -9,6 +9,8 @@ struct UZeeLogo: View {
     var tile = false
     /// The mouth opens and closes as if singing (the Ask UZee mic, and while UZee speaks).
     var singing = false
+    /// Eyes closed, asleep (Ask UZee before it wakes up to listen).
+    var sleeping = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var start = Date()
 
@@ -94,7 +96,13 @@ struct UZeeLogo: View {
             faceLayer.fill(Path(ellipseIn: CGRect(x: cx - 34, y: 592, width: 68, height: 40)), with: .color(h(0x6EE7B7).opacity(0.55)))
         }
         let open = blink(t, still: still) * face
-        for cx: CGFloat in [398, 516] {
+        for cx: CGFloat in [398, 516] where sleeping {
+            var lid = Path()
+            lid.move(to: CGPoint(x: cx - 38, y: 536))
+            lid.addQuadCurve(to: CGPoint(x: cx + 38, y: 536), control: CGPoint(x: cx, y: 566))
+            faceLayer.stroke(lid, with: .color(ink), style: StrokeStyle(lineWidth: 22, lineCap: .round))
+        }
+        for cx: CGFloat in [398, 516] where !sleeping {
             let eyeHeight = 80 * open
             faceLayer.fill(Path(ellipseIn: CGRect(x: cx - 40, y: 540 - eyeHeight / 2, width: 80, height: eyeHeight)), with: .color(ink))
             if open > 0.6 {
