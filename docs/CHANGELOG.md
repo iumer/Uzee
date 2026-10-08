@@ -15,6 +15,7 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 
 ### Added
 - First launch: a short setup. Welcome, then tap the banks and wallets you use (HBL, Meezan, MCB, UBL, Allied, Bank Alfalah, SadaPay, NayaPay, Easypaisa, JazzCash, Wise, Cash) and type today's balance and currency for each, then the day your salary comes (budgets follow it). "Try with sample data" skips it.
+- Settings › Privacy and data: "Lock with Face ID" (asks once when you turn it on; then each time you come back to UZee) and "Export to CSV" (every transaction, to share, save to Files or open in Numbers/Excel; text that looks like a formula is made safe).
 - New account: one-tap bank and wallet names that also set the type.
 - Add: everyday categories (Groceries, Dining out, Fuel, Food delivery, Ride-hailing, Mobile; Salary for income) are one tap even before you have recent ones.
 - UZee helper: Ask UZee is now a spoken conversation, like Siri. Opening it starts listening (once the microphone is allowed); it notices when you stop talking, answers aloud and listens again until you say bye, tap the orb or go quiet. With Apple Intelligence on, Apple's on-device model holds the conversation and uses the app as tools: answer questions, find transactions, give an overview, prepare a card and save or cancel it when you say yes or no. Without it, UZee's rules still understand common sentences, overviews ("How am I doing?") and searches ("What did I spend on Foodpanda?"). Replies can be muted.

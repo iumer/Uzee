@@ -9,6 +9,12 @@ public struct RootView: View {
     @State private var showingSplash = !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory")
     /// First-launch setup, once the splash has gone.
     @State private var showingOnboarding = false
+    /// Face ID lock (SEC-01): locked at launch and whenever UZee leaves the screen, when the owner turned it on.
+    @State private var isLocked = AppLock.isOn
+    @State private var isUnlocking = false
+    /// Ask once per return; the Face ID prompt itself makes the app inactive, so a cancel mustn't re-prompt.
+    @State private var promptOnActive = AppLock.isOn
+    @Environment(\.scenePhase) private var scenePhase
 
     public init(session: AppSession) {
         self.session = session
@@ -55,11 +61,35 @@ public struct RootView: View {
                 LaunchSplash(isShowing: $showingSplash).transition(.opacity)
             }
         }
+        .overlay {
+            if isLocked {
+                LockScreen { unlock() }.transition(.opacity)
+            }
+        }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            switch phase {
+            case .background:
+                if AppLock.isOn { isLocked = true; promptOnActive = true }
+            case .active:
+                if isLocked, promptOnActive { promptOnActive = false; unlock() }
+            default: break
+            }
+        }
         .fullScreenCover(isPresented: $showingOnboarding) {
             OnboardingView(session: session) { showingOnboarding = false }
         }
         .onChange(of: showingSplash, initial: true) { _, splash in
             if !splash, OnboardingView.isNeeded(session) { showingOnboarding = true }
+        }
+    }
+
+    private func unlock() {
+        guard !isUnlocking else { return }
+        isUnlocking = true
+        Task {
+            let ok = await AppLock.unlock()
+            isUnlocking = false
+            if ok { withAnimation(.easeOut(duration: 0.25)) { isLocked = false } }
         }
     }
 

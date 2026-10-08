@@ -40,6 +40,21 @@ struct ActivityTests {
         return (rows, snapshot, cats)
     }
 
+    @Test("EXP-01 CSV export: oldest first, signed per account, quoted text, no formulas")
+    func csvExport() {
+        let (rows, snapshot, _) = fixture()
+        let tricky = txn(7, 10, "=HYPERLINK(\"x\")", nil, "HBL", rs(500), note: "Milk, eggs")
+        var deleted = txn(7, 11, "Gone", nil, "HBL", rs(1))
+        deleted.deletedAt = Date()
+        let csv = CSVExport.transactions(rows + [tricky, deleted], ledger: snapshot)
+        let lines = csv.components(separatedBy: "\r\n").filter { !$0.isEmpty }
+        #expect(lines.first == "Date,Type,Account,Amount,Currency,Category,Payee,Note,Status")
+        #expect(lines.count == 7)
+        #expect(lines[1].hasPrefix("2026-10-03,Expense,Easypaisa,-1850,PKR,Transport › Ride-hailing,Careem"))
+        #expect(lines[6] == "2026-10-07,Expense,HBL,-500,PKR,,\"'=HYPERLINK(\"\"x\"\")\",\"Milk, eggs\",Posted")
+        #expect(!csv.contains("Gone"))
+    }
+
     @Test("TXN-022 filter by account; TXN-024 type and date range")
     func accountTypeDate() {
         let (rows, snapshot, _) = fixture()

@@ -1,7 +1,7 @@
 import SwiftUI
 import UZeeCore
 
-/// Settings (SCR-04). M2 adds accounts and the exchange rate; other sections arrive with their features.
+/// Settings (SCR-04): money setup, import and voice, privacy and export, sample data.
 struct SettingsView: View {
     @Bindable var session: AppSession
     @State private var confirmingRemove = false
@@ -49,6 +49,19 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.voice")
             } header: {
                 Text("Import and voice")
+            }
+            Section {
+                LockToggle()
+                NavigationLink {
+                    ExportView(session: session)
+                } label: {
+                    SettingsLabel("Export to CSV", symbol: "square.and.arrow.up", color: Color(uiColor: .systemBlue))
+                }
+                .accessibilityIdentifier("settings.export")
+            } header: {
+                Text("Privacy and data")
+            } footer: {
+                Text("Your data stays on this iPhone. The lock asks for \(AppLock.methodName) each time you come back to UZee.")
             }
             Section {
                 if session.isSampleMode {
