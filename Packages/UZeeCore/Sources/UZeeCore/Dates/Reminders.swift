@@ -65,7 +65,7 @@ public struct ReminderSettings: Hashable, Sendable, Codable {
 
 /// One local notification to schedule.
 public struct PlannedReminder: Hashable, Sendable {
-    public enum Kind: String, Sendable { case bill, event, loan }
+    public enum Kind: String, Sendable { case bill, event, loan, prayer }
 
     /// Stable, so rescheduling replaces rather than duplicates: "uzee.bill.<item>.<date>".
     public var id: String

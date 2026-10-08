@@ -31,7 +31,8 @@ final class AppContainer {
                              recurring: database.map(Self.recurringClient) ?? .unavailable,
                              smart: Self.smartClient(),
                              calendar: database.map(Self.calendarClient) ?? .unavailable,
-                             backup: database.flatMap { db in files.map { Self.backupClient(db, $0, info: info) } } ?? .unavailable)
+                             backup: database.flatMap { db in files.map { Self.backupClient(db, $0, info: info) } } ?? .unavailable,
+                             location: Self.locationClient())
         let session = session
         NotificationScheduler.shared.start { response in
             await MainActor.run {
@@ -66,6 +67,18 @@ final class AppContainer {
                 Log.data.info("Backup restored")
                 return summary
             })
+    }
+
+    /// Core Location for namaz times and the Qibla compass (UZeeSystem).
+    private static func locationClient() -> LocationClient {
+        let service = LocationService.shared
+        return LocationClient(
+            currentPlace: {
+                let place = try await service.currentPlace()
+                return LocationClient.Place(latitude: place.latitude, longitude: place.longitude, city: place.city)
+            },
+            startHeading: { service.startHeading($0) },
+            stopHeading: { service.stopHeading() })
     }
 
     /// Custom events, reminder settings (UZeeData) and local notifications (UZeeSystem), M7.

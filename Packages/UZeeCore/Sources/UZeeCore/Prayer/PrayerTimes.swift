@@ -188,3 +188,51 @@ public enum Qibla {
         return PrayerTimes.mod(d(angle), 360)
     }
 }
+
+/// The owner's namaz preferences and last known place (kept on the phone).
+public struct PrayerSettings: Hashable, Sendable, Codable {
+    public var latitude: Double?
+    public var longitude: Double?
+    public var city: String?
+    public var method: PrayerMethod
+    public var asr: AsrMethod
+    /// A notification at the start of each prayer.
+    public var notify: Bool
+
+    public init(latitude: Double? = nil, longitude: Double? = nil, city: String? = nil, method: PrayerMethod = .karachi,
+                asr: AsrMethod = .hanafi, notify: Bool = false) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.city = city
+        self.method = method
+        self.asr = asr
+        self.notify = notify
+    }
+
+    public var hasPlace: Bool { latitude != nil && longitude != nil }
+
+    public func windows(_ date: LocalDate, timeZone: TimeZone) -> [PrayerWindow] {
+        guard let latitude, let longitude else { return [] }
+        return PrayerTimes.windows(date, latitude: latitude, longitude: longitude, timeZone: timeZone, method: method, asr: asr)
+    }
+
+    /// One notification at each prayer's start for the next `days` days, from `now` on.
+    public func reminders(from now: Date, timeZone: TimeZone, days: Int = 4) -> [PlannedReminder] {
+        guard notify, hasPlace else { return [] }
+        let today = LocalDate(now, in: timeZone)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        var result: [PlannedReminder] = []
+        for offset in 0..<days {
+            let date = today.addingDays(offset)
+            for window in windows(date, timeZone: timeZone) where window.start > now {
+                let parts = calendar.dateComponents([.hour, .minute], from: window.start)
+                let ends = window.end.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: timeZone))
+                result.append(PlannedReminder(id: "\(PlannedReminder.idPrefix)prayer.\(window.prayer.rawValue).\(date)", kind: .prayer,
+                                              fireDate: date, minuteOfDay: (parts.hour ?? 0) * 60 + (parts.minute ?? 0),
+                                              title: "\(window.prayer.name) time", body: "Until \(ends).", itemID: nil, scheduledDate: date))
+            }
+        }
+        return result
+    }
+}

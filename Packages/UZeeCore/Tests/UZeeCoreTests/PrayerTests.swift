@@ -46,3 +46,19 @@ struct PrayerTests {
         #expect(abs(Qibla.bearing(latitude: 51.5074, longitude: -0.1278) - 118.99) < 0.1)
     }
 }
+
+@Suite("Prayer reminders")
+struct PrayerReminderTests {
+    @Test("One at each start still to come, only when on and placed")
+    func reminders() {
+        let zone = TimeZone(identifier: "Asia/Karachi")!
+        var settings = PrayerSettings(latitude: 24.8607, longitude: 67.0011, notify: true)
+        let noon = LocalDate(year: 2026, month: 10, day: 8).startDate(in: zone).addingTimeInterval(13 * 3_600)
+        let planned = settings.reminders(from: noon, timeZone: zone, days: 2)
+        #expect(planned.map(\.title) == ["Asr time", "Maghrib time", "Isha time", "Fajr time", "Dhuhr time", "Asr time", "Maghrib time", "Isha time"])
+        #expect(planned[0].minuteOfDay == 16 * 60 + 33)
+        settings.notify = false
+        #expect(settings.reminders(from: noon, timeZone: zone).isEmpty)
+        #expect(PrayerSettings(notify: true).reminders(from: noon, timeZone: zone).isEmpty)
+    }
+}

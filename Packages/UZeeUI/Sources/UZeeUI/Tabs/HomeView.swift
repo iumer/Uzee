@@ -37,6 +37,7 @@ struct HomeView: View {
                     let model = RecurringModel(session: session)
                     overdueStrip(model)
                     availableCard
+                    if session.prayer.hasPlace { PrayerHomeCard(session: session) }
                     HomeCards(session: session, model: model, paying: $paying)
                     accountsCard
                 }
@@ -131,5 +132,45 @@ struct HomeView: View {
                 }
             }
         }
+    }
+}
+
+/// Home: the prayer now and when it ends, once namaz times are set up; opens Namaz & Qibla.
+struct PrayerHomeCard: View {
+    @Bindable var session: AppSession
+
+    var body: some View {
+        NavigationLink {
+            PrayerView(session: session)
+        } label: {
+            TimelineView(.everyMinute) { context in
+                let now = context.date
+                let windows = session.prayer.windows(LocalDate(now, in: .current), timeZone: .current)
+                let current = windows.first { $0.contains(now) }
+                let next = windows.first { $0.start > now }
+                UZCard(padding: UZSpacing.l) {
+                    HStack(spacing: UZSpacing.l) {
+                        Image(systemName: "moon.stars.fill").font(.title3).foregroundStyle(UZColor.tint).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                            if let current {
+                                Text("\(current.prayer.name) · now").font(.subheadline.weight(.semibold))
+                                Text("Ends \(current.end.formatted(date: .omitted, time: .shortened))"
+                                     + (next.map { " · \($0.prayer.name) at \($0.start.formatted(date: .omitted, time: .shortened))" } ?? ""))
+                                    .font(.caption).foregroundStyle(UZColor.label2)
+                            } else if let next {
+                                Text("Next: \(next.prayer.name)").font(.subheadline.weight(.semibold))
+                                Text("At \(next.start.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(UZColor.label2)
+                            } else {
+                                Text("Namaz & Qibla").font(.subheadline.weight(.semibold))
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(UZColor.label3)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.prayer")
     }
 }

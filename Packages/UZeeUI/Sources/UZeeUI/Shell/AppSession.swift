@@ -78,11 +78,20 @@ public final class AppSession {
     public let smart: SmartClient
     public let calendar: CalendarClient
     public let backup: BackupClient
+    public let location: LocationClient
+    /// Namaz preferences and place, kept on the phone (UserDefaults; not part of the ledger).
+    public var prayer: PrayerSettings = AppSession.loadPrayer() {
+        didSet {
+            if let data = try? JSONEncoder().encode(prayer) { UserDefaults.standard.set(data, forKey: Self.prayerKey) }
+            rescheduleReminders()
+        }
+    }
+    static let prayerKey = "uzee.prayer"
 
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
                 activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable,
                 recurring: RecurringClient = .unavailable, smart: SmartClient = .unavailable, calendar: CalendarClient = .unavailable,
-                backup: BackupClient = .unavailable) {
+                backup: BackupClient = .unavailable, location: LocationClient = .unavailable) {
         self.info = info
         self.isDatabaseReady = isDatabaseReady
         self.sampleData = sampleData
@@ -94,6 +103,7 @@ public final class AppSession {
         self.smart = smart
         self.calendar = calendar
         self.backup = backup
+        self.location = location
         isSampleMode = (try? sampleData.isActive()) ?? false
         reload()
     }
@@ -129,14 +139,32 @@ public final class AppSession {
     /// Coalesced, so a burst of saves schedules once.
     public func rescheduleReminders() {
         scheduling?.cancel()
-        let plan = ReminderPlanner.plan(recurring: recurring, events: events, loans: loanReminders, settings: reminderSettings,
-                                        today: today, minuteNow: Self.minuteNow(), format: { MoneyFormatter.string($0) })
+        let prayers = prayer.reminders(from: Date(), timeZone: .current)
+        let money = ReminderPlanner.plan(recurring: recurring, events: events, loans: loanReminders, settings: reminderSettings,
+                                         today: today, minuteNow: Self.minuteNow(), format: { MoneyFormatter.string($0) })
+        // Bills come first; prayers fill what's left of the 60 (iOS keeps 64 at most).
+        let plan = money + prayers.prefix(max(0, ReminderPlanner.cap - money.count))
         let calendar = calendar
         scheduling = Task {
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
             await calendar.schedule(plan)
         }
+    }
+
+    static func loadPrayer() -> PrayerSettings {
+        guard let data = UserDefaults.standard.data(forKey: prayerKey),
+              let saved = try? JSONDecoder().decode(PrayerSettings.self, from: data) else { return PrayerSettings() }
+        return saved
+    }
+
+    /// Finds where the phone is for namaz times; false when location isn't allowed.
+    public func updatePrayerPlace() async -> Bool {
+        guard let place = try? await location.currentPlace() else { return false }
+        prayer.latitude = place.latitude
+        prayer.longitude = place.longitude
+        prayer.city = place.city
+        return true
     }
 
     static func minuteNow() -> Int {

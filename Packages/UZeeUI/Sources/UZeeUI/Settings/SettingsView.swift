@@ -48,13 +48,19 @@ struct SettingsView: View {
                 }
                 .accessibilityIdentifier("settings.import")
                 NavigationLink {
+                    PrayerView(session: session)
+                } label: {
+                    SettingsLabel("Namaz times & Qibla", symbol: "moon.stars", color: Color(uiColor: .systemGreen))
+                }
+                .accessibilityIdentifier("settings.prayer")
+                NavigationLink {
                     SiriVoiceView(session: session)
                 } label: {
                     SettingsLabel("Siri & voice", symbol: "waveform", color: Color(uiColor: .systemPurple))
                 }
                 .accessibilityIdentifier("settings.voice")
             } header: {
-                Text("Import and voice")
+                Text("Import, voice and namaz")
             }
             Section {
                 LockToggle()

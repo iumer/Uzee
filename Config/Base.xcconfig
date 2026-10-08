@@ -20,3 +20,4 @@ INFOPLIST_KEY_NSCameraUsageDescription = UZee uses the camera to photograph rece
 INFOPLIST_KEY_NSMicrophoneUsageDescription = UZee listens when you tap the mic in Ask UZee, so you can ask about your money or log something by voice.
 INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = UZee turns what you say in Ask UZee into text on this iPhone. Your voice is not sent anywhere.
 INFOPLIST_KEY_NSFaceIDUsageDescription = UZee uses Face ID to unlock the app when you turn on the lock in Settings.
+INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = UZee uses your location to work out namaz times and the Qibla direction where you are. It stays on this iPhone.
