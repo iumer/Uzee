@@ -47,6 +47,8 @@ public struct VoiceCommand: Equatable, Sendable {
     public var payee: String?
     public var date: LocalDate?
     public var question: VoiceQuestion?
+    /// "I owe Ammi 250,000", "Usama owes me 5,000": a debt to record, with no money moving through an account now.
+    public var noMoneyMoved = false
 
     public init(action: VoiceAction, amount: SpokenAmount? = nil, person: String? = nil, account: String? = nil,
                 toAccount: String? = nil, category: String? = nil, payee: String? = nil, date: LocalDate? = nil,
@@ -122,8 +124,18 @@ public enum VoiceRuleParser {
                                 category: category, question: question)
         }
 
-        let action = classifyAction(t, amount: amount, accounts: accounts)
+        var action = classifyAction(t, amount: amount, accounts: accounts)
+        // "I owe my mom 250000", "I have to pay Ammi back 5k", "Usama owes me 5000": a debt, not spending.
+        // "I have to pay…" is a debt only to a person ("my mom"), not to a bill.
+        let owedByMe = (has(t, [" i owe ", " i still owe ", " owe my ", " owe to "])
+                        || (person != nil && has(t, [" i have to pay ", " i need to pay ", " i have to return "])))
+            && !has(t, [" owes me ", " owe me "])
+        let owedToMe = has(t, [" owes me ", " owe me ", " has to pay me ", " needs to pay me ", " has to return me "])
+        if amount != nil, owedByMe || owedToMe, action != .repaidByMe, action != .repaidToMe {
+            action = owedToMe ? .lend : .borrow
+        }
         var command = VoiceCommand(action: action, amount: amount, date: date)
+        command.noMoneyMoved = (owedByMe || owedToMe) && accounts.isEmpty && (action == .lend || action == .borrow)
         switch action {
         case .transfer:
             let ordered = orderTransfer(accounts, in: t)

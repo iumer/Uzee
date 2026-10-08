@@ -273,3 +273,29 @@ struct VoiceMacRunTests {
         #expect(parse("anything due this week").question == .upcoming)
     }
 }
+
+@Suite("Debts said out loud")
+struct VoiceDebtTests {
+    @Test("'I owe' is borrowing with no account; 'owes me' is lending", arguments: [
+        "I owe 250000 to my Mom", "I owe my mom 250000", "I owe 2.5 lakh to my mother", "add that I owe Ammi 250000",
+        "I have to pay my mom 250000"
+    ])
+    func iOwe(_ sentence: String) {
+        let command = parse(sentence)
+        #expect(command.action == .borrow)
+        #expect(command.noMoneyMoved)
+        #expect(command.person == "Ammi")
+        #expect(command.amount?.value == 250_000)
+    }
+
+    @Test("Someone owes me")
+    func owesMe() {
+        let command = parse("Usama owes me 5000")
+        #expect(command.action == .lend)
+        #expect(command.noMoneyMoved)
+        #expect(command.person == "Usama")
+        #expect(parse("my mom lent me 250000").action == .borrow)
+        #expect(!parse("my mom lent me 250000").noMoneyMoved)
+        #expect(parse("How much do I owe Ammi?").action == .question)
+    }
+}

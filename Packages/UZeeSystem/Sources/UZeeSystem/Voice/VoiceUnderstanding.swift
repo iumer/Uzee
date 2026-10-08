@@ -101,7 +101,10 @@ enum ModelParser {
     /// Checks what the model filled in against the user's own names; amounts are read by `AmountPhrase`.
     static func command(from generated: Fields, said text: String, vocabulary: VoiceVocabulary,
                         today: LocalDate) -> VoiceCommand? {
-        guard let action = VoiceAction(rawValue: generated.action), action != .unknown else { return nil }
+        // The model sometimes names a debt in its own words.
+        let raw = generated.action.trimmingCharacters(in: .whitespaces).lowercased()
+        let debtWords = ["owe": VoiceAction.borrow, "iowe": .borrow, "debt": .borrow, "owed": .lend, "owesme": .lend]
+        guard let action = VoiceAction(rawValue: generated.action) ?? debtWords[raw], action != .unknown else { return nil }
         let rules = VoiceRuleParser.parse(text, vocabulary: vocabulary, today: today)
         func said(_ value: String) -> String? {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -115,6 +118,7 @@ enum ModelParser {
                                    person: person, account: account,
                                    toAccount: VoiceRuleParser.resolve(said(generated.toAccount), among: vocabulary.accounts),
                                    category: category, payee: said(generated.payee).map(ReceiptParser.tidy), date: rules.date)
+        if debtWords[raw] != nil || (rules.noMoneyMoved && rules.action == action) { command.noMoneyMoved = true }
         if action == .question {
             command.question = question(generated.question, person: person, category: category, account: account,
                                         period: VoicePeriod(rawValue: generated.period) ?? .thisMonth)

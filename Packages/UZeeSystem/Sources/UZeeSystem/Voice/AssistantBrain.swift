@@ -42,7 +42,8 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
         Pakistani rupees unless the user says another currency. Today is \(today.year)-\(today.month)-\(today.day).
 
         Use the tools for anything about the user's money; never guess numbers. To log something (spent, received, \
-        transferred, lent, borrowed, paid back) call prepareEntry. It shows a card; then tell the user what is on it \
+        transferred, lent, borrowed, paid back, or a debt such as "I owe my mom 250000" = borrow and "Ali owes me 5000" = \
+        lend, with justADebt true) call prepareEntry. It shows a card; then tell the user what is on it \
         and ask them to confirm. Only call confirmEntry after the user clearly agrees, and cancelEntry if they say no. \
         If they want a change, call prepareEntry again with the corrected details. If prepareEntry says something is \
         missing, ask the user for it. For questions use answerQuestion, findTransactions or overview. To be reminded \
@@ -110,6 +111,8 @@ struct PrepareEntryTool: Tool {
         var payee: String
         @Guide(description: "When it happened, as the user said it, such as today, yesterday or 5 October. Empty for today.")
         var when: String
+        @Guide(description: "True when the user only records a debt and no money moves now: 'I owe my mom 250000' (borrow) or 'Ali owes me 5000' (lend).")
+        var justADebt: Bool
     }
 
     func call(arguments: Arguments) async throws -> String {
@@ -120,6 +123,7 @@ struct PrepareEntryTool: Tool {
             return "That isn't something UZee can log. Ask the user what they want to record."
         }
         command.date = VoiceRuleParser.parse(arguments.when, vocabulary: vocabulary, today: today).date
+        if arguments.justADebt, command.action == .borrow || command.action == .lend { command.noMoneyMoved = true }
         return await actions.prepare(command)
     }
 }

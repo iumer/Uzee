@@ -433,6 +433,9 @@ final class VoiceModel {
         if let named = command.account, accountID == nil {
             // An account that isn't in UZee ("JazzCash") must be picked, not swapped for another one quietly.
             problem = "There's no account called \(named). Pick one."
+        } else if command.noMoneyMoved {
+            // "I owe Ammi 250,000": only a record of the debt; no account balance changes.
+            accountID = nil
         } else if accountID == nil {
             // "$20" goes to a dollar account; otherwise the last used account.
             if let currency = command.amount?.currency, currency != ledger.base {
@@ -589,6 +592,13 @@ final class VoiceModel {
             guard session.perform("Couldn't save. Nothing was changed. Try again.", {
                 try session.peopleClient.recordLoan(direction, personID, amount, accountID, date, nil, nil)
             }) else { return nil }
+            let money = MoneyFormatter.string(amount)
+            if accountID == nil {
+                // Just a record of the debt.
+                let said = direction == .lent ? "\(name) owes you \(money)" : "You owe \(name) \(money)"
+                session.toasts.show(said)
+                return "Saved · \(said)."
+            }
             session.toasts.show(direction == .lent ? "Lent \(MoneyFormatter.string(amount)) to \(name)" : "Borrowed \(MoneyFormatter.string(amount)) from \(name)")
             return direction == .lent ? "Saved · Lent \(MoneyFormatter.string(amount)) to \(name)." : "Saved · Borrowed \(MoneyFormatter.string(amount)) from \(name)."
         default:

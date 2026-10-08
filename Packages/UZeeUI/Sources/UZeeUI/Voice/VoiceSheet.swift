@@ -305,7 +305,8 @@ struct VoiceCardView: View {
             .accessibilityIdentifier("voiceCard.person")
         }
         accountPicker(action == .transfer ? "From" : action == .income || action == .repaidToMe || action == .borrow ? "Into" : "From",
-                      selection: card.accountID, identifier: "voiceCard.account")
+                      selection: card.accountID, identifier: "voiceCard.account",
+                      none: action == .lend || action == .borrow ? "No account, just a record" : "Choose")
         if action == .transfer {
             accountPicker("To", selection: card.toAccountID, identifier: "voiceCard.to")
         }
@@ -334,9 +335,9 @@ struct VoiceCardView: View {
                 })
     }
 
-    private func accountPicker(_ label: String, selection: Binding<UUID?>, identifier: String) -> some View {
+    private func accountPicker(_ label: String, selection: Binding<UUID?>, identifier: String, none: String = "Choose") -> some View {
         Picker(label, selection: selection) {
-            Text("Choose").tag(UUID?.none)
+            Text(none).tag(UUID?.none)
             ForEach(ledger.activeAccounts) { account in
                 Text(account.currency == ledger.base ? account.name : "\(account.name) (\(account.currency.code))")
                     .tag(UUID?.some(account.id))
