@@ -17,6 +17,9 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 - The review screen says which bank the statement was read as, and warns when the statement's currency differs from the account's.
 - An empty statement (e.g. a Wise currency with no activity) says so instead of "can't read this format".
 
+### Fixed
+- Ask UZee: saving a confirmation card no longer closes the app. The card's fields read the card after Save had cleared it.
+
 ## [0.9.3] build 12 — 2026-10-07 — "Wallet pal" icon
 
 ### Changed

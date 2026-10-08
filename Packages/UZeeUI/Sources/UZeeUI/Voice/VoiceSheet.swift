@@ -185,7 +185,11 @@ struct VoiceCardView: View {
     private var ledger: LedgerSnapshot { session.ledger }
 
     var body: some View {
-        if let binding = Binding($model.card) {
+        if let current = model.card {
+            // Not `Binding($model.card)`: that force-unwraps, and Save clears the card while these
+            // fields are still on screen, which crashed the app.
+            let binding = Binding<VoiceCard>(get: { model.card ?? current },
+                                             set: { value in if model.card != nil { model.card = value } })
             UZCard {
                 VStack(alignment: .leading, spacing: UZSpacing.l) {
                     Text("Check and save").font(.headline)
