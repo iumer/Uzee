@@ -8,7 +8,9 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
-## [Unreleased] — Statement readers for MCB, HBL, Meezan, SadaPay, NayaPay and Wise
+## [0.9.4] build 13 — 2026-10-08 — Statement readers for MCB, HBL, Meezan, SadaPay, NayaPay and Wise
+
+Checked on the owner's Mac against their real statements (the files never left the Mac): every file reads in full, and balances or header totals match.
 
 ### Added
 - Statement import recognises MCB (PDF and CSV), HBL, Meezan Bank, SadaPay, NayaPay (PDF and CSV) and Wise (one PDF per currency), learned from the owner's real statements. Test data is made up in the same layouts; no real statement is in the repository.
