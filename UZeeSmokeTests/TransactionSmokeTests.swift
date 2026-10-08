@@ -23,6 +23,12 @@ final class TransactionSmokeTests: XCTestCase {
         target.tap()
     }
 
+    /// iPad shows the tabs as a sidebar or top bar, not a tab bar.
+    private func tapTab(_ name: String) {
+        let tabBarButton = app.tabBars.buttons[name]
+        if tabBarButton.waitForExistence(timeout: 2) { tabBarButton.tap() } else { app.buttons[name].firstMatch.tap() }
+    }
+
     private func type(_ text: String, into identifier: String, clearing: Bool = false) {
         let field = element(identifier)
         XCTAssertTrue(field.waitForExistence(timeout: 30), "\(identifier) missing")
@@ -87,7 +93,7 @@ final class TransactionSmokeTests: XCTestCase {
     func testSMK009_SMK010_editThenDelete() {
         addHBL()
         addExpense("1500")
-        app.tabBars.buttons["Activity"].firstMatch.tap()
+        tapTab("Activity")
         tap("txn.Food › Groceries")
         tap("detail.edit")
         type("1650", into: "add.amount", clearing: true)
@@ -97,7 +103,7 @@ final class TransactionSmokeTests: XCTestCase {
         XCTAssertEqual(element("detail.amount").label, "1,650 rupees")
         tap("detail.delete")
         tap("detail.confirmDelete")
-        app.tabBars.buttons["Home"].firstMatch.tap()
+        tapTab("Home")
         XCTAssertEqual(balance(of: "HBL"), "10,000 rupees")
     }
 

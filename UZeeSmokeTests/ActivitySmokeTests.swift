@@ -47,7 +47,11 @@ final class ActivitySmokeTests: XCTestCase {
 
     private func search(_ text: String) {
         let field = app.searchFields.firstMatch
-        if !field.waitForExistence(timeout: 3) { app.swipeDown() }
+        if !field.waitForExistence(timeout: 3) {
+            // iPad keeps search behind a toolbar button; iPhone hides the field until a pull down.
+            let button = app.navigationBars.buttons["Search"].firstMatch
+            if button.exists { button.tap() } else { app.swipeDown() }
+        }
         XCTAssertTrue(field.waitForExistence(timeout: 30), "Search field missing")
         field.tap()
         field.typeText(text)

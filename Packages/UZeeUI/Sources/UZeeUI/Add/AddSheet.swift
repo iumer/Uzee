@@ -53,26 +53,34 @@ struct AddSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                amountSection
-                if kind == .transfer { transferSection } else { detailsSection }
-                Section {
-                    DatePicker("Date", selection: $date)
-                        .accessibilityIdentifier("add.date")
-                    TextField("Note", text: $note, axis: .vertical)
-                        .accessibilityIdentifier("add.note")
-                    Toggle("Pending (not in balance yet)", isOn: $isPending)
-                        .accessibilityIdentifier("add.pending")
-                }
-                if let problem {
+            ScrollViewReader { proxy in
+                Form {
+                    amountSection
+                    if kind == .transfer { transferSection } else { detailsSection }
                     Section {
-                        Label(problem, systemImage: "exclamationmark.circle.fill")
-                            .foregroundStyle(UZColor.negative)
-                            // Some toolchains read the symbol name as the label; say the message itself.
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(problem)
-                            .accessibilityIdentifier("add.problem")
+                        DatePicker("Date", selection: $date)
+                            .accessibilityIdentifier("add.date")
+                        TextField("Note", text: $note, axis: .vertical)
+                            .accessibilityIdentifier("add.note")
+                        Toggle("Pending (not in balance yet)", isOn: $isPending)
+                            .accessibilityIdentifier("add.pending")
                     }
+                    if let problem {
+                        Section {
+                            Label(problem, systemImage: "exclamationmark.circle.fill")
+                                .foregroundStyle(UZColor.negative)
+                                // Some toolchains read the symbol name as the label; say the message itself.
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(problem)
+                                .accessibilityIdentifier("add.problem")
+                        }
+                        .id("problem")
+                    }
+                }
+                // The message sits under the form; on iPad's shorter sheet it would be out of sight.
+                .onChange(of: problem) { _, message in
+                    guard message != nil else { return }
+                    withAnimation { proxy.scrollTo("problem", anchor: .bottom) }
                 }
             }
             .navigationTitle(title)

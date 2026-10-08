@@ -19,6 +19,8 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 
 ### Fixed
 - Ask UZee: saving a confirmation card no longer closes the app. The card's fields read the card after Save had cleared it.
+- Add: on iPad the "Enter an amount"-style message is scrolled into view; it sat below the bottom of the shorter sheet.
+- Smoke tests on iPad: tabs are tapped through the sidebar or top bar, and search opens from its toolbar button.
 
 ## [0.9.3] build 12 — 2026-10-07 — "Wallet pal" icon
 
