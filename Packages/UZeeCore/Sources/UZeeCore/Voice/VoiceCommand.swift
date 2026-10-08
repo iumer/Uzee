@@ -108,7 +108,15 @@ public enum VoiceRuleParser {
         let date = findDate(t, original: original, today: today)
 
         if isQuestion(t, original: original) {
-            let question = classifyQuestion(t, person: person, account: accounts.first?.name, category: category)
+            var question = classifyQuestion(t, person: person, account: accounts.first?.name, category: category)
+            // "How much did I spend on food?": keep the word, so the answer is about food or says it can't find it,
+            // never the whole month's spending as if it were food.
+            if case .spent(nil, let period)? = question, let range = t.range(of: " on ") {
+                let word = t[range.upperBound...].split(separator: " ").first.map(String.init) ?? ""
+                if !word.isEmpty, !["this", "last", "the", "today", "my", "it", "average"].contains(word) {
+                    question = .spent(category: word, period: period)
+                }
+            }
             return VoiceCommand(action: question == nil ? .unknown : .question, person: person, account: accounts.first?.name,
                                 category: category, question: question)
         }
@@ -290,6 +298,11 @@ public enum VoiceRuleParser {
         if t.contains(" day before yesterday ") { return today.addingDays(-2) }
         if t.contains(" yesterday ") { return today.addingDays(-1) }
         if t.contains(" today ") { return today }
+        // "last Friday", "on Monday": the most recent one before today.
+        for (index, name) in ReminderPhrase.weekdays.enumerated() where t.contains(" " + name + " ") {
+            let back = (today.weekday - (index + 1) + 7) % 7
+            return today.addingDays(-(back == 0 ? 7 : back))
+        }
         if let found = TextScan.dates(in: original, defaultYear: today.year).first?.date {
             return found > today ? LocalDate(year: found.year - 1, month: found.month, day: found.day) : found
         }
@@ -362,6 +375,13 @@ public enum VoiceRuleParser {
         }
         if has(t, [" transfer", " moved ", " move ", " withdrew", " withdraw"]) || (accounts.count >= 2 && t.contains(" from ") && t.contains(" to ")) {
             return .transfer
+        }
+        // "Ali sent me 5,000" is money in; "Paid maid salary", "Got a haircut for 800" are money out.
+        if has(t, [" sent me", " gave me", " paid me", " got paid", " transferred me"]) { return .income }
+        if has(t, [" spent", " paid ", " i paid", " bought", " purchase", " paid for "]) { return .expense }
+        if has(t, [" got a ", " got an ", " got some ", " got new "]),
+           !has(t, [" salary", " bonus", " payment", " refund", " gift", " cashback", " profit", " commission", " raise"]) {
+            return .expense
         }
         if has(t, [" received", " got paid", " salary", " income", " earned", " credited", " deposit", " got ", " freelance", " bonus"]) {
             return .income

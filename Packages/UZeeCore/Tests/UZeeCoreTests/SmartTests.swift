@@ -234,3 +234,47 @@ struct DuplicateTests {
         #expect(found[4] == nil)
     }
 }
+
+@Suite("Receipt review fixes")
+struct ReceiptReviewTests {
+    let today = LocalDate(year: 2026, month: 10, day: 8)
+
+    func amount(_ lines: [String]) -> Money? { ReceiptParser.read(lines, currency: .pkr, today: today).amount }
+
+    @Test("Cash paid and change aren't the total")
+    func paidAmount() {
+        #expect(amount(["Shop", "Total   2,773", "Paid Amount   3,000", "Change   227"]) == Money(minorUnits: 277_300, currency: .pkr))
+    }
+
+    @Test("The amount after discount wins")
+    func netPayable() {
+        #expect(amount(["Shop", "Total Amount   3,000", "Discount   -300", "Net Payable   2,700"]) == Money(minorUnits: 270_000, currency: .pkr))
+    }
+
+    @Test("Sub Total split into columns is still a subtotal")
+    func splitSubTotal() {
+        #expect(amount(["Shop", "Sub   Total   2,500", "GST   450", "Total   2,950"]) == Money(minorUnits: 295_000, currency: .pkr))
+        let pieces = [
+            ReceiptPiece(text: "Sub", x: 0.1, y: 0.50, width: 0.08, height: 0.02),
+            ReceiptPiece(text: "Total", x: 0.19, y: 0.50, width: 0.1, height: 0.02),
+            ReceiptPiece(text: "2,500", x: 0.7, y: 0.50, width: 0.1, height: 0.02),
+            ReceiptPiece(text: "Total", x: 0.19, y: 0.40, width: 0.1, height: 0.02),
+            ReceiptPiece(text: "2,950", x: 0.7, y: 0.40, width: 0.1, height: 0.02)
+        ]
+        #expect(ReceiptParser.labelledAmount(pieces) == 2950)
+    }
+
+    @Test("Letters read inside numbers become digits")
+    func ocrDigits() {
+        #expect(ReceiptParser.fixDigits("TOTAL 2,77O.00") == "TOTAL 2,770.00")
+        #expect(ReceiptParser.fixDigits("Rs 1,25S") == "Rs 1,255")
+        #expect(ReceiptParser.fixDigits("Organic Soap") == "Organic Soap")
+        #expect(amount(["Shop", "TOTAL 2,77O.00"]) == Money(minorUnits: 277_000, currency: .pkr))
+    }
+
+    @Test("Pakistani date formats")
+    func dates() {
+        #expect(ReceiptParser.read(["Shop", "Date: 05-Oct-26"], currency: .pkr, today: today).date == LocalDate(year: 2026, month: 10, day: 5))
+        #expect(ReceiptParser.read(["Shop", "05/10/26 14:32"], currency: .pkr, today: today).date == LocalDate(year: 2026, month: 10, day: 5))
+    }
+}

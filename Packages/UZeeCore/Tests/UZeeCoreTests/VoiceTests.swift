@@ -201,3 +201,62 @@ struct ReminderPhraseTests {
         #expect(ReminderPhrase.request("How much did I spend", today: today, currency: .pkr) == nil)
     }
 }
+
+@Suite("Voice review fixes")
+struct VoiceReviewTests {
+    @Test("Only a plain yes or no answers the card")
+    func plainYesNo() {
+        #expect(AssistantReply.intent("No, make it 3000") == nil)
+        #expect(AssistantReply.intent("no, HBL") == nil)
+        #expect(AssistantReply.intent("yes from Meezan") == nil)
+        #expect(AssistantReply.intent("ok wait") == nil)
+        #expect(AssistantReply.intent("yes please") == .confirm)
+        #expect(AssistantReply.intent("that's right") == .confirm)
+        #expect(AssistantReply.intent("no thanks") == .cancel)
+        #expect(AssistantReply.intent("never mind") == .cancel)
+        #expect(AssistantReply.saysYes("yes, from Meezan"))
+        #expect(!AssistantReply.saysYes("no, don't save it"))
+    }
+
+    @Test("An entry ending in thanks isn't a goodbye")
+    func thanksEntry() {
+        #expect(!AssistantReply.isGoodbye("Paid 2000 for petrol thanks"))
+        #expect(AssistantReply.isGoodbye("ok thanks"))
+    }
+
+    @Test("Money in or out from the words around it")
+    func direction() {
+        #expect(parse("Paid maid salary 15000").action == .expense)
+        #expect(parse("Got a haircut for 800").action == .expense)
+        #expect(parse("Ali sent me 5000").action == .income)
+        #expect(parse("Ammi gave me 2000").action == .income)
+        #expect(parse("Got paid 150000 salary").action == .income)
+        #expect(parse("Spent 500 on groceries").action == .expense)
+    }
+
+    @Test("The amount isn't a count, a date or a time")
+    func amountChoice() {
+        #expect(AmountPhrase.find(in: "Bought 2 pizzas for 1500")?.value == 1500)
+        #expect(AmountPhrase.find(in: "On 5/10 paid 300")?.value == 300)
+        #expect(AmountPhrase.find(in: "1.5k")?.value == 1500)
+        #expect(AmountPhrase.find(in: "500 rupay") == SpokenAmount(value: 500, currency: .pkr))
+        #expect(AmountPhrase.find(in: "Rs.1,50,000")?.value == 150_000)
+        #expect(AmountPhrase.find(in: "do sau")?.value == 200)
+        #expect(AmountPhrase.find(in: "paanch hazaar")?.value == 5000)
+        #expect(AmountPhrase.find(in: "do it now") == nil)
+        #expect(AmountPhrase.find(in: "two point two five dollars")?.value == Decimal(string: "2.25"))
+    }
+
+    @Test("Last Friday is the Friday before today")
+    func pastWeekday() {
+        // 6 Oct 2026 is a Tuesday.
+        #expect(parse("Spent 500 on fuel last friday").date == LocalDate(year: 2026, month: 10, day: 2))
+        #expect(parse("Spent 500 on fuel on tuesday").date == LocalDate(year: 2026, month: 9, day: 29))
+    }
+
+    @Test("A spending question keeps the category word it doesn't know")
+    func unknownCategory() {
+        #expect(parse("How much did I spend on biryani this month?").question == .spent(category: "biryani", period: .thisMonth))
+        #expect(parse("How much did I spend this month?").question == .spent(category: nil, period: .thisMonth))
+    }
+}

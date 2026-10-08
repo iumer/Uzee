@@ -21,7 +21,8 @@ public enum ReceiptTextReader {
 
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
+        // Correction "fixes" amounts and codes glued to text ("Rs1,250", "PKR"); receipts are mostly figures.
+        request.usesLanguageCorrection = false
         request.recognitionLanguages = ["en-US"]
         let handler = VNImageRequestHandler(cgImage: image, orientation: orientation, options: [:])
         try handler.perform([request])

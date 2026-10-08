@@ -62,6 +62,10 @@ final class VoiceModel {
     /// Waiting for an answer to a follow-up question (VOX-05).
     private var pending: VoiceCommand?
     private var need: VoiceDialog.Need?
+    /// Counts the user's sentences, so the model can't show a card and save it in the same turn.
+    private var turn = 0
+    private var cardTurn = 0
+    private var lastSentence = ""
 
     init(session: AppSession) {
         self.session = session
@@ -161,17 +165,26 @@ final class VoiceModel {
 
     func submit(_ text: String) {
         let sentence = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !sentence.isEmpty else { return }
+        // One reply at a time: the on-device model can't take a second request mid-answer.
+        guard !sentence.isEmpty, !isThinking else { return }
         draft = ""
+        turn += 1
+        lastSentence = sentence
         lines.append(Line(speaker: .me, text: sentence))
-        // "Yes" or "no" to the card on screen, spoken or typed.
-        if card != nil, let intent = AssistantReply.intent(sentence) {
+        // "Yes" or "no" to the card on screen, or "cancel" to a follow-up question, spoken or typed.
+        if card != nil || pending != nil, let intent = AssistantReply.intent(sentence) {
+            let hadCard = card != nil
             pending = nil
             need = nil
-            if intent == .confirm { save() } else { cancelCard() }
+            if intent == .confirm, hadCard { save() }
+            else if hadCard { cancelCard() }
+            else if intent == .cancel { say("OK, dropped it. Nothing was saved.") }
+            else { say("Sorry, I still need that detail. Or say cancel.") }
             return
         }
         if AssistantReply.isGoodbye(sentence) {
+            pending = nil
+            need = nil
             say("Anytime. Bye for now!")
             handsFree = false
             return
@@ -373,11 +386,16 @@ final class VoiceModel {
         }
         showCard(for: command, announce: false)
         guard let card else { return "Couldn't show the card." }
+        if let problem = card.problem { return "The card is on screen but needs fixing: \(problem) Card: \(cardSummary(card)). Tell the user." }
         return "The card is on screen: \(cardSummary(card)). Ask the user to say yes to save or tell you what to change."
     }
 
     private func confirmForModel() -> String {
         guard card != nil else { return "There is no card on screen to save." }
+        // Saving needs the user's yes, after they've seen the card.
+        guard cardTurn < turn || AssistantReply.saysYes(lastSentence) else {
+            return "Not saved yet: the user hasn't confirmed. Show the card and ask them to say yes."
+        }
         let saved = commit()
         if let saved { return saved }
         return "Not saved: \(card?.problem ?? "something is missing"). Tell the user."
@@ -406,7 +424,11 @@ final class VoiceModel {
             return accounts.first { NameKey.make($0.name) == NameKey.make(name) }?.id
         }
         var accountID = account(command.account)
-        if accountID == nil {
+        var problem: String?
+        if let named = command.account, accountID == nil {
+            // An account that isn't in UZee ("JazzCash") must be picked, not swapped for another one quietly.
+            problem = "There's no account called \(named). Pick one."
+        } else if accountID == nil {
             // "$20" goes to a dollar account; otherwise the last used account.
             if let currency = command.amount?.currency, currency != ledger.base {
                 accountID = accounts.first { $0.currency == currency }?.id
@@ -415,6 +437,11 @@ final class VoiceModel {
                 accountID = last
             }
             accountID = accountID ?? accounts.first?.id
+        }
+        // "$20" never lands in a rupee account as Rs 20.
+        if let said = command.amount?.currency, let chosen = ledger.account(accountID), chosen.currency != said {
+            accountID = nil
+            problem = "That's \(said.code). Pick a \(said.code) account."
         }
         let currency = ledger.account(accountID)?.currency ?? ledger.base
         let amountText = command.amount.flatMap { try? Money.fromMajor($0.value, currency) }.map(plainNumber) ?? ""
@@ -442,7 +469,8 @@ final class VoiceModel {
 
         card = VoiceCard(action: command.action, amountText: amountText, personID: personID, newPersonName: newPerson,
                          accountID: accountID, toAccountID: account(command.toAccount), categoryID: categoryID,
-                         payee: command.payee ?? "", date: date)
+                         payee: command.payee ?? "", date: date, problem: problem)
+        cardTurn = turn
         var intro = "Here's the \(VoiceCard.title(command.action).lowercased()). Change anything, then save."
         if let newPerson { intro = "\(newPerson) is new. I'll add them to People when you save. " + intro }
         else if let personID, command.action == .lend || command.action == .borrow {
@@ -453,6 +481,7 @@ final class VoiceModel {
                 intro = (net.isNegative ? "You already owe \(name) \(amount). " : "\(name) already owes you \(amount). ") + intro
             }
         }
+        if let problem { intro = problem + " " + intro }
         if announce { say(intro) }
     }
 

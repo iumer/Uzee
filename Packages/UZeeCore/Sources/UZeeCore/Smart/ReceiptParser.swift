@@ -45,6 +45,9 @@ public struct ReceiptPiece: Equatable, Sendable {
 public enum ReceiptParser {
     /// Strongest first. "total" alone is weaker than "grand total" because receipts repeat it.
     static let totalWords: [[String]] = [
+        // What's left to pay after discounts and tax beats a "Total Amount" printed above them.
+        ["net payable", "amount payable", "total payable", "you pay", "amount to pay", "grand total", "net amount", "amount due",
+         "balance due", "net total"],
         ["grand total", "net total", "total amount", "amount due", "total due", "net payable", "total payable",
          "amount payable", "balance due", "net amount", "bill amount", "total bill", "amount to pay", "you pay",
          "cod amount", "amount to collect", "collect amount", "order amount", "invoice amount", "total price", "grand amount"],
@@ -52,7 +55,9 @@ public enum ReceiptParser {
     ]
     static let notTotal = ["sub total", "subtotal", "sub-total", "total qty", "total quantity", "total items", "total item",
                            "total discount", "total tax", "total gst", "total saving", "items total", "amount paid",
-                           "amount tendered", "amount received", "account", "net weight", "net wt"]
+                           "amount tendered", "amount received", "account", "net weight", "net wt", "paid amount", "tendered",
+                           "cash amount", "card amount", "change", "amount returned", "cash received", "received amount",
+                           "customer paid", "cash paid", "total paid"]
     static let notAmountLines = ["change", "tendered", "cash received", "tel", "phone", "ntn", "strn", "invoice", "receipt no",
                                  "bill no", "order no", "card no", "pos", "qty", "house", "block", "street", "road", "sector",
                                  "phase", "plot", "flat", "floor", "address", "contact", "mobile", "cell", "tracking", "ref",
@@ -67,7 +72,7 @@ public enum ReceiptParser {
                               "sales", "address", "thank", "pos", "counter", "terminal", "branch", "no."]
 
     public static func read(_ lines: [String], currency: Currency, today: LocalDate) -> ReceiptReading {
-        let cleaned = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let cleaned = lines.map { fixDigits($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let shop = merchant(cleaned)
         return ReceiptReading(amount: amount(cleaned, currency: currency), date: date(cleaned, today: today),
                               merchant: shop, categoryKey: CategorySuggester.systemKey(inText: cleaned + [shop ?? ""]))
@@ -76,6 +81,7 @@ public enum ReceiptParser {
     /// Reads pieces with their positions: the amount comes from the value written next to (or under) a label such
     /// as "Amount" or "Grand Total", which still works when a tilted photo or a table puts them on different lines.
     public static func read(pieces: [ReceiptPiece], currency: Currency, today: LocalDate) -> ReceiptReading {
+        let pieces = pieces.map { piece in var fixed = piece; fixed.text = fixDigits(piece.text); return fixed }
         var reading = read(lines(pieces), currency: currency, today: today)
         if let paired = labelledAmount(pieces) { reading.amount = try? Money.fromMajor(paired, currency) }
         return reading
@@ -94,19 +100,41 @@ public enum ReceiptParser {
         return rows.map { $0.sorted { $0.minX < $1.minX }.map(\.text).joined(separator: "   ") }
     }
 
+    /// Letters the reader mistakes for digits inside numbers: "2,77O.00" → "2,770.00", "1,25S" → "1,255",
+    /// "1l5" → "115". Words are left alone.
+    static func fixDigits(_ text: String) -> String {
+        var result = text
+        for (pattern, digit) in [(#"(?<=[0-9][,.]?)[Oo](?=[0-9,.]|\b|$)"#, "0"), (#"(?<![A-Za-z])[Oo](?=[0-9])"#, "0"),
+                                 (#"(?<=[0-9][,.]?)[lI](?=[0-9,.]|\b|$)"#, "1"), (#"(?<=[0-9][,.]?)[S](?=[0-9,.]|$)"#, "5")] {
+            result = result.replacingOccurrences(of: pattern, with: digit, options: .regularExpression)
+        }
+        return result
+    }
+
+    /// Spaces and case evened out, so "Sub   Total" (columns joined) still reads as "sub total".
+    static func plain(_ text: String) -> String {
+        text.lowercased().split(whereSeparator: { $0 == " " || $0 == "\t" }).joined(separator: " ")
+    }
+
     static func labelledAmount(_ pieces: [ReceiptPiece]) -> Decimal? {
         func money(_ piece: ReceiptPiece) -> [TextScan.FoundAmount] {
             let lower = piece.text.lowercased()
             guard !notAmountLines.contains(where: { containsWord(lower, $0) }) else { return [] }
             return TextScan.amounts(in: piece.text).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
         }
-        for words in totalWords {
+        for (tier, words) in totalWords.enumerated() {
             var best: Decimal?
-            for label in pieces {
-                let lower = label.text.lowercased()
+            // Top to bottom; in the first tier the lowest line wins (the amount after discounts), else the largest.
+            for label in pieces.sorted(by: { $0.midY > $1.midY }) {
+                let lower = plain(label.text)
                 guard words.contains(where: { containsWord(lower, $0) }), !notTotal.contains(where: { lower.contains($0) }) else { continue }
+                // "Sub" read as its own piece just left of "Total", or "Cash"/"Paid" before "Amount".
+                let leftWord = pieces.filter { $0 != label && $0.maxX <= label.minX + 0.01 && label.minX - $0.maxX < max(label.height, 0.005) * 3
+                    && abs($0.midY - label.midY) < max(label.height, 0.005) * 0.7 }
+                    .max { $0.maxX < $1.maxX }.map { plain($0.text) } ?? ""
+                if !leftWord.isEmpty, notTotal.contains(where: { (leftWord + " " + lower).contains($0) }) { continue }
                 if let own = TextScan.amounts(in: label.text).filter({ !$0.isNegative && $0.value > 0 }).last {
-                    if own.value > (best ?? 0) { best = own.value }
+                    if tier == 0 || own.value > (best ?? 0) { best = own.value }
                     continue
                 }
                 // The nearest value to the right on the same printed line (allowing for a tilted photo), else the
@@ -126,7 +154,7 @@ public enum ReceiptParser {
                     }
                     if let distance, distance < (nearest?.distance ?? .infinity) { nearest = (distance, value) }
                 }
-                if let value = nearest?.value, value > (best ?? 0) { best = value }
+                if let value = nearest?.value, tier == 0 || value > (best ?? 0) { best = value }
             }
             if let best { return best }
         }
@@ -134,10 +162,10 @@ public enum ReceiptParser {
     }
 
     static func amount(_ lines: [String], currency: Currency) -> Money? {
-        for words in totalWords {
+        for (tier, words) in totalWords.enumerated() {
             var best: Decimal?
             for (index, line) in lines.enumerated() {
-                let lower = line.lowercased()
+                let lower = plain(line)
                 guard words.contains(where: { containsWord(lower, $0) }), !notTotal.contains(where: { lower.contains($0) }) else { continue }
                 // The figure is on the same line, or on one of the next two when the reader split the columns.
                 var candidates = TextScan.amounts(in: line).filter { !$0.isNegative && $0.value > 0 }
@@ -146,7 +174,7 @@ public enum ReceiptParser {
                     guard !notAmountLines.contains(where: { containsWord(nextLower, $0) }) else { continue }
                     candidates = TextScan.amounts(in: next).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
                 }
-                if let value = candidates.last?.value, value > (best ?? 0) { best = value }
+                if let value = candidates.last?.value, tier == 0 || value > (best ?? 0) { best = value }
             }
             if let best { return try? Money.fromMajor(best, currency) }
         }

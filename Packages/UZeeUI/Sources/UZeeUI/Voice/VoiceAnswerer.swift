@@ -63,7 +63,15 @@ struct VoiceAnswerer {
     func person(named name: String) -> Person? {
         let key = NameKey.make(name)
         return session.people.others.first { NameKey.make($0.name) == key }
-            ?? session.people.others.first { NameKey.make($0.name).hasPrefix(key) || key.hasPrefix(NameKey.make($0.name)) }
+            ?? onlyOne(session.people.others.filter { person in
+                // "Ali" is "Ali Raza" but never "Alina"; with two Alis, ask rather than guess.
+                let words = NameKey.make(person.name).split(separator: " ")
+                return words.first.map(String.init) == key || key.split(separator: " ").first.map(String.init) == NameKey.make(person.name)
+            })
+    }
+
+    private func onlyOne(_ people: [Person]) -> Person? {
+        people.count == 1 ? people[0] : nil
     }
 
     // MARK: People
@@ -117,7 +125,12 @@ struct VoiceAnswerer {
         var label = ""
         if let categoryName {
             let key = NameKey.make(categoryName)
-            guard let category = session.ledger.categories.first(where: { NameKey.make($0.name) == key && $0.type == .expense }) else {
+            let expense = session.ledger.categories.filter { $0.type == .expense }
+            // "food" finds "Food & Dining"; whole words first, then any part of a name.
+            let category = expense.first { NameKey.make($0.name) == key }
+                ?? expense.first { NameKey.make($0.name).split(separator: " ").contains { $0 == key || $0 == key + "s" || $0 + "s" == key } }
+                ?? expense.first { key.count >= 4 && NameKey.make($0.name).contains(key) }
+            guard let category else {
                 return "I couldn't find a category called \(categoryName)."
             }
             let ids = Set([category.id] + session.ledger.categories.filter { $0.parentID == category.id }.map(\.id))

@@ -71,11 +71,15 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
         let current = lock.withLock { session }
         do {
             return try await current.respond(to: text).content
-        } catch {
+        } catch let error as LanguageModelSession.GenerationError where error.isTooLong {
             // A long conversation can outgrow the model's memory: start a fresh one and try once more.
             let fresh = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today)
             lock.withLock { session = fresh }
             return try? await fresh.respond(to: text).content
+        } catch {
+            // Anything else (guardrails, busy, unsupported language): the app's own rules answer instead,
+            // and the conversation so far is kept.
+            return nil
         }
     }
 }
@@ -222,6 +226,14 @@ struct AddReminderTool: Tool {
         }
         let amount = AmountPhrase.find(in: arguments.amount).flatMap { try? Money.fromMajor($0.value, $0.currency ?? .pkr) }
         return await actions.remind(arguments.title, date, ReminderPhrase.minuteOfDay(arguments.time + " " + arguments.when), amount)
+    }
+}
+
+@available(iOS 26.0, macOS 26.0, *)
+extension LanguageModelSession.GenerationError {
+    var isTooLong: Bool {
+        if case .exceededContextWindowSize = self { return true }
+        return false
     }
 }
 
