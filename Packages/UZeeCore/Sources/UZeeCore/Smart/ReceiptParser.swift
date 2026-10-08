@@ -5,14 +5,39 @@ public struct ReceiptReading: Equatable, Sendable {
     public var amount: Money?
     public var date: LocalDate?
     public var merchant: String?
+    /// A default category's `systemKey` guessed from the shop and the items ("ceramic coating wax" → car maintenance).
+    public var categoryKey: String?
 
-    public init(amount: Money? = nil, date: LocalDate? = nil, merchant: String? = nil) {
+    public init(amount: Money? = nil, date: LocalDate? = nil, merchant: String? = nil, categoryKey: String? = nil) {
         self.amount = amount
         self.date = date
         self.merchant = merchant
+        self.categoryKey = categoryKey
     }
 
     public var isEmpty: Bool { amount == nil && date == nil && merchant == nil }
+}
+
+/// One piece of text found on a receipt photo and where it sits, in 0…1 page units with the origin at the
+/// bottom left (as Vision reports it).
+public struct ReceiptPiece: Equatable, Sendable {
+    public var text: String
+    public var minX: Double
+    public var minY: Double
+    public var maxX: Double
+    public var maxY: Double
+
+    public init(text: String, x: Double, y: Double, width: Double, height: Double) {
+        self.text = text
+        minX = x
+        minY = y
+        maxX = x + width
+        maxY = y + height
+    }
+
+    var midX: Double { (minX + maxX) / 2 }
+    var midY: Double { (minY + maxY) / 2 }
+    var height: Double { maxY - minY }
 }
 
 /// Turns recognised receipt lines (top to bottom) into an amount, a date and a merchant. On-device text
@@ -21,21 +46,89 @@ public enum ReceiptParser {
     /// Strongest first. "total" alone is weaker than "grand total" because receipts repeat it.
     static let totalWords: [[String]] = [
         ["grand total", "net total", "total amount", "amount due", "total due", "net payable", "total payable",
-         "amount payable", "balance due", "net amount", "bill amount", "total bill", "amount to pay", "you pay"],
-        ["total", "payable"]
+         "amount payable", "balance due", "net amount", "bill amount", "total bill", "amount to pay", "you pay",
+         "cod amount", "amount to collect", "collect amount", "order amount", "invoice amount", "total price", "grand amount"],
+        ["total", "payable", "amount", "cod", "net", "to pay"]
     ]
     static let notTotal = ["sub total", "subtotal", "sub-total", "total qty", "total quantity", "total items", "total item",
-                           "total discount", "total tax", "total gst", "total saving", "items total"]
+                           "total discount", "total tax", "total gst", "total saving", "items total", "amount paid",
+                           "amount tendered", "amount received", "account", "net weight", "net wt"]
     static let notAmountLines = ["change", "tendered", "cash received", "tel", "phone", "ntn", "strn", "invoice", "receipt no",
-                                 "bill no", "order no", "card no", "pos", "qty"]
+                                 "bill no", "order no", "card no", "pos", "qty", "house", "block", "street", "road", "sector",
+                                 "phase", "plot", "flat", "floor", "address", "contact", "mobile", "cell", "tracking", "ref",
+                                 "order", "#", "pieces", "postal", "zip", "cnic", "iban", "a/c", "weight", "kg", "gram"]
+    /// Couriers print their own name at the top of a parcel label; the shop is the shipper.
+    static let couriers = ["postex", "tcs", "leopards", "trax", "m&p", "call courier", "blueex", "rider", "swyft", "daewoo"]
+    static let sellerWords = ["shipper", "seller", "sold by", "vendor", "merchant name", "store name", "shop name"]
     static let notMerchant = ["receipt", "invoice", "tax", "ntn", "strn", "gst", "tel", "phone", "ph", "date", "time", "welcome",
                               "www", "http", "@", "cashier", "order", "table", "bill", "fbr", "customer", "copy", "duplicate",
                               "sales", "address", "thank", "pos", "counter", "terminal", "branch", "no."]
 
     public static func read(_ lines: [String], currency: Currency, today: LocalDate) -> ReceiptReading {
         let cleaned = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let shop = merchant(cleaned)
         return ReceiptReading(amount: amount(cleaned, currency: currency), date: date(cleaned, today: today),
-                              merchant: merchant(cleaned))
+                              merchant: shop, categoryKey: CategorySuggester.systemKey(inText: cleaned + [shop ?? ""]))
+    }
+
+    /// Reads pieces with their positions: the amount comes from the value written next to (or under) a label such
+    /// as "Amount" or "Grand Total", which still works when a tilted photo or a table puts them on different lines.
+    public static func read(pieces: [ReceiptPiece], currency: Currency, today: LocalDate) -> ReceiptReading {
+        var reading = read(lines(pieces), currency: currency, today: today)
+        if let paired = labelledAmount(pieces) { reading.amount = try? Money.fromMajor(paired, currency) }
+        return reading
+    }
+
+    /// Pieces whose vertical centres are close, joined left to right with three spaces.
+    public static func lines(_ pieces: [ReceiptPiece]) -> [String] {
+        var rows: [[ReceiptPiece]] = []
+        for piece in pieces.sorted(by: { $0.midY > $1.midY }) {
+            if let first = rows.last?.first, abs(first.midY - piece.midY) < max(first.height, piece.height) * 0.5 {
+                rows[rows.count - 1].append(piece)
+            } else {
+                rows.append([piece])
+            }
+        }
+        return rows.map { $0.sorted { $0.minX < $1.minX }.map(\.text).joined(separator: "   ") }
+    }
+
+    static func labelledAmount(_ pieces: [ReceiptPiece]) -> Decimal? {
+        func money(_ piece: ReceiptPiece) -> [TextScan.FoundAmount] {
+            let lower = piece.text.lowercased()
+            guard !notAmountLines.contains(where: { containsWord(lower, $0) }) else { return [] }
+            return TextScan.amounts(in: piece.text).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
+        }
+        for words in totalWords {
+            var best: Decimal?
+            for label in pieces {
+                let lower = label.text.lowercased()
+                guard words.contains(where: { containsWord(lower, $0) }), !notTotal.contains(where: { lower.contains($0) }) else { continue }
+                if let own = TextScan.amounts(in: label.text).filter({ !$0.isNegative && $0.value > 0 }).last {
+                    if own.value > (best ?? 0) { best = own.value }
+                    continue
+                }
+                // The nearest value to the right on the same printed line (allowing for a tilted photo), else the
+                // one just below the label.
+                let height = max(label.height, 0.005)
+                var nearest: (distance: Double, value: Decimal)?
+                for piece in pieces where piece != label {
+                    guard let value = money(piece).last?.value else { continue }
+                    let dx = piece.minX - label.maxX
+                    let dy = abs(piece.midY - label.midY)
+                    var distance: Double?
+                    if dx > -height, dy < height * 0.7 + abs(dx) * 0.15 {
+                        distance = max(dx, 0) + dy * 4
+                    } else if piece.maxY < label.midY, label.minY - piece.maxY < height * 2.5,
+                              piece.maxX > label.minX, piece.minX < label.maxX + height * 4 {
+                        distance = 1 + (label.minY - piece.maxY)
+                    }
+                    if let distance, distance < (nearest?.distance ?? .infinity) { nearest = (distance, value) }
+                }
+                if let value = nearest?.value, value > (best ?? 0) { best = value }
+            }
+            if let best { return best }
+        }
+        return nil
     }
 
     static func amount(_ lines: [String], currency: Currency) -> Money? {
@@ -43,26 +136,47 @@ public enum ReceiptParser {
             var best: Decimal?
             for (index, line) in lines.enumerated() {
                 let lower = line.lowercased()
-                guard words.contains(where: { lower.contains($0) }), !notTotal.contains(where: { lower.contains($0) }) else { continue }
-                // The figure is on the same line, or on the next one when the reader split the columns.
-                var candidates = TextScan.amounts(in: line).filter { !$0.isNegative }
-                if candidates.isEmpty, index + 1 < lines.count {
-                    candidates = TextScan.amounts(in: lines[index + 1]).filter { !$0.isNegative }
+                guard words.contains(where: { containsWord(lower, $0) }), !notTotal.contains(where: { lower.contains($0) }) else { continue }
+                // The figure is on the same line, or on one of the next two when the reader split the columns.
+                var candidates = TextScan.amounts(in: line).filter { !$0.isNegative && $0.value > 0 }
+                for next in lines.dropFirst(index + 1).prefix(2) where candidates.isEmpty {
+                    let nextLower = next.lowercased()
+                    guard !notAmountLines.contains(where: { containsWord(nextLower, $0) }) else { continue }
+                    candidates = TextScan.amounts(in: next).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
                 }
-                if let value = candidates.last?.value, value > 0, value > (best ?? 0) { best = value }
+                if let value = candidates.last?.value, value > (best ?? 0) { best = value }
             }
             if let best { return try? Money.fromMajor(best, currency) }
         }
-        // No total line: the largest figure that looks like money.
-        var largest: Decimal?
+        // No total line: the largest figure that looks like money, preferring ones written as money
+        // ("1,829.96", "Rs 500", "1,830/-") over bare grouped numbers, and never addresses or phone numbers.
+        var strong: Decimal?
+        var weak: Decimal?
         for line in lines {
             let lower = line.lowercased()
-            guard !notAmountLines.contains(where: { lower.contains($0) }) else { continue }
+            guard !notAmountLines.contains(where: { containsWord(lower, $0) }) else { continue }
             for found in TextScan.amounts(in: line) where found.looksLikeMoney && !found.isNegative && found.value > 0 {
-                if found.value > (largest ?? 0) { largest = found.value }
+                if found.hasDecimals || found.currencyMarker != nil {
+                    if found.value > (strong ?? 0) { strong = found.value }
+                } else if found.value > (weak ?? 0) {
+                    weak = found.value
+                }
             }
         }
-        return largest.flatMap { try? Money.fromMajor($0, currency) }
+        return (strong ?? weak).flatMap { try? Money.fromMajor($0, currency) }
+    }
+
+    /// "amount" in "Amount: 1,830" but not in "amounts"; symbols ("#", "a/c") match anywhere.
+    static func containsWord(_ text: String, _ word: String) -> Bool {
+        guard word.allSatisfy({ $0.isLetter || $0 == " " }) else { return text.contains(word) }
+        var searchStart = text.startIndex
+        while let range = text.range(of: word, range: searchStart..<text.endIndex) {
+            let before = range.lowerBound == text.startIndex ? nil : text[text.index(before: range.lowerBound)]
+            let after = range.upperBound == text.endIndex ? nil : text[range.upperBound]
+            if !(before?.isLetter ?? false), !(after?.isLetter ?? false) { return true }
+            searchStart = range.upperBound
+        }
+        return false
     }
 
     /// The first date that isn't in the future or more than two years old; lines saying "date" win.
@@ -76,18 +190,31 @@ public enum ReceiptParser {
         return nil
     }
 
-    /// The shop name is usually the first line of words near the top.
+    /// The shop name is usually the first line of words near the top. On a parcel label it is the shipper.
     static func merchant(_ lines: [String]) -> String? {
-        for line in lines.prefix(6) {
-            let lower = line.lowercased()
-            let wordsOnly = lower.split(whereSeparator: { !$0.isLetter && $0 != "." && $0 != "@" }).map(String.init)
-            guard !notMerchant.contains(where: { word in wordsOnly.contains(word) || (word.count > 3 && lower.contains(word)) }) else { continue }
-            let letters = line.filter(\.isLetter).count
-            let visible = line.filter { !$0.isWhitespace }.count
-            guard letters >= 3, visible > 0, Double(letters) / Double(visible) >= 0.6 else { continue }
-            return tidy(line)
+        if let seller = lines.firstIndex(where: { line in sellerWords.contains { line.lowercased().contains($0) } }) {
+            for line in lines.dropFirst(seller + 1).prefix(4) {
+                let value = line.replacingOccurrences(of: #"(?i)^\s*name\s*:?\s*"#, with: "", options: .regularExpression)
+                if let name = shopName(value), !couriers.contains(where: { name.lowercased().contains($0) }) { return name }
+            }
+        }
+        for line in lines.prefix(8) {
+            if let name = shopName(line), !couriers.contains(where: { name.lowercased() == $0 || name.lowercased().hasPrefix($0 + " ") }) {
+                return name
+            }
         }
         return nil
+    }
+
+    private static func shopName(_ line: String) -> String? {
+        let lower = line.lowercased()
+        let wordsOnly = lower.split(whereSeparator: { !$0.isLetter && $0 != "." && $0 != "@" }).map(String.init)
+        guard !notMerchant.contains(where: { word in wordsOnly.contains(word) || (word.count > 3 && lower.contains(word)) }),
+              !wordsOnly.contains("name"), !wordsOnly.contains("information") else { return nil }
+        let letters = line.filter(\.isLetter).count
+        let visible = line.filter { !$0.isWhitespace }.count
+        guard letters >= 3, visible > 0, Double(letters) / Double(visible) >= 0.6 else { return nil }
+        return tidy(line)
     }
 
     /// "** IMTIAZ SUPER MARKET **" → "Imtiaz Super Market".

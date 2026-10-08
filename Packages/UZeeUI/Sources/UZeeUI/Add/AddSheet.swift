@@ -198,14 +198,15 @@ struct AddSheet: View {
         let currency = currency
         let today = session.today
         Task {
-            let lines = await Task.detached { (try? smart.readReceipt(jpeg)) ?? [] }.value
-            apply(ReceiptParser.read(lines, currency: currency, today: today))
+            let pieces = await Task.detached { (try? smart.readReceipt(jpeg)) ?? [] }.value
+            apply(ReceiptParser.read(pieces: pieces, currency: currency, today: today))
             isReadingReceipt = false
         }
     }
 
     private func apply(_ reading: ReceiptReading) {
         var filled: [String] = []
+        let categoryBefore = categoryID
         if let amount = reading.amount {
             amountText = plainNumber(amount)
             filled.append("amount")
@@ -220,6 +221,13 @@ struct AddSheet: View {
             suggestCategory(for: merchant)
             filled.append("shop")
         }
+        // The items can say more than the shop's name ("Ceramic coating wax" → Car maintenance).
+        if categoryID == nil, let key = reading.categoryKey,
+           let category = ledger.categories.first(where: { $0.systemKey == key && !$0.isHidden && $0.type == categoryType(for: kind) }) {
+            categoryID = category.id
+            suggestedCategoryID = category.id
+        }
+        if categoryID != nil, categoryID != categoryBefore { filled.append("category") }
         receiptNote = filled.isEmpty
             ? "Couldn't read this receipt. The photo will still be attached."
             : "Filled \(ListFormatter.localizedString(byJoining: filled)) from the receipt. Check them before saving. The photo will be attached."

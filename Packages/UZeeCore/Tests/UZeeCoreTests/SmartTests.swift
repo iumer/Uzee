@@ -65,6 +65,57 @@ struct ReceiptReadingTests {
         #expect(none.merchant == "Shell Gulberg")
     }
 
+    // A tilted photo of a courier parcel label: the table puts "Amount:" and its value in different cells, and
+    // the address holds a number that looks like money. Made-up details in the label's layout.
+    @Test("Courier label: amount next to its label, shipper as the shop, category from the items")
+    func courierLabel() {
+        let pieces = [
+            ReceiptPiece(text: "PostEx", x: 0.08, y: 0.80, width: 0.12, height: 0.04),
+            ReceiptPiece(text: "LHE", x: 0.88, y: 0.84, width: 0.05, height: 0.03),
+            ReceiptPiece(text: "#12345", x: 0.35, y: 0.79, width: 0.08, height: 0.03),
+            ReceiptPiece(text: "Consignee Information", x: 0.13, y: 0.72, width: 0.2, height: 0.03),
+            ReceiptPiece(text: "Order Information", x: 0.65, y: 0.74, width: 0.15, height: 0.03),
+            ReceiptPiece(text: "Name:", x: 0.08, y: 0.67, width: 0.06, height: 0.03),
+            ReceiptPiece(text: "Test Customer", x: 0.18, y: 0.67, width: 0.14, height: 0.03),
+            ReceiptPiece(text: "Tracking No:", x: 0.37, y: 0.62, width: 0.1, height: 0.03),
+            ReceiptPiece(text: "98765432101234", x: 0.46, y: 0.625, width: 0.16, height: 0.03),
+            ReceiptPiece(text: "House 123,456 Block C-1 Test Town", x: 0.18, y: 0.58, width: 0.22, height: 0.03),
+            ReceiptPiece(text: "Shipper Information", x: 0.16, y: 0.51, width: 0.18, height: 0.03),
+            ReceiptPiece(text: "Name:", x: 0.08, y: 0.455, width: 0.06, height: 0.03),
+            ReceiptPiece(text: "TEST MOTORS", x: 0.18, y: 0.46, width: 0.14, height: 0.03),
+            ReceiptPiece(text: "Amount:", x: 0.63, y: 0.49, width: 0.07, height: 0.03),
+            ReceiptPiece(text: "1529.50/-", x: 0.71, y: 0.497, width: 0.09, height: 0.03),
+            ReceiptPiece(text: "Date:", x: 0.63, y: 0.43, width: 0.05, height: 0.03),
+            ReceiptPiece(text: "1/10/2026", x: 0.71, y: 0.437, width: 0.09, height: 0.03),
+            ReceiptPiece(text: "Order Details:", x: 0.08, y: 0.3, width: 0.12, height: 0.03),
+            ReceiptPiece(text: "[ 1 x CERAMIC COATING WAX 200g 1 Wax - ]", x: 0.2, y: 0.305, width: 0.4, height: 0.03)
+        ]
+        let reading = ReceiptParser.read(pieces: pieces, currency: .pkr, today: today)
+        #expect(reading.amount == Money(minorUnits: 152_950, currency: .pkr))
+        #expect(reading.date == day(2026, 10, 1))
+        #expect(reading.merchant == "Test Motors")
+        #expect(reading.categoryKey == "transport.car_maintenance")
+    }
+
+    @Test("Without positions: the label's value on a merged line; never an address number")
+    func mergedCells() {
+        let lines = ["PostEx", "House 123,456 Block C-1", "Amount", "Shipper Information   Destination:   Lahore   1529.50/-"]
+        #expect(ReceiptParser.read(lines, currency: .pkr, today: today).amount == Money(minorUnits: 152_950, currency: .pkr))
+        let noLabel = ["Test Store", "House 123,456 Block C-1", "Rs 1,830/-"]
+        #expect(ReceiptParser.read(noLabel, currency: .pkr, today: today).amount == Money(major: 1_830, .pkr))
+        #expect(TextScan.amounts(in: "1,830/-").first?.value == 1_830)
+    }
+
+    @Test("Category from the shop or the items")
+    func categoryHints() {
+        #expect(CategorySuggester.systemKey(inText: ["DVAGO Pharmacy", "Panadol tablets"]) == "health.medicine")
+        #expect(CategorySuggester.systemKey(inText: ["Medical Store"]) == "health.medicine")
+        #expect(CategorySuggester.systemKey(inText: ["Kababjees", "Chicken Karahi"]) == "food.dining_out")
+        #expect(CategorySuggester.systemKey(inText: ["Al-Fatah", "Milk 1L"]) == "food.groceries")
+        #expect(CategorySuggester.systemKey(inText: ["Shell Gulberg", "Super 95 50.2 L"]) == "transport.fuel")
+        #expect(CategorySuggester.systemKey(inText: ["Thank you"]) == nil)
+    }
+
     @Test("Future and very old dates are ignored; empty text reads nothing")
     func implausible() {
         let reading = ReceiptParser.read(["Cafe", "Valid till 06/12/2026", "Opened 01/01/2020"], currency: .pkr, today: today)

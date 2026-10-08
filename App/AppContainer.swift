@@ -55,7 +55,7 @@ final class AppContainer {
     /// Vision, PDFKit, Speech and Foundation Models adapters from UZeeSystem (M9, M10).
     static func smartClient() -> SmartClient {
         SmartClient(
-            readReceipt: { try ReceiptTextReader.lines(from: $0) },
+            readReceipt: { try ReceiptTextReader.pieces(from: $0) },
             readStatement: { url, password in
                 switch try StatementTextReader.read(url, password: password) {
                 case .pdf(let versions): .pdf(versions)

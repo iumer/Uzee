@@ -67,7 +67,9 @@ public enum TextScan {
             }
             groups.append(current)
             // Dates and times ("06/10/2026", "12:30", "06-10-26") are not amounts.
-            if j < chars.count, "/:".contains(chars[j]) || (chars[j] == "-" && j + 1 < chars.count && chars[j + 1].isASCIIDigit) {
+            // "1,830/-" is the Pakistani way of writing a whole-rupee amount, not a date.
+            let rupeeDash = j + 1 < chars.count && chars[j] == "/" && chars[j + 1] == "-"
+            if j < chars.count, !rupeeDash, "/:".contains(chars[j]) || (chars[j] == "-" && j + 1 < chars.count && chars[j + 1].isASCIIDigit) {
                 i = skipToken(from: j, in: chars)
                 continue
             }
@@ -100,6 +102,7 @@ public enum TextScan {
             if !hasGrouping, fraction.isEmpty, marker == nil, digits.count >= 7 { i = j; continue }
 
             if marker == nil { marker = markerBefore(start, in: chars) }
+            if marker == nil, j + 1 < chars.count, chars[j] == "/", chars[j + 1] == "-" { marker = "rs" }
             let negative = isNegative(start: start, end: j, in: chars)
             let creditDebit = creditDebitAfter(j, in: chars)
             let literal = fraction.isEmpty ? digits : digits + "." + fraction

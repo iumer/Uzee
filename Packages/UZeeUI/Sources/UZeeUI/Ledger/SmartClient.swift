@@ -10,8 +10,8 @@ public struct SmartClient: Sendable {
         case csv(String)
     }
 
-    /// Receipt photo → text lines, top to bottom.
-    public var readReceipt: @Sendable (Data) throws -> [String]
+    /// Receipt photo → the text on it and where each piece sits.
+    public var readReceipt: @Sendable (Data) throws -> [ReceiptPiece]
     /// Statement file (PDF, CSV) → text. Throws `StatementFileProblem`.
     public var readStatement: @Sendable (URL, _ password: String?) throws -> StatementText
     public var understand: @Sendable (String, VoiceVocabulary, LocalDate) async -> VoiceCommand
@@ -22,7 +22,7 @@ public struct SmartClient: Sendable {
     public var stopListening: @Sendable () -> Void
     public var cancelListening: @Sendable () -> Void
 
-    public init(readReceipt: @escaping @Sendable (Data) throws -> [String],
+    public init(readReceipt: @escaping @Sendable (Data) throws -> [ReceiptPiece],
                 readStatement: @escaping @Sendable (URL, String?) throws -> StatementText,
                 understand: @escaping @Sendable (String, VoiceVocabulary, LocalDate) async -> VoiceCommand,
                 voiceModelProblem: @escaping @Sendable () -> String?,
