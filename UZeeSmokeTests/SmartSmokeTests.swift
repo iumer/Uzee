@@ -79,7 +79,6 @@ final class SmartSmokeTests: XCTestCase {
     func testIMP002_importSheetOpens() {
         tap("settings.import")
         XCTAssertTrue(element("import.pick").waitForExistence(timeout: 30), "Import sheet missing")
-        XCTAssertTrue(element("import.account").exists, "Account picker missing")
         tap("import.close")
     }
 

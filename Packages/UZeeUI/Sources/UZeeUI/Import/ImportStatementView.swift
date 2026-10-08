@@ -17,7 +17,8 @@ struct ImportRow: Identifiable, Equatable {
     let duplicateOf: UUID?
 }
 
-/// Statement import (SCR-34, J11): choose the account, pick a PDF or CSV, review, then import in one step with Undo.
+/// Statement import (SCR-34, J11): pick a PDF or CSV; UZee recognises the bank and the currency and suggests the
+/// matching account (or adds one), then review and import in one step with Undo.
 struct ImportStatementView: View {
     @Bindable var session: AppSession
     @Environment(\.dismiss) private var dismiss
@@ -39,8 +40,13 @@ struct ImportStatementView: View {
     @State private var password = ""
     @State private var rows: [ImportRow] = []
     @State private var guessedSigns = false
-    @State private var sourceName: String?
-    @State private var currencyNote: String?
+    @State private var reading: StatementReading?
+    /// The bank the statement is from: recognised, or chosen by the user when UZee doesn't know the layout.
+    @State private var bankName = ""
+    /// The statement's currency: from its header, or chosen by the user.
+    @State private var statementCurrency: Currency = .pkr
+    @State private var currencyRecognised = false
+    @State private var accountProblem: String?
     @State private var confirming = false
 
     private var ledger: LedgerSnapshot { session.ledger }
@@ -79,35 +85,17 @@ struct ImportStatementView: View {
             } message: {
                 Text("Banks often use your CNIC, date of birth or account number. UZee doesn't keep the password.")
             }
-            .onAppear {
-                if accountID == nil {
-                    accountID = session.importAccountID.flatMap { id in ledger.activeAccounts.first { $0.id == id }?.id }
-                        ?? ledger.activeAccounts.first?.id
-                }
-            }
+            .onChange(of: accountID) { rebuildRows() }
         }
         .presentationDetents([.large])
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("import.sheet")
     }
 
-    // MARK: Step 1–2: account and file
+    // MARK: Step 1: the file
 
     private var chooseStep: some View {
         Form {
-            Section {
-                Picker("Account", selection: $accountID) {
-                    ForEach(ledger.activeAccounts) { account in
-                        Text(account.currency == ledger.base ? account.name : "\(account.name) (\(account.currency.code))")
-                            .tag(UUID?.some(account.id))
-                    }
-                }
-                .accessibilityIdentifier("import.account")
-            } header: {
-                Text("Step 1 of 3 · Choose account")
-            } footer: {
-                Text("Rows are added to this account. Rows already in UZee are spotted and left out.")
-            }
             Section {
                 Button {
                     problem = nil
@@ -115,16 +103,19 @@ struct ImportStatementView: View {
                 } label: {
                     Label("Choose a PDF or CSV statement", systemImage: "doc.text")
                 }
-                .disabled(accountID == nil)
                 .accessibilityIdentifier("import.pick")
                 if let problem {
                     Text(problem).foregroundStyle(UZColor.negative)
                         .accessibilityIdentifier("import.problem")
                 }
             } header: {
-                Text("Step 2 of 3 · Pick the statement")
+                Text("Step 1 of 2 · Pick the statement")
             } footer: {
-                Text("Download the statement from your bank's app or website first. UZee reads it on this iPhone; nothing is uploaded.")
+                Text("Download the statement from your bank's app or website first. UZee works out the bank and the currency, then asks which account it belongs to. It reads the file on this iPhone; nothing is uploaded.")
+            }
+            Section("Reads") {
+                Text("MCB, HBL, Meezan Bank, SadaPay, NayaPay and Wise statements, and most other banks' PDF or CSV statements with a date, an amount and a balance on each row.")
+                    .font(.footnote).foregroundStyle(UZColor.label2)
             }
         }
     }
@@ -142,7 +133,7 @@ struct ImportStatementView: View {
     }
 
     private func read() {
-        guard let fileURL, let account else { return }
+        guard let fileURL else { return }
         step = .reading
         problem = nil
         let smart = session.smart
@@ -153,14 +144,13 @@ struct ImportStatementView: View {
             }.value
             switch result {
             case .success(.pdf(let versions)):
-                let reading = StatementParser.read(versions: versions)
-                review(reading, into: account)
+                review(StatementParser.read(versions: versions))
             case .success(.csv(let text)):
                 guard let reading = StatementParser.read(csv: text) else {
                     fail("UZee couldn't find dates and amounts in this CSV. Check it has Date and Amount (or Debit and Credit) columns.")
                     return
                 }
-                review(reading, into: account)
+                review(reading)
             case .failure(let error):
                 switch error as? StatementFileProblem {
                 case .needsPassword:
@@ -185,7 +175,7 @@ struct ImportStatementView: View {
         step = .choose
     }
 
-    private func review(_ reading: StatementReading, into account: Account) {
+    private func review(_ reading: StatementReading) {
         guard !reading.rows.isEmpty else {
             if let source = reading.source {
                 fail("This \(source.rawValue) statement has no transactions in it.")
@@ -194,7 +184,76 @@ struct ImportStatementView: View {
             }
             return
         }
-        let currency = account.currency
+        self.reading = reading
+        bankName = reading.source?.rawValue ?? ""
+        let recognised = reading.currencyCode.flatMap(Currency.known(code:))
+        currencyRecognised = recognised != nil
+        statementCurrency = recognised ?? ledger.base
+        rows = []
+        accountID = bestAccount()
+        accountProblem = nil
+        rebuildRows()
+        step = .review
+    }
+
+    /// The account this statement most likely belongs to: same currency, then the bank's name in the account's
+    /// name, then the account Import was opened from. Nil when no account has the statement's currency.
+    private func bestAccount() -> UUID? {
+        let bank = NameKey.make(bankShortName)
+        let matching = ledger.activeAccounts.filter { $0.currency == statementCurrency }
+        func score(_ account: Account) -> Int {
+            var points = 0
+            if !bank.isEmpty, NameKey.make(account.name).contains(bank) { points += 4 }
+            if account.id == session.importAccountID { points += 2 }
+            if bankName == StatementSource.wise.rawValue, account.kind == .multiCurrency { points += 1 }
+            return points
+        }
+        return matching.max { score($0) < score($1) }?.id
+    }
+
+    /// "Meezan Bank" → "Meezan", for matching account names.
+    private var bankShortName: String {
+        bankName == StatementSource.meezan.rawValue ? "Meezan" : bankName
+    }
+
+    /// The name for a new account: "Wise USD", "Meezan Bank", or "Imported USD".
+    private var newAccountName: String {
+        let bank = bankName.isEmpty ? "Imported" : bankName
+        return statementCurrency == ledger.base && !bankName.isEmpty ? bank : "\(bank) \(statementCurrency.code)"
+    }
+
+    private func addAccount() {
+        let kind: AccountKind = switch bankName {
+        case StatementSource.wise.rawValue: .multiCurrency
+        case StatementSource.sadapay.rawValue, StatementSource.nayapay.rawValue: .wallet
+        default: .bank
+        }
+        let firstDay = rows.map(\.date).min() ?? session.today
+        // The statement's opening balance, as of the day before its first row, so its rows add up to its closing balance.
+        let opening = reading?.openingBalance.flatMap { try? Money.fromMajor($0, statementCurrency) } ?? Money(minorUnits: 0, currency: statementCurrency)
+        var name = newAccountName
+        var suffix = 2
+        while ledger.accounts.contains(where: { NameKey.make($0.name) == NameKey.make(name) }) {
+            name = "\(newAccountName) \(suffix)"
+            suffix += 1
+        }
+        do {
+            let account = try session.client.createAccount(.init(name: name, kind: kind, currency: statementCurrency, openingBalance: opening,
+                                                                 openingDate: firstDay.addingDays(-1), includeInTotals: true))
+            session.reload()
+            accountID = account.id
+            accountProblem = nil
+            session.toasts.show("Added \(name)")
+        } catch {
+            accountProblem = "Couldn't add the account. Add it in Accounts, then choose it here."
+        }
+    }
+
+    /// Rows in the chosen account's currency, with duplicates spotted against that account. Edits are kept.
+    private func rebuildRows() {
+        guard let reading else { return }
+        let currency = account?.currency ?? statementCurrency
+        let previous = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
         let remembered = (try? session.activity.rememberedCategories()) ?? [:]
         var built: [ImportRow] = []
         var candidates: [DuplicateFinder.Candidate] = []
@@ -202,49 +261,107 @@ struct ImportStatementView: View {
             guard let magnitude = try? Money.fromMajor(abs(row.amount), currency), magnitude.minorUnits > 0 else { continue }
             let signed = row.amount < 0 ? ((try? magnitude.negated()) ?? magnitude) : magnitude
             candidates.append(DuplicateFinder.Candidate(date: row.date, amount: signed))
+            let id = built.count
+            if var kept = previous[id] {
+                kept.amount = magnitude
+                built.append(kept)
+                continue
+            }
             let payee = StatementParser.payee(from: row.description)
             let type: CategoryType = row.amount > 0 ? .income : .expense
             let pickable = ledger.categories.filter { $0.type == type && !$0.isHidden }
             let category = CategorySuggester.suggest(payee: payee, remembered: remembered, categories: pickable)
                 ?? CategorySuggester.suggest(payee: row.description, remembered: remembered, categories: pickable)
-            built.append(ImportRow(id: built.count, date: row.date, description: row.description, payee: payee, amount: magnitude,
+            built.append(ImportRow(id: id, date: row.date, description: row.description, payee: payee, amount: magnitude,
                                    isMoneyIn: row.amount > 0, categoryID: category, include: true, duplicateOf: nil))
         }
-        let duplicates = DuplicateFinder.matches(candidates, accountID: account.id, in: session.transactions)
+        let duplicates = accountID.map { DuplicateFinder.matches(candidates, accountID: $0, in: session.transactions) } ?? [:]
         rows = built.enumerated().map { index, row in
-            guard let match = duplicates[index] else { return row }
+            let match = duplicates[index]
+            let include = previous[row.id] != nil && (previous[row.id]?.duplicateOf == nil) == (match == nil) ? row.include : match == nil
             return ImportRow(id: row.id, date: row.date, description: row.description, payee: row.payee, amount: row.amount,
-                             isMoneyIn: row.isMoneyIn, categoryID: row.categoryID, include: false, duplicateOf: match)
+                             isMoneyIn: row.isMoneyIn, categoryID: row.categoryID, include: include, duplicateOf: match)
         }
         guessedSigns = reading.signSource == .words
-        sourceName = reading.source?.rawValue
-        if let code = reading.currencyCode, code != account.currency.code {
-            currencyNote = "This statement is in \(code), but \(account.name) is in \(account.currency.code). Amounts are imported as they are, so choose a \(code) account if you have one."
-        } else {
-            currencyNote = nil
-        }
-        step = .review
     }
 
-    // MARK: Step 3: review
+    /// Why the import can't go ahead yet: no account, or one in another currency (amounts are never imported in the wrong currency).
+    private var blocker: String? {
+        guard let account else { return "Choose the account this statement belongs to, or add one." }
+        guard account.currency == statementCurrency else {
+            return "This statement is in \(statementCurrency.code), but \(account.name) is in \(account.currency.code). Choose a \(statementCurrency.code) account or add one."
+        }
+        return nil
+    }
+
+    // MARK: Step 2: account and review
 
     private var included: [ImportRow] { rows.filter(\.include) }
 
     private var reviewStep: some View {
         List {
             Section {
+                if let source = reading?.source {
+                    LabeledContent("Bank", value: source.rawValue)
+                        .accessibilityIdentifier("import.bank")
+                } else {
+                    Picker("Bank", selection: $bankName) {
+                        Text("Choose").tag("")
+                        ForEach(StatementSource.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) }
+                        Text("Other bank").tag("Other")
+                    }
+                    .accessibilityIdentifier("import.bank")
+                }
+                if currencyRecognised {
+                    LabeledContent("Currency", value: statementCurrency.code)
+                        .accessibilityIdentifier("import.currency")
+                } else {
+                    Picker("Currency", selection: $statementCurrency) {
+                        ForEach(Currency.known, id: \.self) { Text($0.code).tag($0) }
+                    }
+                    .accessibilityIdentifier("import.currency")
+                }
+                Picker("Import into", selection: $accountID) {
+                    Text("Choose").tag(UUID?.none)
+                    ForEach(ledger.activeAccounts) { account in
+                        Text(account.currency == ledger.base ? account.name : "\(account.name) (\(account.currency.code))")
+                            .tag(UUID?.some(account.id))
+                    }
+                }
+                .accessibilityIdentifier("import.account")
+                if !ledger.activeAccounts.contains(where: { $0.currency == statementCurrency && NameKey.make($0.name).contains(NameKey.make(bankShortName)) })
+                    || account == nil {
+                    Button {
+                        addAccount()
+                    } label: {
+                        Label("Add a “\(newAccountName)” account", systemImage: "plus.circle")
+                    }
+                    .accessibilityIdentifier("import.addAccount")
+                }
+                if let message = accountProblem ?? blocker {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(.footnote).foregroundStyle(UZColor.warning)
+                        .accessibilityIdentifier("import.blocker")
+                }
+            } header: {
+                Text("Step 2 of 2 · Which account is this?")
+            } footer: {
+                if reading?.source != nil || currencyRecognised {
+                    Text("Recognised from the statement. Rows already in the account are spotted and left out.")
+                }
+            }
+            .onChange(of: statementCurrency) {
+                if account?.currency != statementCurrency { accountID = bestAccount() }
+            }
+            .onChange(of: bankName) {
+                if account == nil { accountID = bestAccount() }
+            }
+            Section {
                 VStack(alignment: .leading, spacing: UZSpacing.s) {
                     Text("\(rows.count) transactions found").font(.headline)
                     if let first = rows.map(\.date).min(), let last = rows.map(\.date).max() {
-                        Text("\(DateText.long(first)) – \(DateText.long(last)) · into \(account?.name ?? "")")
+                        Text("\(DateText.long(first)) – \(DateText.long(last))")
                             .font(.subheadline).foregroundStyle(UZColor.label2)
-                    }
-                    if let sourceName {
-                        Text("Read as a \(sourceName) statement").font(.footnote).foregroundStyle(UZColor.label2)
-                    }
-                    if let currencyNote {
-                        Label(currencyNote, systemImage: "exclamationmark.triangle")
-                            .font(.footnote).foregroundStyle(UZColor.warning)
                     }
                     if guessedSigns {
                         Label("This statement has no balance column, so money in and out was guessed from the words. Tap an amount to switch it.",
@@ -254,8 +371,6 @@ struct ImportStatementView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("import.summary")
-            } header: {
-                Text("Step 3 of 3 · Review")
             }
             let fresh = rows.filter { $0.duplicateOf == nil }
             if !fresh.isEmpty {
@@ -282,7 +397,7 @@ struct ImportStatementView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(included.isEmpty)
+            .disabled(included.isEmpty || blocker != nil)
             .padding(UZSpacing.xxl)
             .background(.bar)
             .accessibilityIdentifier("import.import")
@@ -336,7 +451,7 @@ struct ImportStatementView: View {
 
     /// Saves every included row in one go; Undo removes them all (IMP-003: nothing is saved before this).
     private func save() {
-        guard let account else { return }
+        guard let account, blocker == nil else { return }
         var built: [MoneyTransaction] = []
         for row in included {
             let kind: TransactionKind = row.isMoneyIn ? .income : .expense

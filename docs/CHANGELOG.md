@@ -8,6 +8,14 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
+## [Unreleased] — Owner's test round, 2026-10-08
+
+### Changed
+- Statement import starts with the file. UZee shows the bank and currency it recognised (or asks for them), suggests the matching account (same currency, bank in its name) and offers to add one, e.g. "Wise USD". A statement is never imported into an account in another currency.
+
+### Fixed
+- Receipt scanning: the amount is taken from the value next to or under its label ("Amount", "Grand Total"), even on a tilted photo or a table; numbers in addresses, phone numbers, tracking and order numbers are ignored; "1,830/-" reads as money. On courier labels the shipper is the shop. A category is suggested from the shop and the items (more Pakistani shops and item words).
+
 ## [0.9.4] build 13 — 2026-10-08 — Statement readers for MCB, HBL, Meezan, SadaPay, NayaPay and Wise
 
 Checked on the owner's Mac against their real statements (the files never left the Mac): every file reads in full, and balances or header totals match.
