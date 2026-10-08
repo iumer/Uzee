@@ -38,6 +38,7 @@ struct AddSheet: View {
     @State private var receiptNote: String?
     @State private var isReadingReceipt = false
     @State private var showingCamera = false
+    @State private var showingScanner = false
     @State private var showingPhotos = false
     @State private var photoItem: PhotosPickerItem?
     @FocusState private var amountFocused: Bool
@@ -113,6 +114,10 @@ struct AddSheet: View {
                     readReceipt(data)
                 }
             }
+            .fullScreenCover(isPresented: $showingScanner) {
+                ReceiptScanner { image in readReceipt(image?.jpegData(compressionQuality: 0.9)) }
+                    .ignoresSafeArea()
+            }
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraPicker { image in readReceipt(image?.jpegData(compressionQuality: 0.9)) }
                     .ignoresSafeArea()
@@ -170,13 +175,20 @@ struct AddSheet: View {
             }
             .accessibilityIdentifier("add.readingReceipt")
         } else {
+            // Tap opens the auto-capture scanner; hold for a photo instead.
             Menu {
-                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                if ReceiptScanner.isAvailable {
+                    Button("Scan with camera", systemImage: "doc.viewfinder") { showingScanner = true }
+                } else if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     Button("Take photo", systemImage: "camera") { showingCamera = true }
                 }
                 Button("Choose photo", systemImage: "photo") { showingPhotos = true }
             } label: {
                 Label(receiptPhoto == nil ? "Scan receipt" : "Scan another receipt", systemImage: "doc.text.viewfinder")
+            } primaryAction: {
+                if ReceiptScanner.isAvailable { showingScanner = true }
+                else if UIImagePickerController.isSourceTypeAvailable(.camera) { showingCamera = true }
+                else { showingPhotos = true }
             }
             .accessibilityIdentifier("add.scanReceipt")
             if let receiptNote {
@@ -191,7 +203,7 @@ struct AddSheet: View {
             session.errorMessage = "Couldn't read that photo. Try another one."
             return
         }
-        let jpeg = image.resizedForReceipt().jpegData(compressionQuality: 0.8) ?? data
+        let jpeg = image.resizedForReading().jpegData(compressionQuality: 0.8) ?? data
         receiptPhoto = jpeg
         isReadingReceipt = true
         let smart = session.smart

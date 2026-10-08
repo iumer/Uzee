@@ -162,6 +162,7 @@ final class LockCurtain {
         guard let scene else { return }
         let curtain = window ?? UIWindow(windowScene: scene)
         curtain.windowLevel = .alert + 1
+        curtain.overrideUserInterfaceStyle = Appearance.current.style
         curtain.rootViewController = UIHostingController(rootView: LockScreen(showsButton: mode == .locked, unlock: unlock))
         curtain.alpha = 1
         curtain.isHidden = false

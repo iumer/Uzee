@@ -32,6 +32,7 @@ public struct RootView: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.never)
+        .onAppear { Appearance.apply() }
         // A sixth Tab would push People into "More" on iPhone, so "+" floats above the tab bar instead.
         // Only on each tab's first screen; detail screens and Settings keep their full width.
         .overlay(alignment: .bottomTrailing) {
@@ -72,6 +73,7 @@ public struct RootView: View {
             case .background:
                 if AppLock.isOn, !isLocked { backgroundedAt = Date() }
             case .active:
+                Appearance.apply()
                 if let since = backgroundedAt, AppLock.isOn {
                     backgroundedAt = nil
                     if Date().timeIntervalSince(since) >= AppLock.timeout { isLocked = true; promptOnActive = true }

@@ -14,6 +14,7 @@ struct ReceiptsSection: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var showingPhotos = false
     @State private var showingCamera = false
+    @State private var showingScanner = false
     @State private var showingFiles = false
     @State private var previewURL: URL?
     @State private var removing: ReceiptFile?
@@ -37,6 +38,9 @@ struct ReceiptsSection: View {
                 .contextMenu { Button("Remove", systemImage: "trash", role: .destructive) { removing = receipt } }
             }
             Menu {
+                if ReceiptScanner.isAvailable {
+                    Button("Scan with camera", systemImage: "doc.viewfinder") { showingScanner = true }
+                }
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     Button("Take photo", systemImage: "camera") { showingCamera = true }
                 }
@@ -64,6 +68,10 @@ struct ReceiptsSection: View {
             let access = url.startAccessingSecurityScopedResource()
             defer { if access { url.stopAccessingSecurityScopedResource() } }
             add(.pdf, try? Data(contentsOf: url))
+        }
+        .fullScreenCover(isPresented: $showingScanner) {
+            ReceiptScanner { image in addPhoto(image?.jpegData(compressionQuality: 0.85)) }
+                .ignoresSafeArea()
         }
         .fullScreenCover(isPresented: $showingCamera) {
             CameraPicker { image in addPhoto(image?.jpegData(compressionQuality: 0.8)) }

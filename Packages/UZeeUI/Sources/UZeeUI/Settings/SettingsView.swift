@@ -8,6 +8,9 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            Section {
+                AppearancePicker()
+            }
             Section("Money") {
                 NavigationLink(value: Route.accounts) {
                     SettingsLabel("Accounts", symbol: "building.columns", color: Color(uiColor: .systemBlue))
