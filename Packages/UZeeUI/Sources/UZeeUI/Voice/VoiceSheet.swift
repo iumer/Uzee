@@ -1,8 +1,8 @@
 import SwiftUI
 import UZeeCore
 
-/// Ask UZee (SCR-03): speak or type; answers come from the data on this iPhone, and anything that would
-/// save shows a card first (VOX-01…08).
+/// The UZee helper (SCR-03): talk to it like Siri, or type. It answers aloud from the data on this iPhone and
+/// keeps listening until you're done; anything that would save shows a card first (VOX-01…08).
 struct VoiceSheet: View {
     @Bindable var session: AppSession
     @State private var model: VoiceModel
@@ -14,17 +14,29 @@ struct VoiceSheet: View {
         _model = State(initialValue: VoiceModel(session: session))
     }
 
-    static let suggestions = ["How much do I owe Ammi?", "What's my next bill?", "How much budget is left?",
-                              "Spent 2,500 on groceries", "I lent 20k to a friend"]
+    static let suggestions = ["How am I doing this month?", "Spent 2,500 on groceries", "What did I spend on Foodpanda?",
+                              "How much do I owe Ammi?", "I lent 20k to a friend", "What's my next bill?"]
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 conversation
+                if !model.lines.isEmpty, model.handsFree || mood != .idle {
+                    HStack(spacing: UZSpacing.m) {
+                        HelperOrb(mood: mood, size: 30)
+                            .frame(width: 48, height: 48)
+                        Text(status).font(.subheadline).foregroundStyle(UZColor.label2).lineLimit(2)
+                        Spacer()
+                    }
+                    .padding(.horizontal, UZSpacing.xxl)
+                    .contentShape(.rect)
+                    .onTapGesture { model.toggleListening() }
+                    .accessibilityIdentifier("voice.statusBar")
+                }
                 inputBar
             }
             .background(UZColor.bg)
-            .navigationTitle("Ask UZee")
+            .navigationTitle("UZee")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -34,11 +46,23 @@ struct VoiceSheet: View {
                     }
                     .accessibilityIdentifier("voice.close")
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        model.muted.toggle()
+                        if model.muted { session.smart.stopSpeaking() }
+                    } label: {
+                        Image(systemName: model.muted ? "speaker.slash" : "speaker.wave.2")
+                    }
+                    .accessibilityLabel(model.muted ? "Speak replies" : "Mute replies")
+                    .accessibilityIdentifier("voice.mute")
+                }
             }
             .onAppear {
                 if let request = session.voiceRequest {
                     session.voiceRequest = nil
                     model.submit(request)
+                } else {
+                    model.begin()
                 }
             }
             .onChange(of: session.voiceRequest) { _, request in
@@ -62,6 +86,18 @@ struct VoiceSheet: View {
                 VStack(alignment: .leading, spacing: UZSpacing.l) {
                     if model.lines.isEmpty && model.card == nil { intro }
                     ForEach(model.lines) { line in bubble(line).id(line.id) }
+                    if model.isListening, !model.draft.isEmpty, !model.lines.isEmpty {
+                        // What UZee is hearing, live.
+                        HStack {
+                            Spacer(minLength: 48)
+                            Text(model.draft)
+                                .padding(.horizontal, UZSpacing.l)
+                                .padding(.vertical, UZSpacing.m)
+                                .background(UZColor.tint.opacity(0.35), in: .rect(cornerRadius: UZRadius.chip, style: .continuous))
+                                .foregroundStyle(Color.white)
+                        }
+                        .id("live")
+                    }
                     if model.isThinking {
                         HStack(spacing: UZSpacing.m) {
                             ProgressView()
@@ -94,13 +130,33 @@ struct VoiceSheet: View {
         }
     }
 
+    private var mood: HelperOrb.Mood {
+        model.isSpeaking ? .speaking : model.isThinking ? .thinking : model.isListening ? .listening : .idle
+    }
+
+    private var status: String {
+        switch mood {
+        case .listening: model.draft.isEmpty ? "Listening…" : model.draft
+        case .thinking: "Thinking…"
+        case .speaking: "Tap to interrupt"
+        case .idle: "Tap the orb and talk, or type below"
+        }
+    }
+
     private var intro: some View {
-        VStack(alignment: .leading, spacing: UZSpacing.l) {
-            UZeeLogo(size: 64, tile: true)
-                .accessibilityHidden(true)
-            Text("Ask about your money, or log something").font(.title3.weight(.semibold))
-            Text("Everything stays on this iPhone. Nothing is saved until you check it and tap Save.")
-                .font(.subheadline).foregroundStyle(UZColor.label2)
+        VStack(spacing: UZSpacing.l) {
+            Button { model.toggleListening() } label: { HelperOrb(mood: mood, size: 120) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.isListening ? "Stop listening" : "Talk to UZee")
+                .accessibilityIdentifier("voice.orb")
+            Text(status)
+                .font(model.isListening && !model.draft.isEmpty ? .title3.weight(.medium) : .headline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(model.isListening && !model.draft.isEmpty ? UZColor.label : UZColor.label2)
+                .animation(.easeOut(duration: 0.15), value: status)
+                .accessibilityIdentifier("voice.status")
+            Text("Ask about your money, log spending, loans or transfers, or find a transaction. Everything stays on this iPhone, and nothing is saved until you say yes.")
+                .font(.subheadline).foregroundStyle(UZColor.label2).multilineTextAlignment(.center)
             if let problem = model.modelProblem {
                 Label(problem, systemImage: "info.circle")
                     .font(.footnote).foregroundStyle(UZColor.label2)
@@ -118,6 +174,7 @@ struct VoiceSheet: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity)
         .padding(.top, UZSpacing.xl)
     }
 
@@ -163,12 +220,19 @@ struct VoiceSheet: View {
                 typing = false
                 model.toggleListening()
             } label: {
-                Image(systemName: model.isListening ? "stop.circle.fill" : "mic.circle.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(model.isListening ? UZColor.negative : UZColor.tint)
-                    .symbolEffect(.pulse, isActive: model.isListening)
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [Color(red: 0.20, green: 0.78, blue: 0.55), Color(red: 0.25, green: 0.55, blue: 0.98)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 40, height: 40)
+                        .shadow(color: mood == .idle ? .clear : Color(red: 0.25, green: 0.55, blue: 0.98).opacity(0.6), radius: 10)
+                    Image(systemName: model.isSpeaking ? "speaker.wave.2.fill" : model.isListening ? "waveform" : "mic.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .symbolEffect(.variableColor.iterative, isActive: model.isListening || model.isSpeaking)
+                }
             }
-            .accessibilityLabel(model.isListening ? "Stop listening" : "Speak")
+            .accessibilityLabel(model.isSpeaking ? "Stop speaking" : model.isListening ? "Stop listening" : "Talk to UZee")
             .accessibilityIdentifier("voice.mic")
         }
         .padding(.horizontal, UZSpacing.xxl)

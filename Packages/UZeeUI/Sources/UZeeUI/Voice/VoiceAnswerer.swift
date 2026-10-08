@@ -23,6 +23,39 @@ struct VoiceAnswerer {
         }
     }
 
+    /// "4 transactions for Foodpanda this month, Rs 6,200 in all. Latest: …" (UZee helper's search).
+    func search(_ text: String, period: VoicePeriod?) -> String {
+        var filter = ActivityFilter(text: text)
+        if let period { (filter.from, filter.through) = range(period) }
+        var found = ActivityQuery.filter(session.transactions, filter, snapshot: session.ledger, tags: session.tagMap)
+        if found.isEmpty {
+            // Search by category name too ("fuel", "groceries").
+            let key = NameKey.make(text)
+            let ids = Set(session.ledger.categories.filter { NameKey.make($0.name).contains(key) && !key.isEmpty }.map(\.id))
+            if !ids.isEmpty {
+                filter.text = ""
+                filter.categoryIDs = ids
+                found = ActivityQuery.filter(session.transactions, filter, snapshot: session.ledger, tags: session.tagMap)
+            }
+        }
+        let when = period.map { " " + $0.name } ?? ""
+        guard !found.isEmpty else { return "No transactions for \(text)\(when)." }
+        let totals = Dictionary(grouping: found, by: { $0.amount.currency }).compactMap { currency, rows -> String? in
+            let sum = rows.reduce(Int64(0)) { $0 + $1.amount.minorUnits.magnitudeClamped }
+            return money(Money(minorUnits: sum, currency: currency))
+        }
+        let latest = found.prefix(3).map { row in
+            "\(row.payeeName ?? session.ledger.categoryPath(row.categoryID) ?? "a transaction") \(money(row.amount)) on \(DateText.short(row.localDate))"
+        }
+        return "\(found.count) transaction\(found.count == 1 ? "" : "s") for \(text)\(when), \(totals.joined(separator: " and ")) in all. Latest: "
+            + latest.joined(separator: "; ") + "."
+    }
+
+    /// Total balance, this month's spending, budget left and the next bill, in one breath.
+    func overview() -> String {
+        [balance(nil), spent(nil, .thisMonth), budgetLeft(), nextBill()].joined(separator: " ")
+    }
+
     private func money(_ amount: Money) -> String {
         MoneyFormatter.string(Money(minorUnits: amount.minorUnits.magnitudeClamped, currency: amount.currency))
     }
@@ -67,7 +100,7 @@ struct VoiceAnswerer {
         return "You have \(money(summary.left)) left of \(money(summary.total)) for \(BudgetModel.title(budget.current))."
     }
 
-    private func range(_ period: VoicePeriod) -> (LocalDate, LocalDate) {
+    func range(_ period: VoicePeriod) -> (LocalDate, LocalDate) {
         switch period {
         case .today: return (today, today)
         case .thisWeek:

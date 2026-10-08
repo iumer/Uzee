@@ -141,3 +141,23 @@ struct VoiceRuleParserTests {
         #expect(VoiceDialog.need(parse("Hello there")) == nil)
     }
 }
+
+@Suite("UZee helper replies")
+struct AssistantReplyTests {
+    @Test("Short yes and no answer the card; longer sentences are edits")
+    func confirmOrCancel() {
+        #expect(AssistantReply.intent("Yes, save it") == .confirm)
+        #expect(AssistantReply.intent("haan theek hai") == .confirm)
+        #expect(AssistantReply.intent("No") == .cancel)
+        #expect(AssistantReply.intent("cancel that") == .cancel)
+        #expect(AssistantReply.intent("No, make it 3,000 from Meezan instead") == nil)
+        #expect(AssistantReply.intent("Spent 2,500 on groceries") == nil)
+    }
+
+    @Test("Goodbyes end a hands-free conversation")
+    func goodbye() {
+        #expect(AssistantReply.isGoodbye("Thanks, bye"))
+        #expect(AssistantReply.isGoodbye("that's all"))
+        #expect(!AssistantReply.isGoodbye("How much did I spend on fuel this month?"))
+    }
+}

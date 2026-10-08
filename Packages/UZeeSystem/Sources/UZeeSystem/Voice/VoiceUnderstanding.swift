@@ -79,6 +79,28 @@ enum ModelParser {
     static func parse(_ text: String, vocabulary: VoiceVocabulary, today: LocalDate) async -> VoiceCommand? {
         let session = LanguageModelSession(instructions: instructions)
         guard let generated = try? await session.respond(to: text, generating: GeneratedVoiceCommand.self).content else { return nil }
+        let fields = Fields(action: generated.action, amount: generated.amount, person: generated.person, account: generated.account,
+                            toAccount: generated.toAccount, category: generated.category, payee: generated.payee,
+                            question: generated.question, period: generated.period)
+        return command(from: fields, said: text, vocabulary: vocabulary, today: today)
+    }
+
+    /// What the model filled in, as plain text.
+    struct Fields {
+        var action: String
+        var amount: String
+        var person: String
+        var account: String
+        var toAccount: String
+        var category: String
+        var payee: String
+        var question: String
+        var period: String
+    }
+
+    /// Checks what the model filled in against the user's own names; amounts are read by `AmountPhrase`.
+    static func command(from generated: Fields, said text: String, vocabulary: VoiceVocabulary,
+                        today: LocalDate) -> VoiceCommand? {
         guard let action = VoiceAction(rawValue: generated.action), action != .unknown else { return nil }
         let rules = VoiceRuleParser.parse(text, vocabulary: vocabulary, today: today)
         func said(_ value: String) -> String? {
@@ -89,26 +111,31 @@ enum ModelParser {
         let account = VoiceRuleParser.resolve(said(generated.account), among: vocabulary.accounts)
         let category = VoiceRuleParser.resolve(said(generated.category), among: vocabulary.categories)
         var command = VoiceCommand(action: action,
-                                   amount: AmountPhrase.find(in: text) ?? said(generated.amount).flatMap(AmountPhrase.find(in:)),
+                                   amount: said(generated.amount).flatMap(AmountPhrase.find(in:)) ?? AmountPhrase.find(in: text),
                                    person: person, account: account,
                                    toAccount: VoiceRuleParser.resolve(said(generated.toAccount), among: vocabulary.accounts),
                                    category: category, payee: said(generated.payee).map(ReceiptParser.tidy), date: rules.date)
         if action == .question {
-            let period = VoicePeriod(rawValue: generated.period) ?? .thisMonth
-            switch generated.question {
-            case "iOwe": command.question = .iOwe(person: person)
-            case "owesMe": command.question = .owesMe(person: person)
-            case "budgetLeft": command.question = .budgetLeft
-            case "spent": command.question = .spent(category: category, period: period)
-            case "nextBill": command.question = .nextBill
-            case "subscriptions": command.question = .subscriptions
-            case "balance": command.question = .balance(account: account)
-            case "dueBeforeSalary": command.question = .dueBeforeSalary
-            case "upcoming": command.question = .upcoming
-            default: return nil
-            }
+            command.question = question(generated.question, person: person, category: category, account: account,
+                                        period: VoicePeriod(rawValue: generated.period) ?? .thisMonth)
+            if command.question == nil { return nil }
         }
         return command
+    }
+
+    static func question(_ kind: String, person: String?, category: String?, account: String?, period: VoicePeriod) -> VoiceQuestion? {
+        switch kind {
+        case "iOwe": .iOwe(person: person)
+        case "owesMe": .owesMe(person: person)
+        case "budgetLeft": .budgetLeft
+        case "spent": .spent(category: category, period: period)
+        case "nextBill": .nextBill
+        case "subscriptions": .subscriptions
+        case "balance": .balance(account: account)
+        case "dueBeforeSalary": .dueBeforeSalary
+        case "upcoming": .upcoming
+        default: nil
+        }
     }
 }
 #endif

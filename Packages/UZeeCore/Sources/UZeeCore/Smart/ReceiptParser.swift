@@ -59,6 +59,8 @@ public enum ReceiptParser {
                                  "order", "#", "pieces", "postal", "zip", "cnic", "iban", "a/c", "weight", "kg", "gram"]
     /// Couriers print their own name at the top of a parcel label; the shop is the shipper.
     static let couriers = ["postex", "tcs", "leopards", "trax", "m&p", "call courier", "blueex", "rider", "swyft", "daewoo"]
+    static let labelWords: Set<String> = ["amount", "date", "name", "contact", "address", "order", "tracking", "origin",
+                                          "destination", "remarks", "pieces", "type", "details", "city", "weight", "ref"]
     static let sellerWords = ["shipper", "seller", "sold by", "vendor", "merchant name", "store name", "shop name"]
     static let notMerchant = ["receipt", "invoice", "tax", "ntn", "strn", "gst", "tel", "phone", "ph", "date", "time", "welcome",
                               "www", "http", "@", "cashier", "order", "table", "bill", "fbr", "customer", "copy", "duplicate",
@@ -210,7 +212,10 @@ public enum ReceiptParser {
         let lower = line.lowercased()
         let wordsOnly = lower.split(whereSeparator: { !$0.isLetter && $0 != "." && $0 != "@" }).map(String.init)
         guard !notMerchant.contains(where: { word in wordsOnly.contains(word) || (word.count > 3 && lower.contains(word)) }),
-              !wordsOnly.contains("name"), !wordsOnly.contains("information") else { return nil }
+              !wordsOnly.contains("name"), !wordsOnly.contains("information"),
+              // A form label ("Amount:", "Order Type") is not a shop.
+              !line.trimmingCharacters(in: .whitespaces).hasSuffix(":"),
+              !(wordsOnly.count <= 3 && wordsOnly.contains(where: labelWords.contains)) else { return nil }
         let letters = line.filter(\.isLetter).count
         let visible = line.filter { !$0.isWhitespace }.count
         guard letters >= 3, visible > 0, Double(letters) / Double(visible) >= 0.6 else { return nil }

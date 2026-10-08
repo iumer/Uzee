@@ -28,6 +28,11 @@ public final class SpeechListener: @unchecked Sendable {
         return await AVAudioApplication.requestRecordPermission()
     }
 
+    /// True when speech recognition and the microphone are already allowed.
+    public static var hasAccess: Bool {
+        SFSpeechRecognizer.authorizationStatus() == .authorized && AVAudioApplication.shared.recordPermission == .granted
+    }
+
     /// Starts listening. `onText` gets the transcript so far, then once more with `isFinal` true.
     public func start(_ onText: @escaping @Sendable (_ text: String, _ isFinal: Bool) -> Void) throws {
         stop()
@@ -35,7 +40,8 @@ public final class SpeechListener: @unchecked Sendable {
         guard let recognizer, recognizer.isAvailable else { throw Failure.unavailable }
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+        // Play and record, so UZee can answer aloud right after listening.
+        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .duckOthers, .allowBluetoothA2DP])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         #endif
         let request = SFSpeechAudioBufferRecognitionRequest()

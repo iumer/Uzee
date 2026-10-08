@@ -21,6 +21,13 @@ public struct SmartClient: Sendable {
     public var startListening: @Sendable (@escaping @Sendable (String, Bool) -> Void) throws -> Void
     public var stopListening: @Sendable () -> Void
     public var cancelListening: @Sendable () -> Void
+    /// True when the microphone and speech recognition are already allowed (so listening won't show a prompt).
+    public var canListen: @Sendable () -> Bool
+    /// A conversation with Apple's on-device model, or nil when it isn't available (rules are used then).
+    public var startAssistant: @Sendable (AssistantActions, VoiceVocabulary, LocalDate) -> (any AssistantChat)?
+    /// Says a reply aloud, then calls back.
+    public var speak: @Sendable (String, @escaping @Sendable () -> Void) -> Void
+    public var stopSpeaking: @Sendable () -> Void
 
     public init(readReceipt: @escaping @Sendable (Data) throws -> [ReceiptPiece],
                 readStatement: @escaping @Sendable (URL, String?) throws -> StatementText,
@@ -29,7 +36,11 @@ public struct SmartClient: Sendable {
                 requestSpeechAccess: @escaping @Sendable () async -> Bool,
                 startListening: @escaping @Sendable (@escaping @Sendable (String, Bool) -> Void) throws -> Void,
                 stopListening: @escaping @Sendable () -> Void,
-                cancelListening: @escaping @Sendable () -> Void) {
+                cancelListening: @escaping @Sendable () -> Void,
+                canListen: @escaping @Sendable () -> Bool = { false },
+                startAssistant: @escaping @Sendable (AssistantActions, VoiceVocabulary, LocalDate) -> (any AssistantChat)? = { _, _, _ in nil },
+                speak: @escaping @Sendable (String, @escaping @Sendable () -> Void) -> Void = { _, done in done() },
+                stopSpeaking: @escaping @Sendable () -> Void = {}) {
         self.readReceipt = readReceipt
         self.readStatement = readStatement
         self.understand = understand
@@ -38,6 +49,10 @@ public struct SmartClient: Sendable {
         self.startListening = startListening
         self.stopListening = stopListening
         self.cancelListening = cancelListening
+        self.canListen = canListen
+        self.startAssistant = startAssistant
+        self.speak = speak
+        self.stopSpeaking = stopSpeaking
     }
 
     /// Previews and tests: rules only, no camera text, no microphone.

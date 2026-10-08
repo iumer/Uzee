@@ -69,7 +69,13 @@ final class AppContainer {
             requestSpeechAccess: { await SpeechListener.requestAccess() },
             startListening: { try SpeechListener.shared.start($0) },
             stopListening: { SpeechListener.shared.stop() },
-            cancelListening: { SpeechListener.shared.cancel() })
+            cancelListening: { SpeechListener.shared.cancel() },
+            canListen: { SpeechListener.hasAccess },
+            startAssistant: { actions, vocabulary, today in
+                AssistantBrain.start(actions: actions, vocabulary: vocabulary, today: today)
+            },
+            speak: { text, done in VoiceSpeaker.shared.speak(text, done: done) },
+            stopSpeaking: { VoiceSpeaker.shared.stop() })
     }
 
     private static func sampleDataActions(_ database: AppDatabase) -> AppSession.SampleDataActions {

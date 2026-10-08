@@ -32,7 +32,9 @@ struct VoiceCard: Equatable {
     }
 }
 
-/// Ask UZee conversation (SCR-03, J5): listen or type, understand, ask follow-ups, answer or show a card.
+/// The UZee helper (SCR-03, J5): a spoken conversation like Siri. It listens, works out when you've finished,
+/// answers aloud and listens again. Apple's on-device model holds the conversation and uses the app through
+/// tools (answer, look up, prepare a card, save it); without it, UZee's own rules understand common sentences.
 @MainActor
 @Observable
 final class VoiceModel {
@@ -48,7 +50,15 @@ final class VoiceModel {
     var draft = ""
     var isListening = false
     var isThinking = false
+    var isSpeaking = false
+    /// Listening again after each reply, until the user says bye, stops it or goes quiet.
+    var handsFree = false
+    /// Replies are shown but not spoken.
+    var muted = false
     var card: VoiceCard?
+    private var silence: Task<Void, Never>?
+    private var chat: (any AssistantChat)?
+    private var triedChat = false
     /// Waiting for an answer to a follow-up question (VOX-05).
     private var pending: VoiceCommand?
     private var need: VoiceDialog.Need?
@@ -61,14 +71,36 @@ final class VoiceModel {
 
     var vocabulary: VoiceVocabulary { session.voiceVocabulary }
 
+    var usesModel: Bool { modelProblem == nil }
+
     // MARK: Listening
 
+    /// Opening the helper starts listening straight away when the microphone is already allowed.
+    func begin() {
+        guard lines.isEmpty, card == nil, session.smart.canListen() else { return }
+        handsFree = true
+        Task { await startListening() }
+    }
+
+    /// The big button: stop talking, stop listening, or start a hands-free conversation.
     func toggleListening() {
-        if isListening { stopListening() } else { Task { await startListening() } }
+        if isSpeaking {
+            session.smart.stopSpeaking()
+            return
+        }
+        if isListening {
+            handsFree = false
+            stopListening()
+        } else {
+            handsFree = true
+            Task { await startListening() }
+        }
     }
 
     private func startListening() async {
+        guard !isListening else { return }
         guard await session.smart.requestSpeechAccess() else {
+            handsFree = false
             say("I can't hear you yet. Allow the microphone and speech recognition for UZee in Settings, or type instead.")
             return
         }
@@ -79,27 +111,49 @@ final class VoiceModel {
             }
             isListening = true
         } catch {
+            handsFree = false
             say("Voice isn't available right now. Use the keyboard instead.")
         }
     }
 
     func stopListening() {
+        silence?.cancel()
         session.smart.stopListening()
     }
 
+    /// Closing the helper: stop listening and speaking, end the conversation.
     func cancelListening() {
+        silence?.cancel()
+        handsFree = false
         session.smart.cancelListening()
+        session.smart.stopSpeaking()
         isListening = false
+        isSpeaking = false
     }
 
     private func heard(_ text: String, isFinal: Bool) {
         guard isListening else { return }
         if !text.isEmpty { draft = text }
         if isFinal {
+            silence?.cancel()
             isListening = false
             let sentence = draft
             draft = ""
-            if !sentence.trimmingCharacters(in: .whitespaces).isEmpty { submit(sentence) }
+            if sentence.trimmingCharacters(in: .whitespaces).isEmpty {
+                // Nothing said: end the hands-free loop quietly.
+                handsFree = false
+            } else {
+                submit(sentence)
+            }
+            return
+        }
+        // Finished speaking = a short pause after some words (or a longer one before any).
+        silence?.cancel()
+        let wait: Duration = draft.isEmpty ? .seconds(6) : .milliseconds(1_300)
+        silence = Task { [weak self] in
+            try? await Task.sleep(for: wait)
+            guard !Task.isCancelled, let self, self.isListening else { return }
+            self.session.smart.stopListening()
         }
     }
 
@@ -110,21 +164,29 @@ final class VoiceModel {
         guard !sentence.isEmpty else { return }
         draft = ""
         lines.append(Line(speaker: .me, text: sentence))
+        // "Yes" or "no" to the card on screen, spoken or typed.
+        if card != nil, let intent = AssistantReply.intent(sentence) {
+            pending = nil
+            need = nil
+            if intent == .confirm { save() } else { cancelCard() }
+            return
+        }
+        if AssistantReply.isGoodbye(sentence) {
+            say("Anytime. Bye for now!")
+            handsFree = false
+            return
+        }
+        if usesModel, pending == nil {
+            converse(sentence)
+            return
+        }
         if let pending, let need {
             self.pending = nil
             self.need = nil
             handle(VoiceDialog.apply(sentence, to: pending, need: need, vocabulary: vocabulary))
             return
         }
-        isThinking = true
-        let smart = session.smart
-        let vocabulary = vocabulary
-        let today = session.today
-        Task {
-            let command = await smart.understand(sentence, vocabulary, today)
-            isThinking = false
-            handle(command)
-        }
+        understandWithRules(sentence)
     }
 
     private func handle(_ command: VoiceCommand) {
@@ -150,11 +212,172 @@ final class VoiceModel {
 
     private func say(_ text: String) {
         lines.append(Line(speaker: .uzee, text: text))
+        speakThenListen(text)
+    }
+
+    /// Speaks the reply in a hands-free conversation, then listens for the next sentence.
+    private func speakThenListen(_ text: String) {
+        guard handsFree else { return }
+        guard !muted else {
+            Task { if handsFree { await startListening() } }
+            return
+        }
+        isSpeaking = true
+        session.smart.speak(text) { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.isSpeaking = false
+                if self.handsFree { await self.startListening() }
+            }
+        }
+    }
+
+    /// One turn with the on-device model; falls back to the rules if it can't answer.
+    private func converse(_ sentence: String) {
+        if !triedChat {
+            triedChat = true
+            chat = session.smart.startAssistant(assistantActions, vocabulary, session.today)
+        }
+        guard let chat else {
+            understandWithRules(sentence)
+            return
+        }
+        isThinking = true
+        Task {
+            let reply = await chat.reply(to: sentence)
+            isThinking = false
+            if let reply, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                say(reply)
+            } else {
+                understandWithRules(sentence)
+            }
+        }
+    }
+
+    private func understandWithRules(_ sentence: String) {
+        if let answer = quickAnswer(sentence) {
+            say(answer)
+            return
+        }
+        isThinking = true
+        let smart = session.smart
+        let vocabulary = vocabulary
+        let today = session.today
+        Task {
+            let command = await smart.understand(sentence, vocabulary, today)
+            isThinking = false
+            handle(command)
+        }
+    }
+
+    /// Overviews and searches the rules don't cover: "How am I doing?", "Find Careem", "What did I spend on Foodpanda this month?".
+    private func quickAnswer(_ sentence: String) -> String? {
+        let answerer = VoiceAnswerer(session: session)
+        var t = sentence.lowercased().trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        if ["how am i doing", "overview", "summary", "how's my month", "how is my month", "how are my finances"].contains(where: t.contains) {
+            return answerer.overview()
+        }
+        var period: VoicePeriod?
+        for (words, value) in [("this month", VoicePeriod.thisMonth), ("last month", .lastMonth), ("this week", .thisWeek), ("today", .today)]
+        where t.hasSuffix(" " + words) {
+            period = value
+            t = String(t.dropLast(words.count + 1))
+        }
+        var term: String?
+        for lead in ["search for ", "search ", "find ", "look up ", "show me "] where t.hasPrefix(lead) {
+            term = String(t.dropFirst(lead.count))
+            break
+        }
+        if term == nil {
+            for marker in ["spend on ", "spent on ", "paid to ", "pay to "] {
+                if let range = t.range(of: marker) { term = String(t[range.upperBound...]); break }
+            }
+            // A category ("groceries") is answered by the rules, with only my shares counted.
+            if let found = term, vocabulary.categories.contains(where: { NameKey.make($0) == NameKey.make(found) }) { return nil }
+        }
+        guard let term = term?.trimmingCharacters(in: .whitespaces), !term.isEmpty else { return nil }
+        return answerer.search(term, period: period)
+    }
+
+    /// The app, as tools for the model. Each returns a short result the model words for the user.
+    private var assistantActions: AssistantActions {
+        AssistantActions(
+            answer: { [weak self] question in
+                guard let self else { return "" }
+                return await self.answerForModel(question)
+            },
+            prepare: { [weak self] command in
+                guard let self else { return "" }
+                return await self.prepareForModel(command)
+            },
+            confirm: { [weak self] in
+                guard let self else { return "" }
+                return await self.confirmForModel()
+            },
+            cancel: { [weak self] in
+                guard let self else { return "" }
+                return await self.cancelForModel()
+            },
+            search: { [weak self] text, period in
+                guard let self else { return "" }
+                return await self.searchForModel(text, period: period)
+            },
+            overview: { [weak self] in
+                guard let self else { return "" }
+                return await self.overviewForModel()
+            })
+    }
+
+    private func answerForModel(_ question: VoiceQuestion) -> String {
+        VoiceAnswerer(session: session).answer(question)
+    }
+
+    private func searchForModel(_ text: String, period: VoicePeriod?) -> String {
+        VoiceAnswerer(session: session).search(text, period: period)
+    }
+
+    private func overviewForModel() -> String {
+        VoiceAnswerer(session: session).overview()
+    }
+
+    private func cancelForModel() -> String {
+        guard card != nil else { return "There was no card on screen." }
+        card = nil
+        return "Cancelled. Nothing was saved."
+    }
+
+    private func prepareForModel(_ command: VoiceCommand) -> String {
+        if let need = VoiceDialog.need(command) {
+            return "Not shown yet. Missing information: " + VoiceDialog.prompt(need, for: command) + " Ask the user."
+        }
+        showCard(for: command, announce: false)
+        guard let card else { return "Couldn't show the card." }
+        return "The card is on screen: \(cardSummary(card)). Ask the user to say yes to save or tell you what to change."
+    }
+
+    private func confirmForModel() -> String {
+        guard card != nil else { return "There is no card on screen to save." }
+        let saved = commit()
+        if let saved { return saved }
+        return "Not saved: \(card?.problem ?? "something is missing"). Tell the user."
+    }
+
+    /// "Lent Rs 20,000 to Usama from HBL, today".
+    private func cardSummary(_ card: VoiceCard) -> String {
+        let ledger = session.ledger
+        var parts = [VoiceCard.title(card.action) + " " + (card.amountText.isEmpty ? "(no amount)" : card.amountText)]
+        if let name = card.personID.flatMap({ session.people.person($0)?.name }) ?? card.newPersonName { parts.append("person " + name) }
+        if let account = ledger.account(card.accountID)?.name { parts.append("account " + account) }
+        if let to = ledger.account(card.toAccountID)?.name { parts.append("to " + to) }
+        if let category = ledger.categoryPath(card.categoryID) { parts.append("category " + category) }
+        if !card.payee.isEmpty { parts.append("payee " + card.payee) }
+        parts.append("date " + DateText.short(LocalDate(card.date, in: .current)))
+        return parts.joined(separator: ", ")
     }
 
     // MARK: Card
 
-    private func showCard(for command: VoiceCommand) {
+    private func showCard(for command: VoiceCommand, announce: Bool = true) {
         let ledger = session.ledger
         let accounts = ledger.activeAccounts
         func account(_ name: String?) -> UUID? {
@@ -209,7 +432,7 @@ final class VoiceModel {
                 intro = (net.isNegative ? "You already owe \(name) \(amount). " : "\(name) already owes you \(amount). ") + intro
             }
         }
-        say(intro)
+        if announce { say(intro) }
     }
 
     func cancelCard() {
@@ -217,9 +440,18 @@ final class VoiceModel {
         say("Cancelled. Nothing was saved.")
     }
 
-    /// Saves the card (VOX-07). Returns a short "Saved · …" line.
+    /// Saves the card (VOX-07) and says "Saved · …"; a problem stays on the card.
     func save() {
-        guard var card else { return }
+        if let result = commit() {
+            say(result)
+        } else if let problem = card?.problem {
+            speakThenListen(problem)
+        }
+    }
+
+    /// Saves the card. Returns "Saved · …", or nil with the reason on the card.
+    private func commit() -> String? {
+        guard var card else { return nil }
         card.problem = nil
         let ledger = session.ledger
         let currency = ledger.account(card.accountID)?.currency ?? ledger.base
@@ -229,7 +461,7 @@ final class VoiceModel {
         } catch {
             card.problem = ProblemText.message(error)
             self.card = card
-            return
+            return nil
         }
         let result: String?
         switch card.action {
@@ -242,15 +474,15 @@ final class VoiceModel {
         }
         if let result {
             self.card = nil
-            say(result)
-        } else {
-            // The app-wide error alert can't show over this sheet, so a save failure goes on the card.
-            if card.problem == nil, let message = session.errorMessage {
-                card.problem = message
-                session.errorMessage = nil
-            }
-            self.card = card
+            return result
         }
+        // The app-wide error alert can't show over this sheet, so a save failure goes on the card.
+        if card.problem == nil, let message = session.errorMessage {
+            card.problem = message
+            session.errorMessage = nil
+        }
+        self.card = card
+        return nil
     }
 
     private func saveTransaction(_ card: inout VoiceCard, amount: Money) -> String? {

@@ -13,6 +13,9 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 ### Changed
 - Statement import starts with the file. UZee shows the bank and currency it recognised (or asks for them), suggests the matching account (same currency, bank in its name) and offers to add one, e.g. "Wise USD". A statement is never imported into an account in another currency.
 
+### Added
+- UZee helper: Ask UZee is now a spoken conversation, like Siri. Opening it starts listening (once the microphone is allowed); it notices when you stop talking, answers aloud and listens again until you say bye, tap the orb or go quiet. With Apple Intelligence on, Apple's on-device model holds the conversation and uses the app as tools: answer questions, find transactions, give an overview, prepare a card and save or cancel it when you say yes or no. Without it, UZee's rules still understand common sentences, overviews ("How am I doing?") and searches ("What did I spend on Foodpanda?"). Replies can be muted.
+
 ### Fixed
 - Receipt scanning: the amount is taken from the value next to or under its label ("Amount", "Grand Total"), even on a tilted photo or a table; numbers in addresses, phone numbers, tracking and order numbers are ignored; "1,830/-" reads as money. On courier labels the shipper is the shop. A category is suggested from the shop and the items (more Pakistani shops and item words).
 
