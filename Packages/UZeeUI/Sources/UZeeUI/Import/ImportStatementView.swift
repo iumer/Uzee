@@ -152,8 +152,8 @@ struct ImportStatementView: View {
                 Result { try smart.readStatement(fileURL, secret) }
             }.value
             switch result {
-            case .success(.lines(let lines)):
-                let reading = StatementParser.read(lines: lines)
+            case .success(.pdf(let versions)):
+                let reading = StatementParser.read(versions: versions)
                 review(reading, into: account)
             case .success(.csv(let text)):
                 guard let reading = StatementParser.read(csv: text) else {

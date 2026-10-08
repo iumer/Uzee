@@ -58,7 +58,7 @@ final class AppContainer {
             readReceipt: { try ReceiptTextReader.lines(from: $0) },
             readStatement: { url, password in
                 switch try StatementTextReader.read(url, password: password) {
-                case .lines(let lines): .lines(lines)
+                case .pdf(let versions): .pdf(versions)
                 case .csv(let text): .csv(text)
                 }
             },

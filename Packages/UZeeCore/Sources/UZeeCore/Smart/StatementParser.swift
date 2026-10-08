@@ -65,11 +65,59 @@ public enum StatementParser {
         switch source {
         case .sadapay: reading = StatementLayouts.readSadaPay(lines)
         case .wise: reading = StatementLayouts.readWise(lines)
-        default: reading = readTable(lines)
+        default:
+            // Rows on one line each, or stacked over several lines (date, time, type, details, amount, balance)
+            // as in PDFKit's own text order: keep whichever finds more.
+            let table = readTable(lines)
+            let stacked = readTable(joinStacked(lines))
+            reading = stacked.rows.count > table.rows.count ? stacked : table
         }
         reading.source = source
         reading.currencyCode = StatementLayouts.currencyCode(lines)
         return reading
+    }
+
+    /// The same PDF read more than one way (rebuilt rows, then the PDF's own text order): keeps the reading with
+    /// the most transactions, preferring one whose rows check out against the running balance.
+    public static func read(versions: [[String]]) -> StatementReading {
+        let readings = versions.map { read(lines: $0) }
+        func score(_ reading: StatementReading) -> Double {
+            Double(reading.rows.count) * (reading.signSource == .balance ? 1.1 : 1) + (reading.source == nil ? 0 : 0.5)
+        }
+        var best = readings.first ?? read(lines: [])
+        for reading in readings.dropFirst() where score(reading) > score(best) { best = reading }
+        return best
+    }
+
+    /// Joins each date and the lines under it, up to the next date, into one row line. Page headers, footers and
+    /// NayaPay's "Service Charges Rs. 0" are left out so their figures aren't read as the amount.
+    static func joinStacked(_ lines: [String]) -> [String] {
+        let year = headerYear(lines)
+        var result: [String] = []
+        var block: [String] = []
+        func flush() {
+            if !block.isEmpty { result.append(block.joined(separator: " ")) }
+            block = []
+        }
+        for raw in lines {
+            var line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+            line = line.replacingOccurrences(of: #"(?i)service charges\s*rs\.?\s*[0-9][0-9,]*(\.[0-9]+)?"#, with: "",
+                                             options: .regularExpression).trimmingCharacters(in: .whitespaces)
+            let lower = line.lowercased()
+            if startsWithDate(line, year: year), !line.contains(" - "), !lower.contains("statement") {
+                flush()
+                block = [line]
+            } else if !block.isEmpty, block.count < 10, !StatementLayouts.isTableHeader(lower), !StatementLayouts.isPageNoise(lower),
+                      !openingWords.contains(where: { lower.contains($0) }), !closingWords.contains(where: { lower.hasPrefix($0) }) {
+                if !line.isEmpty { block.append(line) }
+            } else {
+                flush()
+                result.append(line)
+            }
+        }
+        flush()
+        return result
     }
 
     /// One transaction per line, with wrapped descriptions on the lines below.
@@ -164,8 +212,25 @@ public enum StatementParser {
         }
         let headerLines = table.prefix(headerIndex + 8).map { $0.joined(separator: " ") }
         guard !drafts.isEmpty else { return nil }
-        let (rows, source) = resolveSigns(drafts, opening: nil)
-        var reading = StatementReading(rows: rows, openingBalance: nil, closingBalance: nil,
+        // "Opening Balance,PKR 2488.55" (MCB) or "Opening Balance,128.15,Closing Balance,408.18" (NayaPay).
+        var opening: Decimal?
+        var closing: Decimal?
+        for cells in table.prefix(headerIndex) {
+            for (index, cell) in cells.enumerated() {
+                let lower = cell.lowercased()
+                let isOpening = openingWords.contains { lower.contains($0) }
+                // Not "total": NayaPay's header also has "Total Spent" and "Total Income".
+                let isClosing = closingWords.contains { $0 != "total" && lower.hasPrefix($0) }
+                guard isOpening || isClosing else { continue }
+                let value = TextScan.amounts(in: cell).last(where: \.looksLikeMoney)
+                    ?? cells.dropFirst(index + 1).first.flatMap { TextScan.amounts(in: $0).last(where: \.looksLikeMoney) }
+                guard let value else { continue }
+                if isOpening, opening == nil { opening = signed(value) }
+                if isClosing, closing == nil { closing = signed(value) }
+            }
+        }
+        let (rows, source) = resolveSigns(drafts, opening: opening)
+        var reading = StatementReading(rows: rows, openingBalance: opening, closingBalance: closing,
                                        signSource: hasColumns && source == .words ? .columns : source, linesRead: table.count)
         reading.source = StatementLayouts.source(of: headerLines)
         let currencyColumn = column(["currency"])

@@ -228,6 +228,47 @@ struct StatementLayoutTests {
         #expect(reading?.rows.map(\.date) == [day(2025, 9, 4), day(2025, 9, 4)])
         #expect(reading?.rows.first?.description == "Incoming fund transfer from Ali Raza | SadaPay-0001")
         #expect(reading?.rows.map { StatementParser.payee(from: $0.description) } == ["Ali Raza", "Google One London"])
+        #expect(reading?.openingBalance == dec("128.15"))
+        #expect(reading?.closingBalance == dec("844.32"))
+    }
+
+    @Test("MCB CSV header: opening and closing balance with a currency")
+    func mcbCSVBalances() {
+        let text = """
+        Opening Balance,PKR 1000.00
+        Closing Balance,PKR 2465.00
+        Date,Description,Reference Number,Currency,Amount,Cr/Dr,Currency,Balance
+        05 Oct 2026,IBFT RECEIVING,1234567890,PKR,1465.00,Cr,PKR,2465.00
+        """
+        let reading = StatementParser.read(csv: text)
+        #expect(reading?.openingBalance == 1_000)
+        #expect(reading?.closingBalance == 2_465)
+    }
+
+    @Test("NayaPay PDF in the PDF's own text order: each row stacked over several lines")
+    func nayapayStacked() {
+        let lines = [
+            "Account Statement", "01 Jul 2025 - 30 Jun 2026", "NayaPay ID", "test@nayapay",
+            "IBAN", "PK00NAYA0000000000000000",
+            "Opening Balance", "Rs. 128.15",
+            "TYPE", "DESCRIPTION", "AMOUNT", "BALANCE",
+            "31 Jul 2025", "05:53 PM", "Card", "Authorization", "TEST SHOP LOS ANGELES US", "Service Charges Rs. 0", "-Rs. 0", "Rs. 128.15",
+            "04 Sep 2025", "03:22 PM", "Raast In", "Incoming fund transfer from Ali Raza", "Service Charges Rs. 0", "+Rs. 1,000", "Rs. 1,128.15",
+            "04 Sep 2025", "03:40 PM", "Online", "Paid to Google One London GB", "Service Charges Rs. 0", "-Rs. 283.83", "Rs. 844.32",
+        ]
+        let reading = StatementParser.read(lines: lines)
+        #expect(reading.source == .nayapay)
+        #expect(reading.rows.map(\.amount) == [dec("1000"), dec("-283.83")])
+        #expect(reading.rows.map(\.balance) == [dec("1128.15"), dec("844.32")])
+        #expect(reading.rows.map { StatementParser.payee(from: $0.description) } == ["Ali Raza", "Google One London"])
+    }
+
+    @Test("Two readings of one PDF: the one with more transactions wins")
+    func bestVersion() {
+        let garbled = ["R ce ved mon y", "2,04 . 3"]
+        let clean = ["Statement 2025", "05 Oct 2025   Paid to Shop   -1,200.00   800.00", "06 Oct 2025   Salary   +5,000.00   5,800.00"]
+        #expect(StatementParser.read(versions: [garbled, clean]).rows.count == 2)
+        #expect(StatementParser.read(versions: [clean, garbled]).rows.count == 2)
     }
 
     @Test("Signs written before a currency: −Rs. 283.83, +Rs. 1,000, + PKR42,500.00")

@@ -16,6 +16,9 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 - Cleaner payees: people's names from transfers, merchants from card payments ("Food Panda Karachi"), "Salary Credit", "Wise fees".
 - The review screen says which bank the statement was read as, and warns when the statement's currency differs from the account's.
 - An empty statement (e.g. a Wise currency with no activity) says so instead of "can't read this format".
+- PDF text is rebuilt from PDFKit's text lines (not single characters, which could pick up the wrong letters), checked against the page's own text, and the PDF is also read in its own text order; the reading with more transactions wins.
+- Rows stacked over several lines (date, time, type, details, amount, balance) are read too, e.g. NayaPay PDFs.
+- CSV opening and closing balances are read from the header (MCB, NayaPay).
 
 ### Fixed
 - Ask UZee: saving a confirmation card no longer closes the app. The card's fields read the card after Save had cleared it.

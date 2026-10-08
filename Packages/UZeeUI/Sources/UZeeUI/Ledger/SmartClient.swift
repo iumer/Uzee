@@ -5,7 +5,8 @@ import UZeeCore
 /// doesn't depend on Vision, PDFKit, Speech or Foundation Models directly.
 public struct SmartClient: Sendable {
     public enum StatementText: Sendable {
-        case lines([String])
+        /// A PDF's text, read one or more ways (see `StatementParser.read(versions:)`).
+        case pdf([[String]])
         case csv(String)
     }
 
