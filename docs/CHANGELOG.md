@@ -8,7 +8,7 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
-## [Unreleased] — Owner's test round, 2026-10-08
+## [0.10.0] build 14 — 2026-10-08 — Owner's test round fixes, reminders, backup, namaz and Qibla
 
 ### Changed
 - Statement import starts with the file. UZee shows the bank and currency it recognised (or asks for them), suggests the matching account (same currency, bank in its name) and offers to add one, e.g. "Wise USD". A statement is never imported into an account in another currency.
