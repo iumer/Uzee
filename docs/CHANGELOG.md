@@ -14,6 +14,8 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 - Statement import starts with the file. UZee shows the bank and currency it recognised (or asks for them), suggests the matching account (same currency, bank in its name) and offers to add one, e.g. "Wise USD". A statement is never imported into an account in another currency.
 
 ### Added
+- Reminders (M7): one notification for each bill, subscription, installment and kameti, each loan due back, and your own reminders, by default a day before at 10:00 (Settings › Reminders: lead time, time, hide amounts). "Mark paid" on a bill notification posts the payment once from the bill's account; "Snooze 1 day" moves it to tomorrow; tapping opens the bill. At most 60 are queued, nearest first, refreshed on every change and whenever UZee opens. Permission is asked after setup or when you add your first bill or reminder.
+- Calendar: add your own reminders and events (title, date, optional time, repeat, amount, note, when to remind) with the new calendar button; they show as purple stars and open for editing.
 - First launch: a short setup. Welcome, then tap the banks and wallets you use (HBL, Meezan, MCB, UBL, Allied, Bank Alfalah, SadaPay, NayaPay, Easypaisa, JazzCash, Wise, Cash) and type today's balance and currency for each, then the day your salary comes (budgets follow it). "Try with sample data" skips it.
 - Settings › Privacy and data: "Lock with Face ID" (asks once when you turn it on; then each time you come back to UZee) and "Export to CSV" (every transaction, to share, save to Files or open in Numbers/Excel; text that looks like a formula is made safe).
 - New account: one-tap bank and wallet names that also set the type.

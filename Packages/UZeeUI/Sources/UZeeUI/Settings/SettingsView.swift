@@ -29,6 +29,12 @@ struct SettingsView: View {
                     SettingsLabel("Tags", symbol: "number", color: Color(uiColor: .systemTeal))
                 }
                 .accessibilityIdentifier("settings.tags")
+                NavigationLink {
+                    ReminderSettingsView(session: session)
+                } label: {
+                    SettingsLabel("Reminders", symbol: "bell.badge", color: Color(uiColor: .systemRed))
+                }
+                .accessibilityIdentifier("settings.reminders")
                 NavigationLink(value: Route.recentlyDeleted) {
                     SettingsLabel("Recently Deleted", symbol: "trash", color: Color(uiColor: .systemGray))
                 }

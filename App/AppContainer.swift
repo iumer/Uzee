@@ -29,7 +29,33 @@ final class AppContainer {
                              budgets: database.map(Self.budgetClient) ?? .unavailable,
                              people: database.map(Self.peopleClient) ?? .unavailable,
                              recurring: database.map(Self.recurringClient) ?? .unavailable,
-                             smart: Self.smartClient())
+                             smart: Self.smartClient(),
+                             calendar: database.map(Self.calendarClient) ?? .unavailable)
+        let session = session
+        NotificationScheduler.shared.start { response in
+            await MainActor.run {
+                switch response {
+                case .markPaid(let item, let scheduled): session.markPaidFromReminder(item: item, scheduled: scheduled)
+                case .snooze(let item, let scheduled): session.snoozeFromReminder(item: item, scheduled: scheduled)
+                case .open(let item, let date): session.openReminder(item: item, date: date)
+                }
+            }
+        }
+    }
+
+    /// Custom events, reminder settings (UZeeData) and local notifications (UZeeSystem), M7.
+    private static func calendarClient(_ database: AppDatabase) -> CalendarClient {
+        let store = EventStore(database: database)
+        let notifications = NotificationScheduler.shared
+        return CalendarClient(
+            events: { try store.events() },
+            saveEvent: { try store.save($0) },
+            deleteEvent: { try store.delete($0) },
+            reminderSettings: { try store.reminderSettings() },
+            setReminderSettings: { try store.setReminderSettings($0) },
+            requestNotifications: { await notifications.requestAccess() },
+            notificationsAllowed: { await notifications.isAllowed() },
+            schedule: { await notifications.schedule($0) })
     }
 
     /// The one container, shared by the app scene and Siri (App Intents run in the app's process).

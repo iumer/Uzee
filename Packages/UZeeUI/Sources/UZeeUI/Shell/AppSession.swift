@@ -29,6 +29,8 @@ public final class AppSession {
 
     public var selectedTab: AppTab = .home
     public var paths: [AppTab: [Route]] = [:]
+    /// A day the Calendar should jump to (from a reminder).
+    public var calendarFocus: LocalDate?
     public var isAddPresented = false {
         didSet { if !isAddPresented { addRequest = .new } }
     }
@@ -62,6 +64,10 @@ public final class AppSession {
     public private(set) var balances = PeopleLedger(selfID: UUID(), transactions: [], splits: [], loans: [], base: .pkr, rates: [:])
     /// Bills, subscriptions, income and plans with their resolved occurrences (REC-02).
     public private(set) var recurring: RecurringSnapshot = .empty
+    /// Custom calendar entries (CAL-03) and reminder preferences (CAL-04).
+    public private(set) var events: [CalendarEvent] = []
+    public private(set) var reminderSettings: ReminderSettings = .standard
+    private var scheduling: Task<Void, Never>?
 
     private let sampleData: SampleDataActions
     public let client: LedgerClient
@@ -70,10 +76,11 @@ public final class AppSession {
     public let peopleClient: PeopleClient
     public let recurringClient: RecurringClient
     public let smart: SmartClient
+    public let calendar: CalendarClient
 
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
                 activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable,
-                recurring: RecurringClient = .unavailable, smart: SmartClient = .unavailable) {
+                recurring: RecurringClient = .unavailable, smart: SmartClient = .unavailable, calendar: CalendarClient = .unavailable) {
         self.info = info
         self.isDatabaseReady = isDatabaseReady
         self.sampleData = sampleData
@@ -83,6 +90,7 @@ public final class AppSession {
         self.peopleClient = people
         self.recurringClient = recurring
         self.smart = smart
+        self.calendar = calendar
         isSampleMode = (try? sampleData.isActive()) ?? false
         reload()
     }
@@ -99,8 +107,71 @@ public final class AppSession {
             balances = PeopleLedger(selfID: people.selfID, transactions: transactions, splits: people.splits, loans: people.loans,
                                     base: ledger.base, rates: ledger.rates)
             recurring = try recurringClient.snapshot()
+            events = try calendar.events()
+            reminderSettings = try calendar.reminderSettings()
         } catch {
             errorMessage = "Couldn't read your accounts. Close UZee and open it again."
+        }
+        rescheduleReminders()
+    }
+
+    /// Re-plans every reminder from the current data (on launch, after each change and on return to the app).
+    /// Coalesced, so a burst of saves schedules once.
+    public func rescheduleReminders() {
+        scheduling?.cancel()
+        let plan = ReminderPlanner.plan(recurring: recurring, events: events, loans: loanReminders, settings: reminderSettings,
+                                        today: today, minuteNow: Self.minuteNow(), format: { MoneyFormatter.string($0) })
+        let calendar = calendar
+        scheduling = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            await calendar.schedule(plan)
+        }
+    }
+
+    static func minuteNow() -> Int {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+    }
+
+    /// Open loans with a due date (LOAN-07).
+    private var loanReminders: [(name: String, outstanding: Money, due: LocalDate, owedToMe: Bool)] {
+        people.loans.compactMap { loan in
+            guard let due = loan.dueDate, let name = people.person(loan.personID)?.name ?? loan.institution else { return nil }
+            let outstanding = LoanCalculator.outstanding(loan)
+            guard outstanding.minorUnits > 0 else { return nil }
+            return (name, outstanding, due, loan.direction == .lent)
+        }
+    }
+
+    public func saveEvent(_ event: CalendarEvent) -> Bool {
+        do {
+            try calendar.saveEvent(event)
+            reload()
+            Task { _ = await calendar.requestNotifications(); rescheduleReminders() }
+            return true
+        } catch {
+            errorMessage = "Couldn't save this. Check the title and amount."
+            return false
+        }
+    }
+
+    public func deleteEvent(_ id: UUID) {
+        do {
+            try calendar.deleteEvent(id)
+            reload()
+            toasts.show("Deleted")
+        } catch {
+            errorMessage = "Couldn't delete this. Try again."
+        }
+    }
+
+    public func setReminderSettings(_ settings: ReminderSettings) {
+        do {
+            try calendar.setReminderSettings(settings)
+            reload()
+        } catch {
+            errorMessage = "Couldn't save reminder settings."
         }
     }
 
@@ -199,6 +270,44 @@ public final class AppSession {
             self.reload()
         }
         return true
+    }
+
+    // MARK: Notification actions (CAL-05)
+
+    /// "Mark paid" on a bill reminder: posts exactly one payment from the bill's account, at the expected amount.
+    /// Without an account (or if it fails) the bill opens instead, so nothing is posted to the wrong place.
+    public func markPaidFromReminder(item: UUID, scheduled: LocalDate) {
+        reload()
+        guard let bill = recurring.item(item), bill.accountID != nil || bill.paidByID != nil,
+              (try? recurringClient.markPaid(item, scheduled, bill.amount(on: scheduled), bill.accountID, Date())) != nil else {
+            openReminder(item: item, date: scheduled)
+            return
+        }
+        reload()
+        toasts.show("\(bill.name) marked paid")
+    }
+
+    /// "Snooze 1 day" on a bill reminder: the bill moves to tomorrow and gets a fresh reminder.
+    public func snoozeFromReminder(item: UUID, scheduled: LocalDate) {
+        let until = max(today, scheduled).addingDays(1)
+        do {
+            try recurringClient.snooze(item, scheduled, until)
+        } catch {
+            openReminder(item: item, date: scheduled)
+            return
+        }
+        reload()
+    }
+
+    /// Tapping a reminder opens the bill (or the Calendar on that day).
+    public func openReminder(item: UUID?, date: LocalDate?) {
+        selectedTab = .calendar
+        if let item, recurring.item(item) != nil {
+            paths[.calendar] = [.bills, .recurring(item)]
+        } else {
+            paths[.calendar] = []
+            calendarFocus = date
+        }
     }
 
     /// Skip this time or snooze (REC-08), with Undo.

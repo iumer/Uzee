@@ -220,6 +220,8 @@ struct RecurringFormSheet: View {
         let priceFrom = item.flatMap { RecurringModel(session: session).next($0)?.scheduledDate } ?? first
         if session.perform("Couldn't save. Nothing was changed. Try again.", { try session.recurringClient.save(updated, priceFrom) }) {
             session.toasts.show(item == nil ? "Added \(updated.name)" : "Changes saved")
+            // The first bill is when reminders start to matter: ask for notifications once.
+            if item == nil { Task { _ = await session.calendar.requestNotifications(); session.rescheduleReminders() } }
             dismiss()
         }
     }

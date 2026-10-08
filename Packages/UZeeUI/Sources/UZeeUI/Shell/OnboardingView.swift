@@ -209,6 +209,8 @@ struct OnboardingView: View {
         }
         session.reload()
         done()
+        // Bill reminders need permission; ask now that setup is done, once.
+        Task { _ = await session.calendar.requestNotifications(); session.rescheduleReminders() }
     }
 
     private func done() {

@@ -72,6 +72,7 @@ public struct RootView: View {
                 if AppLock.isOn { isLocked = true; promptOnActive = true }
             case .active:
                 if isLocked, promptOnActive { promptOnActive = false; unlock() }
+                session.rescheduleReminders()
             default: break
             }
         }

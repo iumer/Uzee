@@ -51,6 +51,8 @@ public final class AppDatabase: Sendable {
             try db.execute(sql: "DROP INDEX account_name")
             try db.execute(sql: "CREATE UNIQUE INDEX account_name ON account(name_key, is_sample) WHERE deleted_at IS NULL")
         }
+        // M7: custom calendar entries (CAL-03).
+        migrator.registerMigration("v9_calendar_events") { db in try EventSchema.create(db) }
         return migrator
     }
 
