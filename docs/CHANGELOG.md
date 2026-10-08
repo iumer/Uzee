@@ -15,6 +15,8 @@ Built without per-milestone approval at the owner's request (2026-10-07): M4–M
 
 ### Added
 - Reminders (M7): one notification for each bill, subscription, installment and kameti, each loan due back, and your own reminders, by default a day before at 10:00 (Settings › Reminders: lead time, time, hide amounts). "Mark paid" on a bill notification posts the payment once from the bill's account; "Snooze 1 day" moves it to tomorrow; tapping opens the bill. At most 60 are queued, nearest first, refreshed on every change and whenever UZee opens. Permission is asked after setup or when you add your first bill or reminder.
+- Ask UZee from anywhere: a Control Center control (also for the Lock Screen and the Action Button) and a round Lock Screen widget, both opening Ask UZee ready to listen. They're in a new UZeeWidgets extension; they show no money, so no data is shared outside the app.
+- Reports: "Export PDF" makes an A4 PDF of the report on screen, to save, print or share.
 - Backup and restore (Settings › Backup and restore): one password-protected file with everything, receipts included (AES-GCM, key from your password with PBKDF2; the password is never stored), saved to Files, iCloud Drive or shared. Restore checks the password and shows what the backup holds, keeps a copy of your current data on the phone, then replaces everything. A wrong password or a changed file changes nothing.
 - Face ID lock: choose to lock immediately, after 1 minute or after 5 minutes away; with the lock on, the app switcher shows the logo instead of your amounts.
 - Calendar: add your own reminders and events (title, date, optional time, repeat, amount, note, when to remind) with the new calendar button; they show as purple stars and open for editing.

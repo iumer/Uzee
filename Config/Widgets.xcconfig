@@ -1,0 +1,15 @@
+// Ask UZee control and Lock Screen widget (Widgets/). Bundle id is the app's plus ".widgets".
+#include "Version.xcconfig"
+
+PRODUCT_NAME = UZeeWidgets
+IPHONEOS_DEPLOYMENT_TARGET = 26.0
+TARGETED_DEVICE_FAMILY = 1,2
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_FILE = Config/Widgets-Info.plist
+INFOPLIST_KEY_CFBundleDisplayName = UZee
+CODE_SIGN_STYLE = Automatic
+SKIP_INSTALL = YES
+APPLICATION_EXTENSION_API_ONLY = YES
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks @executable_path/../../Frameworks

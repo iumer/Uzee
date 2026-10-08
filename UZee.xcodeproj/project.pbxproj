@@ -11,6 +11,7 @@
 		306DA2A2A9BA4B081FC09F14 /* UZeeData in Frameworks */ = {isa = PBXBuildFile; productRef = B3DA2B2456D3EFEEFC5F3328 /* UZeeData */; };
 		F15E854621AF6D0D08DA716E /* UZeeSystem in Frameworks */ = {isa = PBXBuildFile; productRef = 2D0269825975BA6D9D0D7A3B /* UZeeSystem */; };
 		B7B7AB03C702D8216F7E0117 /* UZeeUI in Frameworks */ = {isa = PBXBuildFile; productRef = 235DCE6835D1E7956E1756D8 /* UZeeUI */; };
+		FCBD2C7CAAC3BD646C2726D4 /* UZeeWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0F3EBECCD9B4CFEC0B732DA3 /* UZeeWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -21,7 +22,28 @@
 			remoteGlobalIDString = 3D4C91345015A4DD0A099400;
 			remoteInfo = UZee;
 		};
+		57FA3ED7A7A56289261AB6AE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B8F16BE7731CD5DAC84487EF;
+			remoteInfo = UZeeWidgets;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		36D72B10CDB69C7796B7922F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FCBD2C7CAAC3BD646C2726D4 /* UZeeWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		81918909E83595C8F4212CCC /* UZee.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UZee.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -30,6 +52,10 @@
 		56137EF57AA7DD8976D75563 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		FF529D686FFC1CFF9E5F7F08 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		779827CBE7D8DCAC69F28D50 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+		0F3EBECCD9B4CFEC0B732DA3 /* UZeeWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UZeeWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6FA7F39FEAE9CE2FE0606F0 /* Widgets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Widgets.xcconfig; sourceTree = "<group>"; };
+		525F4A392673286CC9BF6926 /* Widgets-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Widgets-Debug.xcconfig"; sourceTree = "<group>"; };
+		75E52758A77013E2671A66EC /* Widgets-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Widgets-Release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -41,6 +67,11 @@
 		EE38E7FB1100DD18CC715F16 /* UZeeSmokeTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = UZeeSmokeTests;
+			sourceTree = "<group>";
+		};
+		DC81B824BA646EB577FC406A /* Widgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Widgets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -64,6 +95,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EA97922DDA1E7F9C62413E41 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -72,6 +110,7 @@
 			children = (
 				FDA31503C7EA89B18AA63554 /* App */,
 				EE38E7FB1100DD18CC715F16 /* UZeeSmokeTests */,
+				DC81B824BA646EB577FC406A /* Widgets */,
 				7173545D75AC56744F55E81B /* Config */,
 				1BADDC1D73C1A20F347483E1 /* Products */,
 			);
@@ -84,6 +123,9 @@
 				56137EF57AA7DD8976D75563 /* Debug.xcconfig */,
 				FF529D686FFC1CFF9E5F7F08 /* Release.xcconfig */,
 				779827CBE7D8DCAC69F28D50 /* Version.xcconfig */,
+				B6FA7F39FEAE9CE2FE0606F0 /* Widgets.xcconfig */,
+				525F4A392673286CC9BF6926 /* Widgets-Debug.xcconfig */,
+				75E52758A77013E2671A66EC /* Widgets-Release.xcconfig */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -93,6 +135,7 @@
 			children = (
 				81918909E83595C8F4212CCC /* UZee.app */,
 				858E33F033846B57054E0712 /* UZeeSmokeTests.xctest */,
+				0F3EBECCD9B4CFEC0B732DA3 /* UZeeWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -107,10 +150,12 @@
 				DA10D9DD089DF2AFEBC5ED5A /* Sources */,
 				0248D6DB510EB0F7E9C05175 /* Frameworks */,
 				82A968CB662751220D4DFE2D /* Resources */,
+				36D72B10CDB69C7796B7922F /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				10151EA27938F23E74103FF5 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				FDA31503C7EA89B18AA63554 /* App */,
@@ -147,6 +192,26 @@
 			productReference = 858E33F033846B57054E0712 /* UZeeSmokeTests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		B8F16BE7731CD5DAC84487EF /* UZeeWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 61B032D28C1FBC02DD294A59 /* Build configuration list for PBXNativeTarget "UZeeWidgets" */;
+			buildPhases = (
+				E217C6CC905FC6262C469BD8 /* Sources */,
+				EA97922DDA1E7F9C62413E41 /* Frameworks */,
+				E55A1D066312042E6B8EC6BD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DC81B824BA646EB577FC406A /* Widgets */,
+			);
+			name = UZeeWidgets;
+			productName = UZeeWidgets;
+			productReference = 0F3EBECCD9B4CFEC0B732DA3 /* UZeeWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -163,6 +228,9 @@
 					DFEE19449146DDDB4DD78AD1 = {
 						CreatedOnToolsVersion = 26.0;
 						TestTargetID = 3D4C91345015A4DD0A099400;
+					};
+					B8F16BE7731CD5DAC84487EF = {
+						CreatedOnToolsVersion = 26.0;
 					};
 				};
 			};
@@ -188,6 +256,7 @@
 			targets = (
 				3D4C91345015A4DD0A099400 /* UZee */,
 				DFEE19449146DDDB4DD78AD1 /* UZeeSmokeTests */,
+				B8F16BE7731CD5DAC84487EF /* UZeeWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -201,6 +270,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		887D9852F7F2A508189160F7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E55A1D066312042E6B8EC6BD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -224,6 +300,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E217C6CC905FC6262C469BD8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -231,6 +314,11 @@
 			isa = PBXTargetDependency;
 			target = 3D4C91345015A4DD0A099400 /* UZee */;
 			targetProxy = 431387EB7262E1CFC79B125E /* PBXContainerItemProxy */;
+		};
+		10151EA27938F23E74103FF5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B8F16BE7731CD5DAC84487EF /* UZeeWidgets */;
+			targetProxy = 57FA3ED7A7A56289261AB6AE /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -325,6 +413,20 @@
 			};
 			name = Release;
 		};
+		FFA6F62B968F453C466B6945 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 525F4A392673286CC9BF6926 /* Widgets-Debug.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		77A514727E0893EA07FE8021 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 75E52758A77013E2671A66EC /* Widgets-Release.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -351,6 +453,15 @@
 			buildConfigurations = (
 				5AB3A6BF84C2901E813939E6 /* Debug */,
 				54ECD3B736C66C8688F6C25B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		61B032D28C1FBC02DD294A59 /* Build configuration list for PBXNativeTarget "UZeeWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FFA6F62B968F453C466B6945 /* Debug */,
+				77A514727E0893EA07FE8021 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

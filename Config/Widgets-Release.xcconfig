@@ -1,0 +1,2 @@
+#include "Widgets.xcconfig"
+PRODUCT_BUNDLE_IDENTIFIER = app.uzee.ios.widgets
