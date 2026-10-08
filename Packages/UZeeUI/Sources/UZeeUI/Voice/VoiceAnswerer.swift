@@ -127,14 +127,14 @@ struct VoiceAnswerer {
             let key = NameKey.make(categoryName)
             let expense = session.ledger.categories.filter { $0.type == .expense }
             // "food" finds "Food & Dining"; whole words first, then any part of a name.
-            let category = expense.first { NameKey.make($0.name) == key }
-                ?? expense.first { category in
-                    NameKey.make(category.name).split(separator: " ").map(String.init).contains { word in
-                        word == key || word == key + "s" || word + "s" == key
-                    }
-                }
-                ?? expense.first { key.count >= 4 && NameKey.make($0.name).contains(key) }
-            guard let category else {
+            func wordMatch(_ name: String) -> Bool {
+                let words: [String] = NameKey.make(name).split(separator: " ").map(String.init)
+                return words.contains(key) || words.contains(key + "s") || words.contains { $0 + "s" == key }
+            }
+            var found: SpendCategory? = expense.first { NameKey.make($0.name) == key }
+            if found == nil { found = expense.first { wordMatch($0.name) } }
+            if found == nil, key.count >= 4 { found = expense.first { NameKey.make($0.name).contains(key) } }
+            guard let category = found else {
                 return "I couldn't find a category called \(categoryName)."
             }
             let ids = Set([category.id] + session.ledger.categories.filter { $0.parentID == category.id }.map(\.id))

@@ -61,12 +61,15 @@ struct RemindersTests {
         #expect(plan[2].minuteOfDay == 540)
     }
 
-    @Test("CAL-018 never more than the cap, nearest first")
+    @Test("CAL-018 never more than the cap, nearest first; a daily event takes only its next week")
     func cap() {
-        let daily = CalendarEvent(title: "Daily", date: today.addingDays(1), repeatUnit: .day)
-        let plan = ReminderPlanner.plan(recurring: .empty, events: [daily], loans: [], settings: .standard, today: today, minuteNow: 0,
+        let daily = (0..<12).map { CalendarEvent(title: "Daily \($0)", date: today.addingDays(1), repeatUnit: .day) }
+        let plan = ReminderPlanner.plan(recurring: .empty, events: daily, loans: [], settings: .standard, today: today, minuteNow: 0,
                                         format: format)
         #expect(plan.count == ReminderPlanner.cap)
+        let one = ReminderPlanner.plan(recurring: .empty, events: [daily[0]], loans: [], settings: .standard, today: today,
+                                       minuteNow: 0, format: format)
+        #expect(one.count == 7)
         #expect(plan.first?.fireDate == today)
         #expect(zip(plan, plan.dropFirst()).allSatisfy { $0.fireDate <= $1.fireDate })
     }
