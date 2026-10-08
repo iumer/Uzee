@@ -66,17 +66,13 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
     }
 
     func reply(to text: String) async -> String? {
-        lock.lock()
-        let current = session
-        lock.unlock()
+        let current = lock.withLock { session }
         do {
             return try await current.respond(to: text).content
         } catch {
             // A long conversation can outgrow the model's memory: start a fresh one and try once more.
             let fresh = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today)
-            lock.lock()
-            session = fresh
-            lock.unlock()
+            lock.withLock { session = fresh }
             return try? await fresh.respond(to: text).content
         }
     }
