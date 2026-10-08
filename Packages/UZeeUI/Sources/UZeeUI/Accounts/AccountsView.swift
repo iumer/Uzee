@@ -171,9 +171,35 @@ struct AccountFormSheet: View {
     @State private var currencyLocked = false
     @State private var problem: String?
 
+    /// Banks and wallets people in Pakistan use most; one tap fills the name and type.
+    static let presets: [(name: String, kind: AccountKind)] = [
+        ("Cash", .cash), ("HBL", .bank), ("Meezan", .bank), ("MCB", .bank), ("UBL", .bank), ("Allied", .bank),
+        ("Bank Alfalah", .bank), ("SadaPay", .wallet), ("NayaPay", .wallet), ("Easypaisa", .wallet),
+        ("JazzCash", .wallet), ("Wise", .multiCurrency)
+    ]
+
     var body: some View {
         NavigationStack {
             Form {
+                if editing == nil {
+                    Section("Quick pick") {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: UZSpacing.s) {
+                                ForEach(Self.presets, id: \.name) { preset in
+                                    Button(preset.name) {
+                                        name = preset.name
+                                        kind = preset.kind
+                                        if preset.kind == .multiCurrency { currency = .usd }
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(name == preset.name ? UZColor.tint : .secondary)
+                                    .accessibilityIdentifier("accountForm.preset.\(preset.name)")
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
                 Section {
                     TextField("Name, e.g. HBL", text: $name)
                         .textInputAutocapitalization(.words)

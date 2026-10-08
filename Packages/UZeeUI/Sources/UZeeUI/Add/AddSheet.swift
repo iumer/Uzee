@@ -4,7 +4,7 @@ import UIKit
 import UZeeCore
 
 /// Add or edit a transaction (SCR-05, TXN-01…07). Amount first; account defaults to the last used one;
-/// recent categories come first; Save shows a confirm sheet, then "Saved · Undo" (AUD-13).
+/// recent and everyday categories are one tap; Save saves, then "Saved · Undo" (AUD-13).
 struct AddSheet: View {
     @Bindable var session: AppSession
     @Environment(\.dismiss) private var dismiss
@@ -365,16 +365,26 @@ struct AddSheet: View {
         kind == .income ? .income : .expense
     }
 
-    /// Up to four categories used most recently for this type (TXN-010).
+    /// Up to six chips: categories used most recently for this type (TXN-010), topped up with everyday ones
+    /// so a new user also gets one-tap categories.
     private var recentCategories: [SpendCategory] {
         var seen = Set<UUID>()
         var result: [SpendCategory] = []
+        let type = categoryType(for: kind)
         for transaction in session.transactions where transaction.kind == kind {
             guard let id = transaction.categoryID, !seen.contains(id), let category = ledger.category(id),
-                  category.type == categoryType(for: kind) else { continue }
+                  category.type == type else { continue }
             seen.insert(id)
             result.append(category)
             if result.count == 4 { break }
+        }
+        let everyday = type == .income ? ["Salary", "Freelance / Business", "Reimbursement"]
+                                       : ["Groceries", "Dining out", "Fuel", "Food delivery", "Ride-hailing", "Mobile"]
+        for name in everyday where result.count < 6 && (kind == .expense || kind == .income) {
+            guard let category = ledger.categories.first(where: { $0.name == name && $0.type == type && !$0.isHidden }),
+                  !seen.contains(category.id) else { continue }
+            seen.insert(category.id)
+            result.append(category)
         }
         return result
     }

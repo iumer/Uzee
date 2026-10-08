@@ -7,6 +7,8 @@ public struct RootView: View {
     @Bindable var session: AppSession
     /// The animated logo at launch; UI tests (-uzee-in-memory) skip it.
     @State private var showingSplash = !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory")
+    /// First-launch setup, once the splash has gone.
+    @State private var showingOnboarding = false
 
     public init(session: AppSession) {
         self.session = session
@@ -52,6 +54,12 @@ public struct RootView: View {
             if showingSplash {
                 LaunchSplash(isShowing: $showingSplash).transition(.opacity)
             }
+        }
+        .fullScreenCover(isPresented: $showingOnboarding) {
+            OnboardingView(session: session) { showingOnboarding = false }
+        }
+        .onChange(of: showingSplash, initial: true) { _, splash in
+            if !splash, OnboardingView.isNeeded(session) { showingOnboarding = true }
         }
     }
 
