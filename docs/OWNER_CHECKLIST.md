@@ -9,7 +9,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 
 ## Requests
 
-| ID | Asked | What must be true | How it's checked | 0.11.1 |
+| ID | Asked | What must be true | How it's checked | 0.11.2 |
 |---|---|---|---|---|
 | OWN-001 | 2026-10-07 | Pick a bank and type its balance in first-launch setup | Phone | – |
 | OWN-002 | 2026-10-07 | Saving an expense saves straight away (no extra confirm screen) | Auto: SMK007 | – |
