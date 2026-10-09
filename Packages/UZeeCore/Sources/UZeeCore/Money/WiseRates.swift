@@ -7,9 +7,9 @@ public enum WiseRates {
     /// One point on the rate chart: `value` units of the target per 1 of the source, at `time` (ms since 1970, UTC).
     public struct Point: Equatable, Sendable {
         public let value: Decimal
-        public let time: Double
+        public let time: Int64
 
-        public init(value: Decimal, time: Double) {
+        public init(value: Decimal, time: Int64) {
             self.value = value
             self.time = time
         }
@@ -18,7 +18,7 @@ public enum WiseRates {
         public var day: LocalDate {
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = TimeZone(identifier: "UTC")!
-            let parts = calendar.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: time / 1000))
+            let parts = calendar.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: TimeInterval(time / 1000)))
             return LocalDate(year: parts.year ?? 1970, month: parts.month ?? 1, day: parts.day ?? 1)
         }
     }
@@ -58,7 +58,7 @@ public enum WiseRates {
     }
 
     private static func point(_ object: [String: Any]) -> Point? {
-        guard let number = object["value"] as? NSNumber, let time = (object["time"] as? NSNumber)?.doubleValue else { return nil }
+        guard let number = object["value"] as? NSNumber, let time = (object["time"] as? NSNumber)?.int64Value else { return nil }
         // Through text, so 278.7 stays 278.7 rather than 278.69999…; four decimals, like Wise shows.
         guard let exact = Decimal(string: number.stringValue, locale: Locale(identifier: "en_US_POSIX")) else { return nil }
         let value = Rounding.halfUp(exact, scale: 4)

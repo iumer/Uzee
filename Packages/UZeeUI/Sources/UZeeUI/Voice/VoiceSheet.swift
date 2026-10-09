@@ -288,6 +288,8 @@ struct VoiceSheet: View {
             try? await Task.sleep(for: .milliseconds(750))
             withAnimation(.spring(duration: 0.55, bounce: 0.5)) { asleep = false }
             try? await Task.sleep(for: .milliseconds(300))
+            // Screen tests run without a microphone; a permission prompt there would block every later tap.
+            guard !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory") else { return }
             if session.smart.canListen(), model.voiceMode, !model.isListening, !model.isThinking { model.startVoice() }
         }
     }
