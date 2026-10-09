@@ -126,7 +126,7 @@ struct HomeCards: View {
                                     .accessibilityIdentifier("home.leftAfterBills")
                             }
                         }
-                        Text((hasOverdue ? "Due includes overdue bills · " : "") + "your shares · USD at $1 = Rs 280")
+                        Text((hasOverdue ? "Due includes overdue bills · " : "") + "your shares · " + session.usdRateNote)
                             .font(.caption).foregroundStyle(UZColor.label2)
                     }
                 }

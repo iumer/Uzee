@@ -42,4 +42,11 @@ extension AppSession {
         guard usesWiseRates, currency != ledger.base else { return nil }
         return await smart.wiseRate(currency, ledger.base, day >= today ? nil : day)
     }
+
+    /// "USD at $1 = Rs 277.01" from the rate UZee is using now (Wise's when on), for card footnotes.
+    var usdRateNote: String {
+        let base = ledger.base
+        guard base != .usd else { return "" }
+        return "USD at $1 = \(base.symbol) \(ExchangeRate.display(ledger.rate(for: .usd)))"
+    }
 }

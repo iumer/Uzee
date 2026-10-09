@@ -79,7 +79,7 @@ struct CalendarTabView: View {
                     }
                     dayList(events, model: model, first: first)
                 }
-                Text("Tap a row to open it. Pay marks it paid and records the transaction. USD at $1 = Rs 280.")
+                Text("Tap a row to open it. Pay marks it paid and records the transaction. " + session.usdRateNote + ".")
                     .font(.caption).foregroundStyle(UZColor.label2)
             }
             .padding(.horizontal, UZSpacing.xxl)

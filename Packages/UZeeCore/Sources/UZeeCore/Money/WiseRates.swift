@@ -32,6 +32,20 @@ public enum WiseRates {
         URL(string: "https://wise.com/rates/history?source=\(source.code)&target=\(target.code)&length=\(max(2, days))&resolution=daily&unit=day")!
     }
 
+    /// The chart endpoints to try, in order, for a history reaching `days` back: Wise's site uses
+    /// `history+live`; long spans may need month or year units instead of days.
+    public static func historyURLs(_ source: Currency, _ target: Currency, days: Int) -> [URL] {
+        let pair = "source=\(source.code)&target=\(target.code)"
+        let months = days / 30 + 2
+        let years = days / 365 + 1
+        return [
+            "https://wise.com/rates/history+live?\(pair)&length=\(max(2, days))&resolution=daily&unit=day",
+            "https://wise.com/rates/history+live?\(pair)&length=\(months)&resolution=daily&unit=month",
+            "https://wise.com/rates/history+live?\(pair)&length=\(years)&resolution=daily&unit=year",
+            "https://wise.com/rates/history?\(pair)&length=\(max(2, days))&resolution=daily&unit=day",
+        ].compactMap { URL(string: $0) }
+    }
+
     /// How many days of history to ask for so that `day` is included.
     public static func daysBack(to day: LocalDate, today: LocalDate) -> Int {
         max(2, day.days(to: today) + 3)

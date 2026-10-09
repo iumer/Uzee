@@ -314,6 +314,16 @@ struct ReceiptInternetFixTests {
         #expect(sameLine.amount == Money(minorUnits: 4_290, currency: .usd))
     }
 
+    @Test("The rounded total wins over the total before rounding")
+    func roundedTotal() {
+        let labelled = ReceiptParser.read(["SAMPLE MART", "Total Incl. GST 60.31", "Rounding Adj -0.01", "Rounded Total (RM) 60.30",
+                                           "Cash 100.00", "Change 39.70"], currency: .usd, today: today)
+        #expect(labelled.amount == Money(minorUnits: 6_030, currency: .usd))
+        let plainTotals = ReceiptParser.read(["SAMPLE MART", "Total 33.92", "Rounding -0.02", "Total 33.90", "Cash 50.00"],
+                                             currency: .usd, today: today)
+        #expect(plainTotals.amount == Money(minorUnits: 3_390, currency: .usd))
+    }
+
     @Test("The shop, not the cashier, the address or a misread logo")
     func shopName() {
         let cashier = ReceiptParser.read(["Cashier:", "TAN SAMPLE YEE", "SAMPLE BOOK STORE", "Total 9.00"], currency: .usd, today: today)

@@ -93,7 +93,7 @@ struct BillsHubView: View {
                     }
                     .accessibilityElement(children: .combine)
                 }
-                Text("Your shares only · estimates included" + (session.ledger.footnote.map { " · " + $0 } ?? " · USD at $1 = Rs 280"))
+                Text("Your shares only · estimates included" + (session.ledger.footnote.map { " · " + $0 } ?? " · " + session.usdRateNote))
                     .font(.caption).foregroundStyle(UZColor.label2)
             }
         }

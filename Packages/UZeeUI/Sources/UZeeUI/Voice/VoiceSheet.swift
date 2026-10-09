@@ -40,6 +40,9 @@ struct VoiceSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") {
                         model.cancelListening()
+                        // Close through the presenting flag: dismiss() alone was sometimes swallowed while the
+                        // orb was animating, so Close needed a second tap.
+                        session.isVoicePresented = false
                         dismiss()
                     }
                     .accessibilityIdentifier("voice.close")
@@ -289,7 +292,7 @@ struct VoiceSheet: View {
             withAnimation(.spring(duration: 0.55, bounce: 0.5)) { asleep = false }
             try? await Task.sleep(for: .milliseconds(300))
             // Screen tests run without a microphone; a permission prompt there would block every later tap.
-            guard !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory") else { return }
+            guard !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory"), session.isVoicePresented else { return }
             if session.smart.canListen(), model.voiceMode, !model.isListening, !model.isThinking { model.startVoice() }
         }
     }

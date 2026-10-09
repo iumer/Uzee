@@ -25,11 +25,15 @@ public actor WiseRateFetcher {
            let rate = WiseRates.rate(on: day, in: cached.points) {
             return rate
         }
-        guard let data = await Self.get(WiseRates.historyURL(source, target, days: days)) else { return nil }
-        let points = WiseRates.parseHistory(data)
-        guard !points.isEmpty else { return nil }
-        history[key] = (Date(), days, points)
-        return WiseRates.rate(on: day, in: points)
+        // Try each chart endpoint until one has a point on (or just before) the day.
+        for url in WiseRates.historyURLs(source, target, days: days) {
+            guard let data = await Self.get(url) else { continue }
+            let points = WiseRates.parseHistory(data)
+            guard let rate = WiseRates.rate(on: day, in: points) else { continue }
+            history[key] = (Date(), days, points)
+            return rate
+        }
+        return nil
     }
 
     private static func get(_ url: URL) async -> Data? {

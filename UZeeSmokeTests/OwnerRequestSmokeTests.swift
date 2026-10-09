@@ -42,10 +42,14 @@ final class OwnerRequestSmokeTests: XCTestCase {
 
     /// OWN-009 and OWN-011: Settings keeps UZee's voice, erase everything and the Wise rate.
     func testOWN009_OWN011_settingsRows() {
-        XCTAssertTrue(element("settings.uzeeVoice").waitForExistence(timeout: 30), "UZee's voice missing")
-        XCTAssertTrue(element("settings.erase").waitForExistence(timeout: 30), "Erase everything missing")
+        // Setup scrolled down to the sample-data row; go back to the top so Exchange rate is fully on screen.
+        let list = app.collectionViews.firstMatch
+        for _ in 0..<4 where list.exists { list.swipeDown() }
         tap("settings.rate")
         XCTAssertTrue(element("rate.wise").waitForExistence(timeout: 30), "Live rate from Wise missing")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(element("settings.uzeeVoice").waitForExistence(timeout: 30), "UZee's voice missing")
+        XCTAssertTrue(element("settings.erase").waitForExistence(timeout: 30), "Erase everything missing")
     }
 
     /// OWN-004: from a person you can record "they paid you" (part of what they owe).

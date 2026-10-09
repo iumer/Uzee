@@ -45,6 +45,8 @@ public struct ReceiptPiece: Equatable, Sendable {
 public enum ReceiptParser {
     /// Strongest first. "total" alone is weaker than "grand total" because receipts repeat it.
     static let totalWords: [[String]] = [
+        // A rounded total is what was actually paid (cash rounding to 5 sen / 1 rupee).
+        ["rounded total", "total rounded", "total after rounding", "rounded amount", "total amt rounded", "rounded"],
         // What's left to pay after discounts and tax beats a "Total Amount" printed above them.
         ["net payable", "amount payable", "total payable", "you pay", "amount to pay", "grand total", "net amount", "amount due",
          "balance due", "net total"],
@@ -137,9 +139,12 @@ public enum ReceiptParser {
             guard !notAmountLines.contains(where: { containsWord(lower, $0) }) else { return [] }
             return TextScan.amounts(in: withoutPercents(piece.text)).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
         }
+        // With a rounding line, the last total printed is the rounded one: take the lowest, not the largest.
+        let rounds = pieces.contains { plain($0.text).contains("rounding") }
         for (tier, words) in totalWords.enumerated() {
             var best: Decimal?
-            // Top to bottom; in the first tier the lowest line wins (the amount after discounts), else the largest.
+            let lowestWins = tier <= 1 || rounds
+            // Top to bottom; in the first tiers the lowest line wins (the amount after discounts), else the largest.
             for label in pieces.sorted(by: { $0.midY > $1.midY }) {
                 let lower = plain(label.text)
                 guard words.contains(where: { containsWord(lower, $0) }), !notTotal.contains(where: { lower.contains($0) }) else { continue }
@@ -149,7 +154,7 @@ public enum ReceiptParser {
                     .max { $0.maxX < $1.maxX }.map { plain($0.text) } ?? ""
                 if !leftWord.isEmpty, notTotal.contains(where: { (leftWord + " " + lower).contains($0) }) { continue }
                 if let own = TextScan.amounts(in: withoutPercents(label.text)).filter({ !$0.isNegative && $0.value > 0 }).last {
-                    if tier == 0 || own.value > (best ?? 0) { best = own.value }
+                    if lowestWins || own.value > (best ?? 0) { best = own.value }
                     continue
                 }
                 // The nearest value to the right on the same printed line (allowing for a tilted photo), else the
@@ -169,7 +174,7 @@ public enum ReceiptParser {
                     }
                     if let distance, distance < (nearest?.distance ?? .infinity) { nearest = (distance, value) }
                 }
-                if let value = nearest?.value, tier == 0 || value > (best ?? 0) { best = value }
+                if let value = nearest?.value, lowestWins || value > (best ?? 0) { best = value }
             }
             if let best { return best }
         }
@@ -177,8 +182,10 @@ public enum ReceiptParser {
     }
 
     static func amount(_ lines: [String], currency: Currency) -> Money? {
+        let rounds = lines.contains { plain($0).contains("rounding") }
         for (tier, words) in totalWords.enumerated() {
             var best: Decimal?
+            let lowestWins = tier <= 1 || rounds
             for (index, line) in lines.enumerated() {
                 let lower = plain(line)
                 guard words.contains(where: { containsWord(lower, $0) }), !notTotal.contains(where: { lower.contains($0) }) else { continue }
@@ -189,7 +196,7 @@ public enum ReceiptParser {
                     guard !notAmountLines.contains(where: { containsWord(nextLower, $0) }) else { continue }
                     candidates = TextScan.amounts(in: withoutPercents(next)).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
                 }
-                if let value = candidates.last?.value, tier == 0 || value > (best ?? 0) { best = value }
+                if let value = candidates.last?.value, lowestWins || value > (best ?? 0) { best = value }
             }
             if let best { return try? Money.fromMajor(best, currency) }
         }
