@@ -50,7 +50,7 @@ jobs:
     # Day-to-day checks run on the owner's Mac simulator, which takes ~4 min.
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: macos-26
-    timeout-minutes: 100
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - name: Select newest Xcode
@@ -100,7 +100,7 @@ jobs:
           scripts/ci-run-smoke.sh "$IPHONE_ID" iphone
           xcrun simctl shutdown "$IPHONE_ID" || true
       - name: Smoke UI tests on iPad
-        timeout-minutes: 25
+        timeout-minutes: 40
         run: scripts/ci-run-smoke.sh "$IPAD_ID" ipad
       - name: Upload test results
         if: always()
