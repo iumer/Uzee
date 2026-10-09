@@ -226,6 +226,13 @@ struct CalendarTabView: View {
         .padding(.horizontal, UZSpacing.s)
     }
 
+    static let weekdayLetters = ["M", "T", "W", "T", "F", "S", "S"]
+
+    /// Grid cell ids: -1…-7 the weekday letters, 100+ the blanks before the 1st, 1…31 the days.
+    static func cells(blanks: Int, days: Int) -> [Int] {
+        Array((-7 ... -1).reversed()) + (0..<blanks).map { 100 + $0 } + Array(1...days)
+    }
+
     private func grid(_ first: LocalDate, events: [CalendarEntry], today: LocalDate) -> some View {
         let byDay = Dictionary(grouping: events, by: \.date)
         // Monday first: weekday of the 1st (Sun = 1 … Sat = 7) → leading blanks.
@@ -233,13 +240,17 @@ struct CalendarTabView: View {
         let blanks = (weekday + 5) % 7
         let days = LocalDate.daysIn(year: first.year, month: first.month)
         return LazyVGrid(columns: Self.columns, spacing: UZSpacing.xs) {
-            ForEach(["M", "T", "W", "T", "F", "S", "S"].indices, id: \.self) { index in
-                Text(["M", "T", "W", "T", "F", "S", "S"][index]).font(.caption2.weight(.semibold)).foregroundStyle(UZColor.label2)
-            }
-            ForEach(0..<blanks, id: \.self) { _ in Color.clear.frame(height: 44) }
-            ForEach(1...days, id: \.self) { day in
-                let date = LocalDate(year: first.year, month: first.month, day: day)
-                dayCell(date, events: byDay[date] ?? [], today: today)
+            // One list with one id per cell: the header, the blanks and the days used to share ids 0…6, and the grid
+            // dropped the repeats (that hid the 1st–6th of every month).
+            ForEach(Self.cells(blanks: blanks, days: days), id: \.self) { cell in
+                if cell < 0 {
+                    Text(Self.weekdayLetters[-cell - 1]).font(.caption2.weight(.semibold)).foregroundStyle(UZColor.label2)
+                } else if cell >= 100 {
+                    Color.clear.frame(height: 44)
+                } else {
+                    let date = LocalDate(year: first.year, month: first.month, day: cell)
+                    dayCell(date, events: byDay[date] ?? [], today: today)
+                }
             }
         }
     }

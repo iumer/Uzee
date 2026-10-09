@@ -65,6 +65,18 @@ struct PrayerView: View {
                             .buttonStyle(.borderedProminent)
                             .disabled(locating)
                             .accessibilityIdentifier("prayer.locate")
+                        // No GPS fix or location turned off: times are worked out on the phone, so a city is enough.
+                        Menu("Or pick your city") {
+                            ForEach(Self.cities, id: \.self) { city in
+                                Button(city.name) {
+                                    session.prayer.latitude = city.latitude
+                                    session.prayer.longitude = city.longitude
+                                    session.prayer.city = city.name + ", Pakistan"
+                                    problem = nil
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("prayer.pickCity")
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, UZSpacing.xl)
@@ -84,12 +96,26 @@ struct PrayerView: View {
         .onDisappear { session.location.stopHeading() }
     }
 
+    struct City: Hashable {
+        let name: String
+        let latitude: Double
+        let longitude: Double
+    }
+
+    static let cities = [
+        City(name: "Karachi", latitude: 24.8607, longitude: 67.0011), City(name: "Lahore", latitude: 31.5204, longitude: 74.3587),
+        City(name: "Islamabad", latitude: 33.6844, longitude: 73.0479), City(name: "Rawalpindi", latitude: 33.5651, longitude: 73.0169),
+        City(name: "Faisalabad", latitude: 31.4504, longitude: 73.1350), City(name: "Multan", latitude: 30.1575, longitude: 71.5249),
+        City(name: "Peshawar", latitude: 34.0151, longitude: 71.5249), City(name: "Quetta", latitude: 30.1798, longitude: 66.9750),
+        City(name: "Hyderabad", latitude: 25.3960, longitude: 68.3578), City(name: "Sialkot", latitude: 32.4945, longitude: 74.5229),
+    ]
+
     private func locate() {
         locating = true
         problem = nil
         Task {
             if !(await session.updatePrayerPlace()) {
-                problem = "Couldn't find your location. Allow it for UZee in Settings › Privacy › Location Services."
+                problem = "Couldn't find your location. Pick your city above, or allow location for UZee in Settings › Privacy › Location Services."
             }
             locating = false
         }

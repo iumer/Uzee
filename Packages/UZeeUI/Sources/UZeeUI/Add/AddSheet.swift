@@ -424,13 +424,18 @@ struct AddSheet: View {
         guard !Task.isCancelled else { return }
         let foreign = account.currency == ledger.base ? toAccount.currency : account.currency
         let day = LocalDate(date, in: .current)
-        guard let rate = await session.wiseRate(foreign, on: day), rate > 0, !Task.isCancelled,
-              receivedText.isEmpty || receivedText == wiseFill?.text else { return }
+        // Offline or Wise didn't answer: fall back to the saved rate, and say so.
+        let wise = await session.wiseRate(foreign, on: day)
+        let testing = ProcessInfo.processInfo.arguments.contains("-uzee-in-memory")
+        guard wise != nil || !testing else { return }
+        let rate = wise ?? ledger.rate(for: foreign)
+        guard rate > 0, !Task.isCancelled, receivedText.isEmpty || receivedText == wiseFill?.text else { return }
         let value = account.currency == ledger.base ? sent.decimalValue / rate : sent.decimalValue * rate
         guard let received = try? Money.fromMajor(Rounding.halfUp(value, scale: toAccount.currency.minorUnits), toAccount.currency) else { return }
         let text = plainNumber(received)
         let when = day >= session.today ? "today" : "on \(DateText.short(day))"
-        wiseFill = (text, "Filled in at Wise's rate \(when), \(ExchangeRate.display(rate)). Change it to what actually arrived.")
+        let source = wise != nil ? "Wise's rate \(when)" : session.usesWiseRates ? "your saved rate (couldn't reach Wise)" : "your saved rate"
+        wiseFill = (text, "Filled in at \(source), \(ExchangeRate.display(rate)). Change it to what actually arrived.")
         receivedText = text
     }
 

@@ -1,5 +1,5 @@
 #include "Base.xcconfig"
-// Debug installs as a separate "UZee Dev" app so test data never mixes with real data.
+// Debug installs as a separate app (bundle id .dev, named UZee) so test data never mixes with real data.
 PRODUCT_BUNDLE_IDENTIFIER = app.uzee.ios.dev
-INFOPLIST_KEY_CFBundleDisplayName = UZee Dev
+INFOPLIST_KEY_CFBundleDisplayName = UZee
 SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG

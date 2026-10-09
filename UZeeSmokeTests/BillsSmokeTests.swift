@@ -36,6 +36,8 @@ final class BillsSmokeTests: XCTestCase {
     func testCAL001_monthGrid() {
         XCTAssertTrue(element("calendar.month").waitForExistence(timeout: 30), "Calendar month missing")
         XCTAssertTrue(element("calendar.day.10").exists, "Day 10 missing")
+        // CAL-BUG-01: the 1st–6th used to vanish from the month grid.
+        for day in 1...6 { XCTAssertTrue(element("calendar.day.\(day)").exists, "Day \(day) missing") }
         XCTAssertTrue(element("calendar.bills").exists, "Bills button missing")
     }
 
