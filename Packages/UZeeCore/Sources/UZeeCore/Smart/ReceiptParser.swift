@@ -60,7 +60,7 @@ public enum ReceiptParser {
                            "amount tendered", "amount received", "account", "net weight", "net wt", "paid amount", "tendered",
                            "cash amount", "card amount", "change", "amount returned", "cash received", "received amount",
                            "customer paid", "cash paid", "total paid", "after due date", "after due", "late payment", "late surcharge",
-                           "item count", "no. of items", "no of items"]
+                           "item count", "no. of items", "no of items", "rounding adj", "rounding amount", "rounding amt"]
     static let notAmountLines = ["change", "tendered", "cash received", "tel", "phone", "ntn", "strn", "invoice", "receipt no",
                                  "bill no", "order no", "card no", "pos", "qty", "house", "block", "street", "road", "sector",
                                  "phase", "plot", "flat", "floor", "address", "contact", "mobile", "cell", "tracking", "ref",
@@ -139,11 +139,12 @@ public enum ReceiptParser {
             guard !notAmountLines.contains(where: { containsWord(lower, $0) }) else { return [] }
             return TextScan.amounts(in: withoutPercents(piece.text)).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
         }
-        // With a rounding line, the last total printed is the rounded one: take the lowest, not the largest.
-        let rounds = pieces.contains { plain($0.text).contains("rounding") }
+        // "Total 60.31 / Rounding -0.01 / Total 60.30": a total printed below the rounding line is what was paid.
+        let roundingY = pieces.filter { plain($0.text).contains("rounding") }.map(\.midY).min()
         for (tier, words) in totalWords.enumerated() {
             var best: Decimal?
-            let lowestWins = tier <= 1 || rounds
+            var afterRounding: Decimal?
+            let lowestWins = tier <= 1
             // Top to bottom; in the first tiers the lowest line wins (the amount after discounts), else the largest.
             for label in pieces.sorted(by: { $0.midY > $1.midY }) {
                 let lower = plain(label.text)
@@ -153,8 +154,10 @@ public enum ReceiptParser {
                     && abs($0.midY - label.midY) < max(label.height, 0.005) * 0.7 }
                     .max { $0.maxX < $1.maxX }.map { plain($0.text) } ?? ""
                 if !leftWord.isEmpty, notTotal.contains(where: { (leftWord + " " + lower).contains($0) }) { continue }
+                let belowRounding = roundingY.map { label.midY < $0 } ?? false
                 if let own = TextScan.amounts(in: withoutPercents(label.text)).filter({ !$0.isNegative && $0.value > 0 }).last {
                     if lowestWins || own.value > (best ?? 0) { best = own.value }
+                    if belowRounding { afterRounding = own.value }
                     continue
                 }
                 // The nearest value to the right on the same printed line (allowing for a tilted photo), else the
@@ -174,18 +177,28 @@ public enum ReceiptParser {
                     }
                     if let distance, distance < (nearest?.distance ?? .infinity) { nearest = (distance, value) }
                 }
-                if let value = nearest?.value, lowestWins || value > (best ?? 0) { best = value }
+                if let value = nearest?.value {
+                    if lowestWins || value > (best ?? 0) { best = value }
+                    if belowRounding { afterRounding = value }
+                }
             }
-            if let best { return best }
+            if let best { return roundedTotal(afterRounding, largest: best) }
         }
         return nil
     }
 
+    /// The total after the rounding line when it is a cash rounding of the largest total (within 1 %), else the largest.
+    static func roundedTotal(_ after: Decimal?, largest: Decimal) -> Decimal {
+        guard let after, after <= largest, after * 100 >= largest * 99 else { return largest }
+        return after
+    }
+
     static func amount(_ lines: [String], currency: Currency) -> Money? {
-        let rounds = lines.contains { plain($0).contains("rounding") }
+        let roundingIndex = lines.lastIndex { plain($0).contains("rounding") }
         for (tier, words) in totalWords.enumerated() {
             var best: Decimal?
-            let lowestWins = tier <= 1 || rounds
+            var afterRounding: Decimal?
+            let lowestWins = tier <= 1
             for (index, line) in lines.enumerated() {
                 let lower = plain(line)
                 guard words.contains(where: { containsWord(lower, $0) }), !notTotal.contains(where: { lower.contains($0) }) else { continue }
@@ -196,9 +209,12 @@ public enum ReceiptParser {
                     guard !notAmountLines.contains(where: { containsWord(nextLower, $0) }) else { continue }
                     candidates = TextScan.amounts(in: withoutPercents(next)).filter { !$0.isNegative && $0.value > 0 && $0.looksLikeMoney }
                 }
-                if let value = candidates.last?.value, lowestWins || value > (best ?? 0) { best = value }
+                if let value = candidates.last?.value {
+                    if lowestWins || value > (best ?? 0) { best = value }
+                    if let roundingIndex, index > roundingIndex { afterRounding = value }
+                }
             }
-            if let best { return try? Money.fromMajor(best, currency) }
+            if let best { return try? Money.fromMajor(roundedTotal(afterRounding, largest: best), currency) }
         }
         // No total line: the largest figure that looks like money, preferring ones written as money
         // ("1,829.96", "Rs 500", "1,830/-") over bare grouped numbers, and never addresses or phone numbers.

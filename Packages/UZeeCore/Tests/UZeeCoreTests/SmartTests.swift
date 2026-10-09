@@ -322,6 +322,10 @@ struct ReceiptInternetFixTests {
         let plainTotals = ReceiptParser.read(["SAMPLE MART", "Total 33.92", "Rounding -0.02", "Total 33.90", "Cash 50.00"],
                                              currency: .usd, today: today)
         #expect(plainTotals.amount == Money(minorUnits: 3_390, currency: .usd))
+        // A rounding line alone never makes a smaller figure (tax, subtotal, the adjustment) the total.
+        let withTax = ReceiptParser.read(["SAMPLE CAFE", "Total Amount 8.60", "Rounding Adj 0.48", "Total GST 0.49", "Cash 10.00"],
+                                         currency: .usd, today: today)
+        #expect(withTax.amount == Money(minorUnits: 860, currency: .usd))
     }
 
     @Test("The shop, not the cashier, the address or a misread logo")
