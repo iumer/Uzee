@@ -261,8 +261,17 @@ final class VoiceModel {
             handsFree = false
             return
         }
+        // UZee's own rules go first when they understand the sentence: they were right far more often than
+        // the on-device model in the 50-sentence check (owner, 2026-10-13). The model gets the rest, and
+        // changes to a card already on screen, with that card described so it knows what's being changed.
         if usesModel, pending == nil {
-            converse(sentence)
+            if card == nil, VoiceRuleParser.understandsOnItsOwn(sentence, vocabulary: vocabulary, today: session.today) {
+                understandWithRules(sentence)
+            } else if let card {
+                converse(sentence, context: "On screen now: \(cardSummary(card)).")
+            } else {
+                converse(sentence)
+            }
             return
         }
         if let pending, let need {
@@ -328,7 +337,7 @@ final class VoiceModel {
     }
 
     /// One turn with the on-device model; falls back to the rules if it can't answer.
-    private func converse(_ sentence: String) {
+    private func converse(_ sentence: String, context: String? = nil) {
         if !triedChat {
             triedChat = true
             chat = session.smart.startAssistant(assistantActions, vocabulary, session.today)
@@ -342,7 +351,8 @@ final class VoiceModel {
             // The on-device model can be slow or stuck (busy, simulator): after 8 seconds UZee's own rules answer.
             let reply: String? = await withCheckedContinuation { continuation in
                 let once = Once()
-                Task { let answer = await chat.reply(to: sentence); if once.claim() { continuation.resume(returning: answer) } }
+                let said = context.map { "(\($0)) " + sentence } ?? sentence
+                Task { let answer = await chat.reply(to: said); if once.claim() { continuation.resume(returning: answer) } }
                 Task { try? await Task.sleep(for: .seconds(8)); if once.claim() { continuation.resume(returning: nil) } }
             }
             isThinking = false

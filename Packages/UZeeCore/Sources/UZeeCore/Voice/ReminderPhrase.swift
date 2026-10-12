@@ -87,11 +87,19 @@ public enum ReminderPhrase {
         var rest = String(lower.dropFirst("remind me".count)).trimmingCharacters(in: .whitespaces)
         for lead in ["to ", "about ", "that ", "of "] where rest.hasPrefix(lead) { rest = String(rest.dropFirst(lead.count)); break }
         guard let date = date(rest, today: today) else { return nil }
-        var cut = rest.endIndex
-        for marker in [" tomorrow", " today", " tonight", " day after", " on ", " at ", " in ", " next ", " this "] + weekdays.map({ " " + $0 }) {
-            if let range = rest.range(of: marker), range.lowerBound < cut { cut = range.lowerBound }
+        func beforeWhen(_ text: String) -> String {
+            let padded = " " + text
+            var cut = padded.endIndex
+            for marker in [" tomorrow", " today", " tonight", " day after", " on ", " at ", " in ", " next ", " this "] + weekdays.map({ " " + $0 }) {
+                if let range = padded.range(of: marker), range.lowerBound < cut { cut = range.lowerBound }
+            }
+            return String(padded[..<cut]).trimmingCharacters(in: .whitespaces)
         }
-        var title = String(rest[..<cut]).trimmingCharacters(in: .whitespaces)
+        var title = beforeWhen(rest)
+        // "Remind me tomorrow at 9 to call the bank": the day comes first, the task after "to".
+        if title.isEmpty, let range = rest.range(of: " to ") ?? rest.range(of: " about ") {
+            title = beforeWhen(String(rest[range.upperBound...]))
+        }
         // Times ("5 pm", "at 5", "5:30") aren't amounts.
         let withoutTimes = rest.replacingOccurrences(of: #"(\bat\s+\d{1,2}(:\d{2})?|\d{1,2}(:\d{2})?\s*(am|pm)|\d{1,2}:\d{2})"#,
                                                      with: " ", options: .regularExpression)

@@ -60,7 +60,7 @@ struct GeneratedVoiceCommand {
     var category: String
     @Guide(description: "The shop, company or payer. Empty if none.")
     var payee: String
-    @Guide(description: "For questions only, one of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming. Empty otherwise.")
+    @Guide(description: "For questions only, one of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming, afford. Empty otherwise.")
     var question: String
     @Guide(description: "For spending questions: today, thisWeek, thisMonth or lastMonth. Empty otherwise.")
     var period: String
@@ -122,13 +122,14 @@ enum ModelParser {
         if debtWords[raw] != nil || (rules.noMoneyMoved && rules.action == action) { command.noMoneyMoved = true }
         if action == .question {
             command.question = question(generated.question, person: person, category: category, account: account,
-                                        period: VoicePeriod(rawValue: generated.period) ?? .thisMonth)
+                                        period: VoicePeriod(rawValue: generated.period) ?? .thisMonth, amount: command.amount)
             if command.question == nil { return nil }
         }
         return command.fixingSameAccountTransfer()
     }
 
-    static func question(_ kind: String, person: String?, category: String?, account: String?, period: VoicePeriod) -> VoiceQuestion? {
+    static func question(_ kind: String, person: String?, category: String?, account: String?, period: VoicePeriod,
+                         amount: SpokenAmount? = nil) -> VoiceQuestion? {
         switch kind {
         case "iOwe": .iOwe(person: person)
         case "owesMe": .owesMe(person: person)
@@ -139,6 +140,7 @@ enum ModelParser {
         case "balance": .balance(account: account)
         case "dueBeforeSalary": .dueBeforeSalary
         case "upcoming": .upcoming
+        case "afford": .afford(amount: amount)
         default: nil
         }
     }

@@ -33,6 +33,8 @@ public enum VoiceQuestion: Equatable, Sendable {
     case balance(account: String?)
     case dueBeforeSalary
     case upcoming
+    /// "Can I afford a 30,000 phone?" (nil amount = what's left to spend).
+    case afford(amount: SpokenAmount?)
 }
 
 /// A request understood from one sentence. Names are as matched against the user's own people,
@@ -124,6 +126,9 @@ public enum VoiceRuleParser {
 
         if isQuestion(t, original: original) {
             var question = classifyQuestion(t, person: person, account: accounts.first?.name, category: category)
+            if question == nil, has(t, [" afford ", " enough money ", " enough for ", " can i buy ", " should i buy "]) {
+                question = .afford(amount: amount)
+            }
             // "How much did I spend on food?": keep the word, so the answer is about food or says it can't find it,
             // never the whole month's spending as if it were food.
             if case .spent(nil, let period)? = question, let range = t.range(of: " on ") {
@@ -146,11 +151,18 @@ public enum VoiceRuleParser {
         if amount != nil, owedByMe || owedToMe, action != .repaidByMe, action != .repaidToMe {
             action = owedToMe ? .lend : .borrow
         }
+        // "Ammi gave me 25,000 which I have to return": the money did reach me, so it lands in an account.
+        let moneyCame = has(t, [" gave me ", " sent me ", " lent me ", " loaned me ", " transferred me ", " paid me "])
         var command = VoiceCommand(action: action, amount: amount, date: date)
-        command.noMoneyMoved = (owedByMe || owedToMe) && accounts.isEmpty && (action == .lend || action == .borrow)
+        command.noMoneyMoved = (owedByMe || owedToMe) && !moneyCame && accounts.isEmpty && (action == .lend || action == .borrow)
         switch action {
         case .transfer:
-            let ordered = orderTransfer(accounts, in: t)
+            var ordered = orderTransfer(accounts, in: t)
+            // "Withdrew 5000 cash from HBL", "took out 10k cash from Meezan": the money always lands in Cash.
+            if has(t, [" withdrew", " withdraw", " took out ", " take out "]),
+               let cash = accounts.first(where: { normalise($0.name) == "cash" })?.name {
+                ordered = (accounts.first { $0.name != cash }?.name, cash)
+            }
             command.account = ordered.from
             command.toAccount = ordered.to
             command = command.fixingSameAccountTransfer()
@@ -159,7 +171,7 @@ public enum VoiceRuleParser {
             command.account = accounts.first?.name
         case .expense, .income:
             command.account = accounts.first?.name
-            command.category = category
+            command.category = guessCategory(t, said: category, action: action, vocabulary: vocabulary)
             command.person = vocabulary.people.contains(where: { $0 == person }) ? person : nil
             command.payee = findPayee(original, t, action: action, exclude: [person, category] + accounts.map { $0.name as String? })
                 ?? (command.person == nil ? person : nil)
@@ -178,6 +190,67 @@ public enum VoiceRuleParser {
             if let name = names.first(where: { group.contains(normalise($0)) }) { return name }
         }
         return nil
+    }
+
+    /// The rules understood the sentence well enough to act without the on-device model: a question they can
+    /// answer, an entry with an amount, or a reminder with a day. In the 50-sentence check (2026-10-13) the rules
+    /// got these right far more often than the model, which swapped lent and borrowed and answered "How much is in
+    /// HBL?" with the total balance, so the model only gets what the rules don't understand.
+    public static func understandsOnItsOwn(_ text: String, vocabulary: VoiceVocabulary, today: LocalDate) -> Bool {
+        if ReminderPhrase.request(text, today: today, currency: .pkr) != nil { return true }
+        // Overviews and searches have their own quick answers in the app.
+        let t = " " + normalise(text) + " "
+        if has(t, [" how am i doing ", " overview ", " summary ", " hows my month ", " how is my month ", " how are my finances "])
+            || [" find ", " search ", " look up "].contains(where: { t.hasPrefix($0) }) {
+            return true
+        }
+        // Asking for advice is a conversation, not a number.
+        if has(t, [" tips ", " tip ", " advice ", " suggest", " how can i save ", " how do i save ", " help me "]) { return false }
+        let command = parse(text, vocabulary: vocabulary, today: today)
+        switch command.action {
+        case .unknown: return false
+        case .question: return command.question != nil
+        default: return command.amount != nil
+        }
+    }
+
+    /// Drops an account or person the user never said: the on-device model sometimes fills in "Meezan" for
+    /// "Spent 2500 on groceries" (found by the 50-sentence voice check, 2026-10-13). `heard` is everything the
+    /// user said in this conversation, so an answer to "Which account?" still counts.
+    public static func keepingOnlySaid(_ command: VoiceCommand, heard: String, vocabulary: VoiceVocabulary) -> VoiceCommand {
+        let t = " " + normalise(heard) + " "
+        let accounts = Set(findAccounts(t, vocabulary: vocabulary).map(\.name))
+        var kept = command
+        if let account = kept.account, vocabulary.accounts.contains(account), !accounts.contains(account) { kept.account = nil }
+        if let to = kept.toAccount, vocabulary.accounts.contains(to), !accounts.contains(to) { kept.toAccount = nil }
+        if let person = kept.person, vocabulary.people.contains(person), findPerson(heard, t, vocabulary: vocabulary) != person,
+           !t.contains(" " + normalise(person) + " ") {
+            kept.person = nil
+        }
+        return kept
+    }
+
+    /// The model often picks the group ("Utilities") where the sentence names the item ("electricity bill"):
+    /// the rules' more specific category wins when it sits in that group, or when the model left it empty
+    /// or gave an expense category to income.
+    public static func refiningCategory(_ command: VoiceCommand, sentence: String, vocabulary: VoiceVocabulary,
+                                        today: LocalDate) -> VoiceCommand {
+        guard command.action == .expense || command.action == .income else { return command }
+        let rules = parse(sentence, vocabulary: vocabulary, today: today)
+        guard rules.action == command.action, let better = rules.category else { return command }
+        var refined = command
+        guard let chosen = command.category else {
+            refined.category = better
+            return refined
+        }
+        let key = normalise(chosen)
+        if command.action == .income {
+            if !DefaultCategories.income.contains(where: { normalise($0.name) == key }) { refined.category = better }
+        } else if let group = DefaultCategories.expense.first(where: { normalise($0.name) == key }),
+                  group.children.contains(where: { normalise($0.name) == normalise(better) }) {
+            refined.category = better
+        }
+        return refined
     }
 
     // MARK: Text
@@ -302,6 +375,46 @@ public enum VoiceRuleParser {
         return (from, to)
     }
 
+    // MARK: Category
+
+    /// Income words that name an income category ("freelance payment" → Freelance / Business).
+    static let incomeWords: [(words: [String], name: String)] = [
+        ([" salary ", " pay day ", " payday ", " bonus "], "Salary"),
+        ([" reimburs", " office expense "], "Reimbursement"),
+        ([" freelance", " client ", " business ", " upwork ", " fiverr "], "Freelance / Business"),
+        ([" kameti ", " committee "], "Kameti payout"),
+        ([" refund", " cashback ", " cash back "], "Refunds"),
+        ([" gift ", " eidi "], "Gifts")
+    ]
+
+    /// The category said, or one the sentence points to: "Netflix" → Streaming, "Careem ride" → Ride-hailing,
+    /// "freelance payment" → Freelance / Business. Only names the user still has are returned.
+    static func guessCategory(_ t: String, said: String?, action: VoiceAction, vocabulary: VoiceVocabulary) -> String? {
+        func known(_ name: String) -> String? {
+            vocabulary.categories.first { normalise($0) == normalise(name) }
+        }
+        if action == .income {
+            if let said, DefaultCategories.income.contains(where: { normalise($0.name) == normalise(said) }) { return said }
+            if let match = incomeWords.first(where: { entry in entry.words.contains { t.contains($0) } }) { return known(match.name) ?? said }
+            return said
+        }
+        if let said { return said }
+        // Meals and everyday Urdu words the shop list doesn't know.
+        let words: [(words: [String], name: String)] = [
+            ([" dinner ", " lunch ", " breakfast ", " khana "], "Dining out"),
+            ([" doodh ", " sabzi ", " ration ", " atta "], "Groceries"),
+            ([" dawai ", " dawa "], "Medicine"),
+            ([" bijli "], "Electricity"),
+            ([" school ", " fee ", " fees "], "Children")
+        ]
+        if let match = words.first(where: { entry in entry.words.contains { t.contains($0) } }), let name = known(match.name) { return name }
+        guard let key = CategorySuggester.systemKey(inText: [t]) else { return nil }
+        for node in DefaultCategories.expense {
+            if let child = node.children.first(where: { $0.key == key }) { return known(child.name) }
+        }
+        return nil
+    }
+
     // MARK: Payee, date
 
     static func findPayee(_ original: String, _ t: String, action: VoiceAction, exclude: [String?]) -> String? {
@@ -330,6 +443,10 @@ public enum VoiceRuleParser {
         if t.contains(" day before yesterday ") { return today.addingDays(-2) }
         if t.contains(" yesterday ") { return today.addingDays(-1) }
         if t.contains(" today ") { return today }
+        // Urdu: "parson" is two days ago and "kal" yesterday here, since a logged entry has already happened.
+        if t.contains(" parson ") || t.contains(" parsoon ") { return today.addingDays(-2) }
+        if t.contains(" kal ") { return today.addingDays(-1) }
+        if t.contains(" aaj ") || t.contains(" aj ") { return today }
         // "last Friday", "on Monday": the most recent one before today.
         for (index, name) in ReminderPhrase.weekdays.enumerated() where t.contains(" " + name + " ") {
             let back = (today.weekday - (index + 1) + 7) % 7
@@ -370,7 +487,7 @@ public enum VoiceRuleParser {
         if t.contains(" subscription") { return .subscriptions }
         if t.contains(" salary"), has(t, [" before ", " until ", " till ", " due ", " bills "]) { return .dueBeforeSalary }
         if t.contains(" next "), has(t, [" bill", " payment", " due", " pay ", " installment", " renewal"]) { return .nextBill }
-        if has(t, [" upcoming ", " bills ", " due ", " what do i have to pay ", " what's due "]) { return .upcoming }
+        if has(t, [" upcoming ", " bills ", " due ", " what do i have to pay ", " what's due ", " coming up "]) { return .upcoming }
         if has(t, [" balance", " how much money", " how much do i have", " have in ", " left in ", " in my "]) || account != nil {
             if !has(t, [" spend", " spent", " spending"]) { return .balance(account: account) }
         }
@@ -386,7 +503,9 @@ public enum VoiceRuleParser {
     }
 
     static func classifyAction(_ t: String, amount: SpokenAmount?, accounts: [(name: String, position: Int)]) -> VoiceAction {
+        // "Paid Ammi back 10k": a sentence that starts with the verb means I did it.
         let iSaid = has(t, [" i paid", " i gave", " i returned", " i sent", " i repaid", " i have paid", " i have returned"])
+            || [" paid ", " gave ", " returned ", " sent ", " repaid "].contains { t.hasPrefix($0) }
         if t.contains(" back ") || has(t, [" returned ", " repaid ", " return "]) {
             if iSaid && has(t, [" back ", " returned ", " repaid "]) { return .repaidByMe }
             // "Returned 1,000 to Sara", "paid Bilal back": I paid someone back.
@@ -394,7 +513,8 @@ public enum VoiceRuleParser {
                 return .repaidByMe
             }
             if has(t, [" paid me", " gave me", " returned ", " repaid ", " got ", " received ", " sent me", " back from "])
-                && !has(t, [" will return", " will give it back", " will pay me back", " will pay back", " return it later"]) {
+                && !has(t, [" will return", " will give it back", " will pay me back", " will pay back", " return it later",
+                            " have to return", " need to return", " to return it"]) {
                 return .repaidToMe
             }
         }
@@ -405,6 +525,8 @@ public enum VoiceRuleParser {
             if has(t, [" lent me", " loaned me"]) { return .borrow }
             return .lend
         }
+        // "Bilal borrowed 5k from me": he borrowed, so I lent.
+        if t.contains(" borrowed "), has(t, [" from me ", " off me "]) { return .lend }
         // "I took 2k from my mother" (a person, not an account) is borrowing.
         if t.contains(" took "), t.contains(" from "), accounts.isEmpty, !has(t, [" took out ", " withdrew"]) { return .borrow }
         if has(t, [" borrowed", " took a loan", " loan from", " i will return", " i will pay it back", " i will pay back",
@@ -416,9 +538,12 @@ public enum VoiceRuleParser {
             || (has(t, [" deposited", " deposit "]) && accounts.count < 2) {
             return .income
         }
-        if has(t, [" transfer", " moved ", " move ", " withdrew", " withdraw"]) || (accounts.count >= 2 && t.contains(" from ") && t.contains(" to ")) {
+        if has(t, [" transfer", " moved ", " move ", " withdrew", " withdraw", " took out ", " take out "]) || (accounts.count >= 2 && t.contains(" from ") && t.contains(" to ")) {
             return .transfer
         }
+        // "Top up Easypaisa with 2,000 from HBL" moves money between my accounts; a mobile top-up is spending.
+        if accounts.count >= 2, has(t, [" top up ", " topped up ", " topup ", " load ", " loaded "]) { return .transfer }
+        if has(t, [" reimbursed", " reimbursement"]) { return .income }
         // "Ali sent me 5,000" is money in; "Paid maid salary", "Got a haircut for 800" are money out.
         if has(t, [" sent me", " gave me", " paid me", " got paid", " transferred me"]) { return .income }
         if has(t, [" spent", " paid ", " i paid", " bought", " purchase", " paid for "]) { return .expense }

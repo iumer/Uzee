@@ -322,3 +322,151 @@ struct VoiceDebtTests {
         #expect(parse("How much do I owe Ammi?").action == .question)
     }
 }
+
+// Owner, 2026-10-13: "ask UZee about 50 things a budgeting app does and fix what it gets wrong".
+@Suite("Fifty-sentence voice check")
+struct VoiceCheckTests {
+    private let full = VoiceVocabulary(
+        people: ["Usama", "Ammi", "Bilal", "Ali", "Sara"],
+        accounts: ["HBL", "Meezan", "Cash", "Easypaisa", "SadaPay", "NayaPay"],
+        categories: (DefaultCategories.expense + DefaultCategories.income).flatMap { [$0.name] + $0.children.map(\.name) })
+
+    private func read(_ text: String) -> VoiceCommand {
+        VoiceRuleParser.parse(text, vocabulary: full, today: today)
+    }
+
+    @Test("Shops and words name the category", arguments: [
+        ("Netflix charged me 1,100 on NayaPay", "Streaming"),
+        ("Spent $20 on ChatGPT", "Software & AI tools"),
+        ("Careem ride 650", "Ride-hailing"),
+        ("Had dinner at Kababjees for 4,350", "Dining out"),
+        ("Received 15k freelance payment in SadaPay", "Freelance / Business"),
+        ("Office reimbursed me 8,000", "Reimbursement")
+    ])
+    func categories(text: String, category: String) {
+        #expect(read(text).category == category)
+    }
+
+    @Test("Reimbursed is income; a top-up between my accounts is a transfer")
+    func moneyDirection() {
+        #expect(read("Office reimbursed me 8,000").action == .income)
+        let topUp = read("Top up Easypaisa with 2,000 from HBL")
+        #expect(topUp.action == .transfer)
+        #expect(topUp.account == "HBL")
+        #expect(topUp.toAccount == "Easypaisa")
+        #expect(read("Mobile top up 500").action == .expense)
+    }
+
+    @Test("Paying back and borrowing in everyday words")
+    func loans() {
+        let paidBack = read("Paid Ammi back 10k from HBL")
+        #expect(paidBack.action == .repaidByMe)
+        #expect(paidBack.person == "Ammi")
+        let borrowed = read("Ammi gave me 25,000 which I have to return")
+        #expect(borrowed.action == .borrow)
+        #expect(!borrowed.noMoneyMoved)
+        #expect(read("Usama paid me back 5000").action == .repaidToMe)
+    }
+
+    @Test("Urdu day words for something already done")
+    func urduDays() {
+        let petrol = read("Kal petrol 3000 ka dalwaya")
+        #expect(petrol.date == today.addingDays(-1))
+        #expect(petrol.category == "Fuel")
+        #expect(read("Parson 500 ka doodh liya").date == today.addingDays(-2))
+    }
+
+    @Test("Coming up and affordability questions")
+    func questions() {
+        #expect(read("What's coming up this week?").question == .upcoming)
+        #expect(read("Can I afford a 30,000 phone?").question == .afford(amount: SpokenAmount(value: 30_000)))
+    }
+
+    @Test("A reminder that says the day first keeps the task as its title")
+    func reminderTitle() {
+        let request = ReminderPhrase.request("Remind me tomorrow at 9 to call the bank", today: today, currency: .pkr)
+        #expect(request?.title == "Call the bank")
+        #expect(request?.date == today.addingDays(1))
+        #expect(ReminderPhrase.request("Remind me to pay the plumber 5,000 on Friday", today: today, currency: .pkr)?.title
+                == "Pay the plumber 5,000")
+    }
+
+    @Test("Details the user never said are dropped from the model's card")
+    func keepsOnlySaid() {
+        let made = VoiceCommand(action: .expense, amount: SpokenAmount(value: 2500), person: "Ali", account: "Meezan", category: "Groceries")
+        let kept = VoiceRuleParser.keepingOnlySaid(made, heard: "Spent 2500 on groceries", vocabulary: full)
+        #expect(kept.account == nil)
+        #expect(kept.person == nil)
+        #expect(kept.category == "Groceries")
+        let answered = VoiceRuleParser.keepingOnlySaid(made, heard: "Spent 2500 on groceries . from Meezan, with Ali", vocabulary: full)
+        #expect(answered.account == "Meezan")
+        #expect(answered.person == "Ali")
+        let mom = VoiceCommand(action: .borrow, amount: SpokenAmount(value: 75_000), person: "Ammi")
+        #expect(VoiceRuleParser.keepingOnlySaid(mom, heard: "I owe my mom 75,000", vocabulary: full).person == "Ammi")
+    }
+
+    @Test("The item's category beats the model's group")
+    func refinesCategory() {
+        let model = VoiceCommand(action: .expense, amount: SpokenAmount(value: 12_000), account: "Meezan", category: "Utilities")
+        let refined = VoiceRuleParser.refiningCategory(model, sentence: "Paid my electricity bill 12,000 from Meezan", vocabulary: full, today: today)
+        #expect(refined.category == "Electricity")
+        let other = VoiceCommand(action: .expense, amount: SpokenAmount(value: 900), category: "Food")
+        #expect(VoiceRuleParser.refiningCategory(other, sentence: "Spent 900 on fuel", vocabulary: full, today: today).category == "Food")
+    }
+}
+
+@Suite("Voice check, unseen sentences")
+struct VoiceUnseenTests {
+    private let full = VoiceVocabulary(
+        people: ["Usama", "Ammi", "Bilal", "Ali", "Sara"],
+        accounts: ["HBL", "Meezan", "Cash", "Easypaisa", "SadaPay", "NayaPay"],
+        categories: (DefaultCategories.expense + DefaultCategories.income).flatMap { [$0.name] + $0.children.map(\.name) })
+
+    private func read(_ text: String) -> VoiceCommand {
+        VoiceRuleParser.parse(text, vocabulary: full, today: today)
+    }
+
+    @Test("Withdrawing always moves money into Cash")
+    func withdrawals() {
+        for sentence in ["Took out 10k cash from Meezan", "Withdrew 5000 cash from HBL"] {
+            let command = read(sentence)
+            #expect(command.action == .transfer)
+            #expect(command.toAccount == "Cash")
+        }
+    }
+
+    @Test("Someone borrowing from me is my loan to them")
+    func borrowedFromMe() {
+        let command = read("Bilal borrowed 5k from me")
+        #expect(command.action == .lend)
+        #expect(command.person == "Bilal")
+    }
+
+    @Test("More category words", arguments: [
+        ("Got 50k bonus in HBL", "Salary"), ("Aaj 1200 ka khana khaya", "Dining out"), ("Paid 15k school fee", "Children"),
+        ("Uber 900", "Ride-hailing"), ("Foodpanda order 1,450 on NayaPay", "Food delivery"), ("Paid K-Electric 8,400", "Electricity")
+    ])
+    func moreCategories(text: String, category: String) {
+        #expect(read(text).category == category)
+    }
+}
+
+@Suite("Rules first, model for the rest")
+struct VoiceRoutingTests {
+    private let names = VoiceVocabulary(people: ["Usama", "Ammi"], accounts: ["HBL", "Meezan", "Cash"], categories: ["Fuel", "Groceries"])
+
+    @Test("Sentences the rules act on without the model", arguments: [
+        "Spent 2500 on groceries", "Lent Usama 10,000", "How much is in HBL?", "Remind me tomorrow at 9 to call the bank",
+        "How am I doing this month?", "Find Careem", "Can I afford a 30,000 phone?"
+    ])
+    func rulesFirst(_ sentence: String) {
+        #expect(VoiceRuleParser.understandsOnItsOwn(sentence, vocabulary: names, today: today))
+    }
+
+    @Test("Sentences left to the model", arguments: [
+        "I think I'm spending too much, any tips?", "Spent some money on fuel", "Tell me a joke"
+    ])
+    func modelGets(_ sentence: String) {
+        #expect(!VoiceRuleParser.understandsOnItsOwn(sentence, vocabulary: names, today: today))
+    }
+}

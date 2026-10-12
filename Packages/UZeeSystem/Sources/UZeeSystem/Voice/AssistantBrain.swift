@@ -27,12 +27,14 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
     private let today: LocalDate
     private var session: LanguageModelSession
     private let lock = NSLock()
+    /// What the user said so far, so the tools can drop details the model made up.
+    private let heard = Heard()
 
     init(actions: AssistantActions, vocabulary: VoiceVocabulary, today: LocalDate) {
         self.actions = actions
         self.vocabulary = vocabulary
         self.today = today
-        session = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today)
+        session = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today, heard: heard)
     }
 
     static func instructions(vocabulary: VoiceVocabulary, today: LocalDate) -> String {
@@ -44,10 +46,14 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
         Use the tools for anything about the user's money; never guess numbers. To log something (spent, received, \
         transferred, lent, borrowed, paid back, or a debt such as "I owe my mom 250000" = borrow and "Ali owes me 5000" = \
         lend, with justADebt true) call prepareEntry. A cheque deposited, submitted or cashed into an account is \
-        income into that account, never a transfer from that account to itself. It shows a card; then tell the user what is on it \
+        income into that account, never a transfer from that account to itself. Fill in only what the user said: \
+        leave the account, person and date empty when they didn't say them, and never pick an account for them. It shows a card; then tell the user what is on it \
         and ask them to confirm. Only call confirmEntry after the user clearly agrees, and cancelEntry if they say no. \
         If they want a change, call prepareEntry again with the corrected details. If prepareEntry says something is \
-        missing, ask the user for it. For questions use answerQuestion, findTransactions or overview. To be reminded \
+        missing, ask the user for it. For a question about one number (an account's balance, budget left, spending, \
+        bills, subscriptions, who owes whom) call answerQuestion with the matching kind; use overview only for "how am \
+        I doing", and findTransactions to look up a shop or word. Only say numbers a tool gave you, and never log \
+        anything when the user asks a question. A line in brackets at the start describes the card already on screen. To be reminded \
         of something later ("remind me to pay the plumber on Friday"), call addReminder.
 
         The user's people: \(vocabulary.people.prefix(30).joined(separator: ", ")).
@@ -56,9 +62,9 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
         """
     }
 
-    static func makeSession(actions: AssistantActions, vocabulary: VoiceVocabulary, today: LocalDate) -> LanguageModelSession {
+    static func makeSession(actions: AssistantActions, vocabulary: VoiceVocabulary, today: LocalDate, heard: Heard) -> LanguageModelSession {
         let tools: [any Tool] = [
-            PrepareEntryTool(actions: actions, vocabulary: vocabulary, today: today),
+            PrepareEntryTool(actions: actions, vocabulary: vocabulary, today: today, heard: heard),
             ConfirmEntryTool(actions: actions),
             CancelEntryTool(actions: actions),
             AnswerQuestionTool(actions: actions, vocabulary: vocabulary),
@@ -70,12 +76,13 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
     }
 
     func reply(to text: String) async -> String? {
+        heard.add(text)
         let current = lock.withLock { session }
         do {
             return try await current.respond(to: text).content
         } catch let error as LanguageModelSession.GenerationError where error.isTooLong {
             // A long conversation can outgrow the model's memory: start a fresh one and try once more.
-            let fresh = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today)
+            let fresh = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today, heard: heard)
             lock.withLock { session = fresh }
             return try? await fresh.respond(to: text).content
         } catch {
@@ -86,11 +93,22 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
     }
 }
 
+/// Everything the user said in one conversation.
+final class Heard: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lines: [String] = []
+
+    func add(_ line: String) { lock.withLock { lines.append(line) } }
+    var all: String { lock.withLock { lines.joined(separator: " . ") } }
+    var last: String { lock.withLock { lines.last ?? "" } }
+}
+
 @available(iOS 26.0, macOS 26.0, *)
 struct PrepareEntryTool: Tool {
     let actions: AssistantActions
     let vocabulary: VoiceVocabulary
     let today: LocalDate
+    let heard: Heard
     let name = "prepareEntry"
     let description = "Shows a card to log an expense, income, transfer, loan or repayment. Nothing is saved until confirmEntry."
 
@@ -125,6 +143,8 @@ struct PrepareEntryTool: Tool {
         }
         command.date = VoiceRuleParser.parse(arguments.when, vocabulary: vocabulary, today: today).date
         if arguments.justADebt, command.action == .borrow || command.action == .lend { command.noMoneyMoved = true }
+        command = VoiceRuleParser.keepingOnlySaid(command, heard: heard.all, vocabulary: vocabulary)
+        command = VoiceRuleParser.refiningCategory(command, sentence: heard.last, vocabulary: vocabulary, today: today)
         return await actions.prepare(command)
     }
 }
@@ -162,7 +182,7 @@ struct AnswerQuestionTool: Tool {
 
     @Generable
     struct Arguments {
-        @Guide(description: "One of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming")
+        @Guide(description: "One of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming, afford (can the user afford a purchase)")
         var question: String
         @Guide(description: "The person, for iOwe or owesMe. Empty for everyone.")
         var person: String
@@ -172,6 +192,8 @@ struct AnswerQuestionTool: Tool {
         var account: String
         @Guide(description: "For spent: today, thisWeek, thisMonth or lastMonth.")
         var period: String
+        @Guide(description: "For afford: the price as the user said it, such as 30,000 or 1.5 lakh. Empty otherwise.")
+        var amount: String
     }
 
     func call(arguments: Arguments) async throws -> String {
@@ -180,7 +202,8 @@ struct AnswerQuestionTool: Tool {
         let category = VoiceRuleParser.resolve(value(arguments.category), among: vocabulary.categories)
         let account = VoiceRuleParser.resolve(value(arguments.account), among: vocabulary.accounts)
         guard let question = ModelParser.question(arguments.question, person: person, category: category, account: account,
-                                                  period: VoicePeriod(rawValue: arguments.period) ?? .thisMonth) else {
+                                                  period: VoicePeriod(rawValue: arguments.period) ?? .thisMonth,
+                                                  amount: AmountPhrase.find(in: arguments.amount)) else {
             return "UZee can't answer that kind of question yet."
         }
         return await actions.answer(question)

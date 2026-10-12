@@ -20,7 +20,33 @@ struct VoiceAnswerer {
         case .balance(let account): return balance(account)
         case .dueBeforeSalary: return dueBeforeSalary()
         case .upcoming: return upcoming()
+        case .afford(let amount): return afford(amount)
         }
+    }
+
+    /// "Can I afford a 30,000 phone?": weighed against this month's budget left, then the money in the accounts.
+    private func afford(_ said: SpokenAmount?) -> String {
+        let budget = BudgetModel(session: session)
+        let summary = budget.summary(for: budget.current)
+        guard let said, said.currency == nil || said.currency == base,
+              let price = try? Money.fromMajor(said.value, base) else {
+            return [budgetLeft(), balance(nil)].joined(separator: " ")
+        }
+        let available = session.ledger.available
+        if let summary {
+            let left = summary.isOver ? -summary.left.minorUnits.magnitudeClamped : summary.left.minorUnits.magnitudeClamped
+            let after = Money(minorUnits: left - price.minorUnits, currency: base)
+            if after.minorUnits >= 0 {
+                return "Yes. \(money(price)) fits your budget, with \(money(after)) still left for \(BudgetModel.title(budget.current))."
+            }
+            let short = "It would put you \(money(after)) over budget for \(BudgetModel.title(budget.current))"
+            return available.minorUnits >= price.minorUnits
+                ? short + ", though your accounts have \(MoneyFormatter.string(available)). Maybe wait until next month."
+                : short + ", and your accounts only have \(MoneyFormatter.string(available))."
+        }
+        return available.minorUnits >= price.minorUnits
+            ? "You have \(MoneyFormatter.string(available)) across your accounts, so yes, but there's no budget this month to check it against."
+            : "Not right now. Your accounts have \(MoneyFormatter.string(available)), less than \(money(price))."
     }
 
     /// "4 transactions for Foodpanda this month, Rs 6,200 in all. Latest: …" (UZee helper's search).

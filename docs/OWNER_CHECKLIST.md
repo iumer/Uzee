@@ -52,6 +52,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-039 | 2026-10-12 | Home: one tile with two circles (what I have, what I spent this month) instead of two tiles | Auto: OWN039 smoke; Phone | – | – | – |
 | OWN-040 | 2026-10-12 | Budget limits: type an amount, not only +/- in 1k steps | Auto: OWN039 smoke; Phone | – | – | – |
 | OWN-041 | 2026-10-12 | People: one + only (bottom + adds an expense with someone); top button is a person icon for add person/group | Auto: OWN038 smoke; Phone | – | – | – |
+| OWN-042 | 2026-10-13 | UZee voice gets everyday budgeting requests right: a 51-sentence check (spend, income, cheques, transfers, loans, debts, questions, afford, reminders, search) all correct; it never makes up an account or person | Auto: VoiceTests "Fifty-sentence voice check", "unseen sentences", "Rules first"; Phone | – | – | – |
 
 ## Bugs
 
@@ -74,6 +75,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-015 | 2026-10-12 | After saving a budget, Budget still asked to set one | Budget screen didn't redraw (budgets aren't observed) | Phone; budgetRevision bump | 0.13.2 | Fixed, check on phone |
 | BUG-016 | 2026-10-12 | Budget with limits but no total showed "Rs 48,000 over the total" and still "No budget yet"; voice read "PKR ₹40,000 check into my HBL account" as HBL to HBL | Empty total saved as 0; ₹ not read; the model's same-account transfer kept | VoiceTests.chequeDeposit; Phone | 0.13.4 | Fixed, check on phone |
 | BUG-017 | 2026-10-12 | Typing 40000 fast saved 4,000 (limits, split amount); empty limit box hard to tap; UZee/+ over fields with keyboard up and over Coming up amounts | Fields rewrote their own text with commas on each keystroke; tiny box; floating buttons ignored keyboard | Mac check; Phone | 0.13.7 | Fixed, check on phone |
+| BUG-018 | 2026-10-13 | Voice: Apple Intelligence answered "How much is in HBL?" with the total, swapped lent/borrowed, logged a debt for "How much do I owe Ammi?", picked accounts never said; rules missed Netflix/Careem/ChatGPT categories, "Paid Ammi back", "Top up … from HBL", "reimbursed", "kal", "coming up", "afford" | Every sentence went to the on-device model first; rules lacked those words | Auto: VoiceTests (3 new suites) | 0.13.8 | Fixed, check on phone |
 
 ## Waiting on the owner
 
