@@ -64,6 +64,10 @@ struct ImportStatementView: View {
     /// Files that weren't imported, with why ("Wise AED: no transactions").
     @State private var skipped: [String] = []
     @State private var statementsImported = 0
+    /// "HBL balance set to Rs 35,951 from the statement", one line per statement whose closing balance was used.
+    @State private var balanceNotes: [String] = []
+    /// Statement rows imported in this batch (Undo also covers any balance adjustments).
+    @State private var rowsImported = 0
 
     private var ledger: LedgerSnapshot { session.ledger }
     private var account: Account? { ledger.account(accountID) }
@@ -97,6 +101,8 @@ struct ImportStatementView: View {
                 skipped = []
                 statementsImported = 0
                 importedIDs = []
+                balanceNotes = []
+                rowsImported = 0
                 nextFile()
             }
             .alert("This PDF has a password", isPresented: $askingPassword) {
@@ -543,12 +549,43 @@ struct ImportStatementView: View {
             session.reload()
         }
         importedIDs += ids
+        rowsImported += ids.count
+        if let fix = matchClosingBalance(account) { importedIDs.append(fix) }
         statementsImported += 1
         if !queue.isEmpty {
             nextFile()
             return
         }
         finishAll()
+    }
+
+    /// The statement's closing balance is the bank's word (owner, 2026-10-13): when the account's balance on the
+    /// statement's last day differs, a visible balance adjustment on that day makes them match. It isn't spending
+    /// or income, and Undo removes it with the rows. Balances after that day keep their own activity.
+    private func matchClosingBalance(_ account: Account) -> UUID? {
+        guard let closing = reading?.closingBalance, let last = reading?.last,
+              let target = try? Money.fromMajor(closing, account.currency) else { return nil }
+        let throughLast = session.transactions.filter { $0.localDate <= last }
+        guard let current = try? BalanceCalculator.balance(of: account, transactions: throughLast) else { return nil }
+        let name = account.name
+        let difference = target.minorUnits - current.minorUnits
+        guard difference != 0 else {
+            balanceNotes.append("\(name) matches the statement: \(MoneyFormatter.string(target)) on \(DateText.short(last)).")
+            return nil
+        }
+        let endOfDay = last.startDate(in: .current).addingTimeInterval(24 * 3_600 - 60)
+        let draft = TransactionDraft(kind: .adjustment, amount: Money(minorUnits: difference.magnitudeClamped, currency: account.currency),
+                                     accountID: account.id, adjustmentIncreases: difference > 0,
+                                     note: "Matched to the \(bankName.isEmpty ? "bank" : bankName) statement's closing balance, \(MoneyFormatter.string(target))",
+                                     occurredAt: endOfDay, source: .import)
+        guard let transaction = try? TransactionValidator.build(draft, accounts: session.ledger.accounts, base: session.ledger.base),
+              (try? session.client.save(transaction)) != nil else {
+            balanceNotes.append("Couldn't set \(name) to the statement's closing balance. Use Reconcile in Accounts.")
+            return nil
+        }
+        session.reload()
+        balanceNotes.append("\(name) balance set to \(MoneyFormatter.string(target)) on \(DateText.short(last)), from the statement.")
+        return transaction.id
     }
 
     /// After the last statement: offer the monthly repeats found in everything imported, then the summary.
@@ -573,7 +610,7 @@ struct ImportStatementView: View {
         recurringFound = RecurringFinder.find(payments, existingNames: session.recurring.items.map(\.name), today: session.today)
         // Seen two months or more: ticked. Seen once: offered, but you tick it yourself.
         recurringChosen = Set(recurringFound.filter { $0.months >= 2 }.map(\.id))
-        step = recurringFound.isEmpty ? .done(ids.count) : .recurring(ids.count)
+        step = recurringFound.isEmpty ? .done(rowsImported) : .recurring(rowsImported)
     }
 
     /// Adds the ticked repeats as bills, subscriptions or income from their next date. Reminders come from them,
@@ -687,6 +724,11 @@ struct ImportStatementView: View {
             Text("Imported \(count) transactions").font(.title3.weight(.semibold))
             Text(statementsImported > 1 ? "From \(statementsImported) statements." : "Into \(account?.name ?? "your account").")
                 .font(.subheadline).foregroundStyle(UZColor.label2).multilineTextAlignment(.center)
+            ForEach(balanceNotes, id: \.self) { note in
+                Label(note, systemImage: "checkmark.seal").font(.footnote).foregroundStyle(UZColor.label2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityIdentifier("import.balance")
             if !skipped.isEmpty {
                 VStack(alignment: .leading, spacing: UZSpacing.xxs) {
                     Text("Not imported").font(.footnote.weight(.semibold))

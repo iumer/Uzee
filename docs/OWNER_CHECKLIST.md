@@ -55,6 +55,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-042 | 2026-10-13 | UZee voice gets everyday budgeting requests right: a 51-sentence check (spend, income, cheques, transfers, loans, debts, questions, afford, reminders, search) all correct; it never makes up an account or person | Auto: VoiceTests "Fifty-sentence voice check", "unseen sentences", "Rules first"; Phone | – | – | – |
 | OWN-044 | 2026-10-13 | Statements read exactly as the PDF shows (Easypaisa, HBL, Meezan, NayaPay, Wise): every row, amount, direction and balance; opening + rows = closing where the bank prints both | Auto: StatementLayoutTests "Statement check 2026-10-13"; Mac check of the owner's PDFs; Phone | – | – | – |
 | OWN-045 | 2026-10-13 | Import several statement files at once: each reviewed in turn into its own account, empty ones skipped with a note, duplicates across files left out, one Undo | Simulator; Phone | – | – | – |
+| OWN-046 | 2026-10-13 | When an imported PDF or CSV has a closing balance, that account's balance is set from it (as of the statement's last day) | Simulator: Accounts after import; Phone | – | – | – |
 
 ## Bugs
 
