@@ -15,8 +15,12 @@ final class BudgetSmokeTests: XCTestCase {
         tap("settings.sampleOn")
         XCTAssertTrue(element("settings.sampleOff").waitForExistence(timeout: 30))
         app.navigationBars["Settings"].buttons.element(boundBy: 0).tap()
-        let tab = app.tabBars.buttons["Budget"]
-        if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons["Budget"].firstMatch.tap() }
+        let tab = app.tabBars.buttons["Plan"]
+        if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons["Plan"].firstMatch.tap() }
+        // Plan holds Budget and Calendar behind one switch.
+        let part = app.segmentedControls["plan.part"].buttons["Budget"]
+        XCTAssertTrue(part.waitForExistence(timeout: 30), "Plan switch missing")
+        part.tap()
     }
 
     private func element(_ identifier: String) -> XCUIElement {

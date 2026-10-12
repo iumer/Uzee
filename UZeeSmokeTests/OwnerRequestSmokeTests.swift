@@ -64,25 +64,36 @@ final class OwnerRequestSmokeTests: XCTestCase {
         XCTAssertTrue(element("person.repay").waitForExistence(timeout: 30), "They paid you missing")
     }
 
-    /// OWN-023 and OWN-025: the singing UZee sits above "+" and the profile icon (Settings) is top right on every tab.
+    /// OWN-023, OWN-025 and round 3 (pick M): the profile icon is top left and UZee top right on every tab,
+    /// and "+" sits in the middle of the bottom bar.
     func testOWN023_uzeeOnEveryTab() {
         backToHome()
         var profileFrame: CGRect?
-        for name in ["Activity", "Budget", "Calendar", "People", "Home"] {
+        var voiceFrame: CGRect?
+        for name in ["Activity", "Plan", "People", "Home"] {
             let tab = app.tabBars.buttons[name]
             if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons[name].firstMatch.tap() }
-            XCTAssertTrue(element("tab.voice").waitForExistence(timeout: 30), "UZee missing on \(name)")
-            XCTAssertTrue(element("tab.add").exists, "+ missing on \(name)")
-            let settings = name == "Home" ? "tab.settings" : "tab.settings.\(name.lowercased())"
-            let profile = element(settings)
+            let id = name == "Home" ? "" : ".\(name.lowercased())"
+            let voice = element("tab.voice" + id)
+            XCTAssertTrue(voice.waitForExistence(timeout: 30), "UZee missing on \(name)")
+            let add = element("tab.add")
+            XCTAssertTrue(add.exists, "+ missing on \(name)")
+            let profile = element("tab.settings" + id)
             XCTAssertTrue(profile.waitForExistence(timeout: 10), "Profile (Settings) missing on \(name)")
-            // Same spot, top left, on every tab.
+            // Same spots on every tab: profile top left, UZee top right.
             XCTAssertLessThan(profile.frame.midX, app.frame.width / 3, "Profile not top left on \(name)")
-            if let first = profileFrame {
+            XCTAssertGreaterThan(voice.frame.midX, app.frame.width * 2 / 3, "UZee not top right on \(name)")
+            if app.frame.width < 600 {
+                XCTAssertEqual(add.frame.midX, app.frame.midX, accuracy: 4, "+ not in the middle of the bottom bar on \(name)")
+                XCTAssertGreaterThan(add.frame.midY, app.frame.height * 0.85, "+ not at the bottom on \(name)")
+            }
+            if let first = profileFrame, let firstVoice = voiceFrame {
                 XCTAssertEqual(profile.frame.midX, first.midX, accuracy: 3, "Profile moved sideways on \(name)")
                 XCTAssertEqual(profile.frame.midY, first.midY, accuracy: 3, "Profile moved up or down on \(name)")
+                XCTAssertEqual(voice.frame.midY, firstVoice.midY, accuracy: 3, "UZee moved up or down on \(name)")
             } else {
                 profileFrame = profile.frame
+                voiceFrame = voice.frame
             }
         }
         tap("tab.voice")

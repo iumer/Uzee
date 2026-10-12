@@ -1,20 +1,22 @@
 import Foundation
 import UZeeCore
 
-/// The five tabs in order (SCREEN_INVENTORY §1.1), plus the detached "+" item.
+/// The four screens plus "+" in the middle of the bottom bar (owner's round 3 pick M, 2026-10-12).
+/// Plan holds Budget and Calendar behind one switch.
 public enum AppTab: String, CaseIterable, Hashable, Sendable {
-    case home, activity, budget, calendar, people
+    case home, activity, plan, people
     /// Not a screen: selecting it opens the Add sheet and keeps the current tab.
     case add
 
-    public static let screens: [AppTab] = [.home, .activity, .budget, .calendar, .people]
+    public static let screens: [AppTab] = [.home, .activity, .plan, .people]
+    /// The bottom bar, left to right: "+" sits in the middle.
+    public static let bar: [AppTab] = [.home, .activity, .add, .plan, .people]
 
     public var title: String {
         switch self {
         case .home: "Home"
         case .activity: "Activity"
-        case .budget: "Budget"
-        case .calendar: "Calendar"
+        case .plan: "Plan"
         case .people: "People"
         case .add: "Add"
         }
@@ -24,12 +26,18 @@ public enum AppTab: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .home: "house"
         case .activity: "list.bullet.rectangle"
-        case .budget: "chart.pie"
-        case .calendar: "calendar"
+        case .plan: "calendar.badge.clock"
         case .people: "person.2"
         case .add: "plus"
         }
     }
+}
+
+/// The two halves of the Plan tab.
+public enum PlanPart: String, CaseIterable, Hashable, Sendable {
+    case budget, calendar
+
+    public var title: String { self == .budget ? "Budget" : "Calendar" }
 }
 
 /// Pushed destinations. Each tab keeps its own path, so Back always works (AUD-14).

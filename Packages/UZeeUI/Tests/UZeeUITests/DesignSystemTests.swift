@@ -86,9 +86,9 @@ struct AppSessionTests {
     @Test("UI-003 choosing + opens Add and keeps the current tab")
     func addKeepsTab() {
         let session = makeSession(FakeStore())
-        session.tabSelection.wrappedValue = .budget
+        session.tabSelection.wrappedValue = .plan
         session.tabSelection.wrappedValue = .add
-        #expect(session.selectedTab == .budget)
+        #expect(session.selectedTab == .plan)
         #expect(session.isAddPresented)
     }
 
@@ -96,15 +96,15 @@ struct AppSessionTests {
     func pathsPerTab() {
         let session = makeSession(FakeStore())
         session.path(for: .home).wrappedValue = [.settings]
-        session.tabSelection.wrappedValue = .budget
+        session.tabSelection.wrappedValue = .plan
         session.tabSelection.wrappedValue = .home
         #expect(session.path(for: .home).wrappedValue == [.settings])
-        #expect(session.path(for: .budget).wrappedValue.isEmpty)
+        #expect(session.path(for: .plan).wrappedValue.isEmpty)
     }
 
     @Test("UI-001 tab order")
     func tabOrder() {
-        #expect(AppTab.screens.map(\.title) == ["Home", "Activity", "Budget", "Calendar", "People"])
+        #expect(AppTab.bar.map(\.title) == ["Home", "Activity", "Add", "Plan", "People"])
     }
 
     @Test("DATA-001 sample mode on and off")

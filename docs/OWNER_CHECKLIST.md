@@ -39,6 +39,11 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-026 | 2026-10-12 | A transaction can be made to repeat every month (with reminders) from its detail screen; "Add again today" is the one-off copy | Phone | – | – | – |
 | OWN-027 | 2026-10-12 | After an import that finds repeating payments, UZee stops and asks to add them with reminders; Undo import is on the done screen | Auto: RecurringFinderTests; Phone | – | – | – |
 | OWN-028 | 2026-10-12 | Salary and other income get a reminder on the day they should arrive | Auto: RemindersTests income | – | – | – |
+| OWN-029 | 2026-10-12 | "+" sits in the middle of the bottom bar: Home, Activity, +, Plan, People (round 3 pick M) | Auto: UI001 tab order, OWN023 centre check | – | – | – |
+| OWN-030 | 2026-10-12 | Plan tab holds Budget and Calendar behind one switch; Bills & subscriptions sits under the month (N, O) | Auto: BUD001, CAL001 via the Plan switch | – | – | – |
+| OWN-031 | 2026-10-12 | Home shows only You have, Spent this month, Coming up and People (M) | Phone | – | – | – |
+| OWN-032 | 2026-10-12 | Add: Spent / Got / Moved, big amount, account and date in one line, 6 category tiles, Scan / Split / More (P); More holds note, pending, tags, receipt, lent/borrowed, refund, fix a balance (Q) | Auto: SMK007, SMK012; Phone | – | – | – |
+| OWN-033 | 2026-10-12 | UZee is top right on every tab, the profile icon top left | Auto: OWN023 | – | – | – |
 
 ## Bugs
 

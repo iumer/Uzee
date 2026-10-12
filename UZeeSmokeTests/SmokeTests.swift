@@ -4,7 +4,9 @@ import XCTest
 /// Written to run on iPhone (tab bar) and iPad (sidebar-adaptable tab bar).
 final class SmokeTests: XCTestCase {
     private var app: XCUIApplication!
-    private let tabs = ["Home", "Activity", "Budget", "Calendar", "People"]
+    private let tabs = ["Home", "Activity", "Plan", "People"]
+    /// The bottom bar: "+" sits in the middle (owner pick M, 2026-10-12).
+    private let bar = ["Home", "Activity", "Add", "Plan", "People"]
 
     override func setUp() {
         continueAfterFailure = false
@@ -83,7 +85,7 @@ final class SmokeTests: XCTestCase {
     func testSMK005_UI001_tabsInOrderAndOpen() {
         if app.tabBars.firstMatch.waitForExistence(timeout: 30) {
             let labels = app.tabBars.firstMatch.buttons.allElementsBoundByIndex.map { $0.label }
-            XCTAssertEqual(Array(labels.prefix(5)), tabs, "Tab order")
+            XCTAssertEqual(Array(labels.prefix(5)), bar, "Tab order")
         }
         for tab in tabs {
             tapTab(tab)
@@ -110,13 +112,13 @@ final class SmokeTests: XCTestCase {
     /// UI-002 Each tab keeps its navigation state
     func testUI002_tabKeepsNavigationState() {
         openSettings()
-        tapTab("Budget")
-        expectScreen("Budget")
+        tapTab("Plan")
+        expectScreen("Plan")
         tapTab("Home")
         expectScreen("Settings")
     }
 
-    /// UI-012 Home toolbar: mic opens Ask UZee, gear opens Settings
+    /// UI-012 Home toolbar: UZee (top right) opens Ask UZee, the profile icon opens Settings
     func testUI012_homeToolbar() {
         element("tab.voice").tap()
         let close = element("voice.close")

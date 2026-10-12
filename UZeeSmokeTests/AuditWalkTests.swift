@@ -1,8 +1,7 @@
 import XCTest
 
 /// A walk through every tab with sample data, the way a person would check the app by hand (owner audit,
-/// 2026-10-12). On each tab it scrolls to the end and checks the floating UZee and "+" never sit on top of an
-/// amount.
+/// 2026-10-12). On each tab it scrolls to the end and checks the raised "+" never sits on top of an amount.
 final class AuditWalkTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -44,7 +43,7 @@ final class AuditWalkTests: XCTestCase {
     }
 
     @MainActor func testAuditWalk_everyTab() {
-        for name in ["Home", "Activity", "Budget", "Calendar", "People"] {
+        for name in ["Home", "Activity", "Plan", "People"] {
             open(name)
             XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 30), "\(name) didn't open")
             // Scroll until the screen stops moving: that is the real end of the list.
@@ -56,12 +55,12 @@ final class AuditWalkTests: XCTestCase {
                 if now == last { break }
                 last = now
             }
-            let voice = app.find("tab.voice"), add = app.find("tab.add")
-            XCTAssertTrue(voice.exists && add.exists, "Floating UZee or + missing on \(name)")
-            let floating = voice.frame.union(add.frame).insetBy(dx: -4, dy: -4)
+            let add = app.find("tab.add")
+            XCTAssertTrue(add.exists, "+ missing on \(name)")
+            let floating = add.frame.insetBy(dx: -4, dy: -4)
             // At the end, the last amount must sit clear of the floating buttons.
             if let low = lowestAmount(), low.frame.intersects(floating) {
-                XCTFail("On \(name), \"\(low.label)\" is under the floating UZee/+ buttons at the end of the list")
+                XCTFail("On \(name), \"\(low.label)\" is under the + button at the end of the list")
             }
         }
     }

@@ -1,8 +1,8 @@
 import SwiftUI
 import UZeeCore
 
-/// Home (SCR-02, AUD-02): what needs attention, what's available, budget left, what's due before salary,
-/// the next 7 days, people balances, where the money went this month, insights and accounts.
+/// Home (round 3 mockup M, owner pick 2026-10-12): four things only. What you have, what you spent,
+/// what's coming up, and who owes whom.
 struct HomeView: View {
     @Bindable var session: AppSession
     @State private var isAddingAccount = false
@@ -10,9 +10,9 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: UZSpacing.xl) {
-                Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
-                    .font(.footnote.weight(.semibold))
+            VStack(alignment: .leading, spacing: UZSpacing.l) {
+                Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                    .font(.subheadline)
                     .foregroundStyle(UZColor.label2)
                     .accessibilityIdentifier("home.date")
                 if !session.isDatabaseReady {
@@ -34,12 +34,9 @@ struct HomeView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("home.empty")
                 } else {
-                    let model = RecurringModel(session: session)
-                    overdueStrip(model)
-                    availableCard
+                    haveCard
+                    HomeCards(session: session, model: RecurringModel(session: session), paying: $paying)
                     if session.prayer.hasPlace { PrayerHomeCard(session: session) }
-                    HomeCards(session: session, model: model, paying: $paying)
-                    accountsCard
                 }
             }
             .padding(.horizontal, UZSpacing.xxl)
@@ -51,71 +48,30 @@ struct HomeView: View {
         .sheet(item: $paying) { MarkPaidSheet(session: session, occurrence: $0) }
     }
 
-    @ViewBuilder
-    private func overdueStrip(_ model: RecurringModel) -> some View {
-        let overdue = model.nextOccurrences.filter { $0.occurrence.state == .overdue }
-        if let first = overdue.first {
-            UZCard(padding: UZSpacing.l) {
-                HStack(spacing: UZSpacing.l) {
-                    Image(systemName: "exclamationmark.circle.fill").font(.title2).foregroundStyle(UZColor.negative)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: UZSpacing.xxs) {
-                        Text(overdue.count == 1 ? "1 overdue" : "\(overdue.count) overdue")
-                            .font(.caption.weight(.bold)).foregroundStyle(UZColor.negative)
-                        Text("\(first.item.name) · \(MoneyFormatter.string(first.occurrence.amount))").font(.subheadline.weight(.semibold))
-                        Text((first.item.isEstimated ? "Estimated · " : "") + "was due \(DateText.short(first.occurrence.scheduledDate))")
-                            .font(.footnote).foregroundStyle(UZColor.label2)
+    /// "You have Rs 484,800 · In 9 accounts"; opens the account list.
+    private var haveCard: some View {
+        let count = session.ledger.activeAccounts.count
+        return NavigationLink(value: Route.accounts) {
+            UZCard {
+                VStack(alignment: .leading, spacing: UZSpacing.xs) {
+                    HStack {
+                        Text("You have").font(.subheadline).foregroundStyle(UZColor.label2)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(UZColor.label3)
                     }
-                    Spacer()
-                    Button("Pay") { paying = first.occurrence }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .accessibilityIdentifier("home.payOverdue")
-                }
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("home.overdue")
-        }
-    }
-
-    private var availableCard: some View {
-        UZCard {
-            VStack(alignment: .leading, spacing: UZSpacing.s) {
-                Text("Available balance").font(.subheadline.weight(.semibold)).foregroundStyle(UZColor.label2)
-                AmountText(session.ledger.available, font: .system(.largeTitle, weight: .bold))
-                    .accessibilityIdentifier("home.available")
-                if let footnote = session.ledger.footnote {
-                    Text(footnote).font(.caption).foregroundStyle(UZColor.label2)
-                        .accessibilityIdentifier("home.footnote")
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var accountsCard: some View {
-        VStack(alignment: .leading, spacing: UZSpacing.m) {
-            HStack {
-                SectionHeader("Accounts")
-                Spacer()
-                NavigationLink("See all", value: Route.accounts)
-                    .font(.subheadline)
-                    .accessibilityIdentifier("home.accounts")
-            }
-            UZCard(padding: UZSpacing.xxl) {
-                VStack(spacing: 0) {
-                    let shown = session.ledger.activeAccounts
-                    ForEach(shown) { account in
-                        NavigationLink(value: Route.account(account.id)) {
-                            AccountRow(account: account, ledger: session.ledger)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("account.\(account.name)")
-                        if account.id != shown.last?.id { Divider() }
+                    AmountText(session.ledger.available, font: .system(.largeTitle, weight: .bold))
+                        .accessibilityIdentifier("home.available")
+                    Text(count == 1 ? "In 1 account" : "In \(count) accounts").font(.footnote).foregroundStyle(UZColor.label2)
+                    if let footnote = session.ledger.footnote {
+                        Text(footnote).font(.caption).foregroundStyle(UZColor.label2)
+                            .accessibilityIdentifier("home.footnote")
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.accounts")
     }
 }
 

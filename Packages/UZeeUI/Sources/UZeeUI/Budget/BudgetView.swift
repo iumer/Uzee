@@ -62,6 +62,7 @@ struct BudgetView: View {
                     overview(summary, model: model)
                     categories(summary, model: model)
                     historyCard(model.history(count: 6, before: model.current), model: model)
+                    reportsRow
                     Text("Your shares only · transfers and loans excluded · warning at \(model.warnPercent)%"
                          + (session.ledger.footnote.map { " · " + $0 } ?? ""))
                         .font(.caption).foregroundStyle(UZColor.label2)
@@ -70,7 +71,7 @@ struct BudgetView: View {
                     UZCard {
                         EmptyStateView("No budget yet", systemImage: "chart.pie",
                                        description: "Set a monthly total and limits per category. Your spending still counts while you decide.",
-                                       actionTitle: "Set budget") { session.paths[.budget, default: []].append(.budgetLimits) }
+                                       actionTitle: "Set budget") { session.paths[.plan, default: []].append(.budgetLimits) }
                     }
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("budget.empty")
@@ -80,15 +81,30 @@ struct BudgetView: View {
             .padding(.bottom, 96)
         }
         .background(UZColor.bg)
-        .navigationTitle("Budget")
+        .navigationTitle("Plan")
         .toolbar {
-            // Top left is the profile icon on every tab, so the period menu sits on the right.
+            // Top left is the profile icon and top right UZee on every tab; the period menu sits beside UZee.
             ToolbarItem(placement: .primaryAction) { periodMenu(model: model, selected: period) }
-            ToolbarItem(placement: .primaryAction) {
-                NavigationLink(value: Route.budgetLimits) { Text("Edit") }
-                    .accessibilityIdentifier("budget.edit")
+        }
+    }
+
+    /// Reports used to sit on Home as Insights; Home is simpler now, so they live with the budget.
+    private var reportsRow: some View {
+        NavigationLink(value: Route.reports) {
+            UZCard(padding: UZSpacing.l) {
+                HStack(spacing: UZSpacing.l) {
+                    Image(systemName: "chart.bar.xaxis").font(.title3).foregroundStyle(UZColor.tint).accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                        Text("Reports").font(.body.weight(.medium)).foregroundStyle(UZColor.label)
+                        Text("Income, spending and where it went, month by month").font(.footnote).foregroundStyle(UZColor.label2)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(UZColor.label3)
+                }
             }
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("budget.reports")
     }
 
     // MARK: Overview ring
@@ -144,10 +160,13 @@ struct BudgetView: View {
 
     private func categories(_ summary: BudgetSummary, model: BudgetModel) -> some View {
         VStack(alignment: .leading, spacing: UZSpacing.m) {
-            HStack {
-                SectionHeader("Categories")
-                Spacer()
+            HStack(alignment: .firstTextBaseline) {
+                SectionHeader("Where it went")
                 Text("your shares").font(.footnote).foregroundStyle(UZColor.label2)
+                Spacer()
+                NavigationLink("Edit limits", value: Route.budgetLimits)
+                    .font(.subheadline)
+                    .accessibilityIdentifier("budget.edit")
             }
             if summary.unassigned.minorUnits != 0 {
                 UZCard(padding: UZSpacing.xl) {

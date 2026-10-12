@@ -1,7 +1,7 @@
 import SwiftUI
 import UZeeCore
 
-/// App shell: five tabs, each with its own NavigationStack, plus the detached "+" (DESIGN_SYSTEM §9).
+/// App shell: four tabs, each with its own NavigationStack, and "+" in the middle of the bottom bar.
 /// `.sidebarAdaptable` gives iPad a sidebar with the same destinations; compact widths keep the tab bar.
 public struct RootView: View {
     @Bindable var session: AppSession
@@ -17,6 +17,7 @@ public struct RootView: View {
     /// When UZee left the screen; it locks on return once the timeout has passed (SET-01).
     @State private var backgroundedAt: Date?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     public init(session: AppSession) {
         self.session = session
@@ -24,32 +25,26 @@ public struct RootView: View {
 
     public var body: some View {
         TabView(selection: session.tabSelection) {
-            ForEach(AppTab.screens, id: \.self) { tab in
-                Tab(tab.title, systemImage: tab.symbol, value: tab) {
-                    TabRoot(tab: tab, session: session)
-                }
-            }
+            // Home, Activity, +, Plan, People: "+" is the middle item, so it never pushes a tab into "More".
+            Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { TabRoot(tab: .home, session: session) }
+            Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { TabRoot(tab: .activity, session: session) }
+            // Choosing it opens Add (AppSession.tabSelection); on iPhone the big "+" below sits on top of it.
+            Tab(AppTab.add.title, systemImage: "plus.circle.fill", value: AppTab.add) { Color.clear }
+            Tab(AppTab.plan.title, systemImage: AppTab.plan.symbol, value: AppTab.plan) { TabRoot(tab: .plan, session: session) }
+            Tab(AppTab.people.title, systemImage: AppTab.people.symbol, value: AppTab.people) { TabRoot(tab: .people, session: session) }
         }
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.never)
         .onAppear { Appearance.apply() }
-        // A sixth Tab would push People into "More" on iPhone, so "+" floats above the tab bar instead.
-        // Only on each tab's first screen; detail screens and Settings keep their full width.
-        .overlay(alignment: .bottomTrailing) {
-            if session.path(for: session.selectedTab).wrappedValue.isEmpty {
-                // UZee sits above "+" on every tab, so asking by voice is always one tap away.
-                VStack(spacing: UZSpacing.m) {
-                    VoiceButton { session.isVoicePresented = true }
-                    AddButton { session.isAddPresented = true }
-                }
-                    .padding(.trailing, UZSpacing.xxl)
-                    .padding(.bottom, 72)
-                    // Stay put when the keyboard opens instead of riding up over the fields.
-                    .ignoresSafeArea(.keyboard)
-                    .transition(.scale.combined(with: .opacity))
-            }
+        // iPhone: the big "+" sits in the middle of the bottom bar, over the Add item (owner, 2026-10-12).
+        // iPad has no bottom bar, so "+" floats at the bottom right instead.
+        .overlay(alignment: sizeClass == .compact ? .bottom : .bottomTrailing) {
+            AddButton(isLarge: sizeClass == .compact) { session.isAddPresented = true }
+                .padding(.trailing, sizeClass == .compact ? 0 : UZSpacing.xxl)
+                .padding(.bottom, sizeClass == .compact ? 0 : UZSpacing.xxl)
+                // Stay put when the keyboard opens instead of riding up over the fields.
+                .ignoresSafeArea(.keyboard)
         }
-        .animation(.easeOut(duration: 0.2), value: session.path(for: session.selectedTab).wrappedValue.isEmpty)
         .sheet(isPresented: $session.isAddPresented) {
             AddSheet(session: session).sessionErrors(session)
         }
@@ -123,16 +118,17 @@ public struct RootView: View {
     }
 }
 
-/// The floating glass "+" that opens Add from any tab.
+/// The glass "+" that opens Add from any tab: big and green in the middle of the iPhone's bottom bar.
 struct AddButton: View {
+    var isLarge = false
     let action: () -> Void
 
     var body: some View {
         // The system glass button style keeps taps reliable; a custom interactive glass layer can swallow them.
         Button(action: action) {
             Image(systemName: AppTab.add.symbol)
-                .font(.title2.weight(.semibold))
-                .frame(width: 44, height: 44)
+                .font(isLarge ? .title.weight(.semibold) : .title2.weight(.semibold))
+                .frame(width: isLarge ? 50 : 44, height: isLarge ? 50 : 44)
         }
         .buttonStyle(.glassProminent)
         .buttonBorderShape(.circle)
@@ -142,19 +138,18 @@ struct AddButton: View {
     }
 }
 
-/// The singing UZee above "+": opens Ask UZee from any tab.
+/// The singing UZee, top right on every tab: opens Ask UZee.
 struct VoiceButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            SingingMic(size: 38)
-                .frame(width: 52, height: 52)
+            SingingMic(size: 28)
+                .frame(width: 36, height: 36)
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Ask UZee")
-        .accessibilityIdentifier("tab.voice")
     }
 }
 
@@ -166,10 +161,14 @@ struct TabRoot: View {
     var body: some View {
         NavigationStack(path: session.path(for: tab)) {
             screen
-                // Room under the last row so the floating UZee and "+" never cover an amount.
-                .contentMargins(.bottom, 128, for: .scrollContent)
                 // Settings sits behind the profile icon, always top left on every tab (OWN-025); no tab puts anything else there.
+                // UZee is always the right-most button (round 3 mockups).
                 .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        VoiceButton { session.isVoicePresented = true }
+                            // Home keeps the plain id the screen tests use; other tabs get their own so ids never clash.
+                            .accessibilityIdentifier(tab == .home ? "tab.voice" : "tab.voice.\(tab)")
+                    }
                     ToolbarItem(placement: .topBarLeading) {
                         NavigationLink(value: Route.settings) {
                             Image(systemName: "person.crop.circle").font(.title3)
@@ -214,8 +213,7 @@ struct TabRoot: View {
         switch tab {
         case .home: HomeView(session: session)
         case .activity: ActivityView(session: session)
-        case .budget: BudgetView(session: session)
-        case .calendar: CalendarTabView(session: session)
+        case .plan: PlanView(session: session)
         case .people: PeopleView(session: session)
         case .add: EmptyView()
         }

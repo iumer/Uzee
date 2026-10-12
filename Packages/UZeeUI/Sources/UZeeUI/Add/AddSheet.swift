@@ -3,8 +3,9 @@ import SwiftUI
 import UIKit
 import UZeeCore
 
-/// Add or edit a transaction (SCR-05, TXN-01…07). Amount first; account defaults to the last used one;
-/// recent and everyday categories are one tap; Save saves, then "Saved · Undo" (AUD-13).
+/// Add or edit a transaction (SCR-05, round 3 mockup P). Spent, Got or Moved; amount first; account and date in
+/// one line; six category tiles; everything used less often sits behind More (mockup Q). Save saves, then
+/// "Saved · Undo" (AUD-13).
 struct AddSheet: View {
     @Bindable var session: AppSession
     @Environment(\.dismiss) private var dismiss
@@ -43,6 +44,9 @@ struct AddSheet: View {
     @State private var showingScanner = false
     @State private var showingPhotos = false
     @State private var photoItem: PhotosPickerItem?
+    /// Tags picked under More; set on the transaction once it is saved.
+    @State private var tagIDs: Set<UUID> = []
+    @State private var tagsBefore: Set<UUID> = []
     @FocusState private var amountFocused: Bool
 
     private var ledger: LedgerSnapshot { session.ledger }
@@ -56,30 +60,42 @@ struct AddSheet: View {
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
-                Form {
-                    amountSection
-                    if kind == .transfer { transferSection } else { detailsSection }
-                    Section {
-                        DatePicker("Date", selection: $date)
-                            .accessibilityIdentifier("add.date")
-                        TextField("Note", text: $note, axis: .vertical)
-                            .accessibilityIdentifier("add.note")
-                        Toggle("Pending (not in balance yet)", isOn: $isPending)
-                            .accessibilityIdentifier("add.pending")
-                    }
-                    if let problem {
-                        Section {
+                ScrollView {
+                    VStack(spacing: UZSpacing.xl) {
+                        kindPicker
+                        amountField
+                        if kind == .transfer { transferFields } else { accountDateRow }
+                        if kind != .transfer {
+                            categoryGrid
+                            payeeField
+                        }
+                        actionRow
+                        receiptStatus
+                        if let problem {
                             Label(problem, systemImage: "exclamationmark.circle.fill")
+                                .font(.subheadline)
                                 .foregroundStyle(UZColor.negative)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 // Some toolchains read the symbol name as the label; say the message itself.
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel(problem)
                                 .accessibilityIdentifier("add.problem")
+                                .id("problem")
                         }
-                        .id("problem")
+                        Button(action: prepare) {
+                            Text(editing == nil ? "Save" : "Save changes")
+                                .font(.headline).frame(maxWidth: .infinity).padding(.vertical, UZSpacing.s)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .accessibilityIdentifier("add.saveBottom")
                     }
+                    .padding(.horizontal, UZSpacing.xxl)
+                    .padding(.top, UZSpacing.s)
+                    .padding(.bottom, UZSpacing.xxl)
                 }
-                // The message sits under the form; on iPad's shorter sheet it would be out of sight.
+                .scrollDismissesKeyboard(.interactively)
+                .background(UZColor.bg)
+                // The message sits near the bottom; on iPad's shorter sheet it would be out of sight.
                 .onChange(of: problem) { _, message in
                     guard message != nil else { return }
                     withAnimation { proxy.scrollTo("problem", anchor: .bottom) }
@@ -145,63 +161,163 @@ struct AddSheet: View {
 
     // MARK: Sections
 
-    private var amountSection: some View {
-        Section {
-            Picker("Type", selection: $kind) {
-                ForEach(Self.kinds, id: \.self) { Text($0.name).tag($0) }
+    /// Spent · Got · Moved. Refund shows as a fourth choice only after it is picked under More.
+    private var kindPicker: some View {
+        Picker("Type", selection: $kind) {
+            ForEach(kind == .refund ? Self.kinds : [.expense, .income, .transfer], id: \.self) {
+                Text(Self.label($0)).tag($0)
             }
-            .disabled(editing != nil)
-            .accessibilityIdentifier("add.type")
-            HStack(spacing: UZSpacing.s) {
-                Text(currency.symbol)
-                    .font(.system(.largeTitle, weight: .bold))
-                    .foregroundStyle(UZColor.label2)
-                TextField("0", text: $amountText)
-                    .font(.system(.largeTitle, weight: .bold))
-                    .keyboardType(.decimalPad)
-                    .focused($amountFocused)
-                    .monospacedDigit()
-                    .accessibilityLabel(kind == .transfer ? "Amount sent" : "Amount")
-                    .accessibilityIdentifier("add.amount")
-                    .onChange(of: amountText) { _, typed in
-                        let grouped = AmountTyping.grouped(typed)
-                        if grouped != typed { amountText = grouped }
-                    }
-            }
-            if kind != .transfer && editing == nil { scanRow }
+        }
+        .pickerStyle(.segmented)
+        .disabled(editing != nil)
+        .accessibilityIdentifier("add.type")
+    }
+
+    static func label(_ kind: TransactionKind) -> String {
+        switch kind {
+        case .expense: "Spent"
+        case .income: "Got"
+        case .transfer: "Moved"
+        default: kind.name
         }
     }
 
+    private var amountField: some View {
+        HStack(alignment: .firstTextBaseline, spacing: UZSpacing.s) {
+            Text(currency.symbol)
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .foregroundStyle(UZColor.label2)
+            TextField("0", text: $amountText)
+                .font(.system(size: 52, weight: .bold, design: .rounded))
+                .keyboardType(.decimalPad)
+                .focused($amountFocused)
+                .monospacedDigit()
+                .fixedSize()
+                .accessibilityLabel(kind == .transfer ? "Amount sent" : "Amount")
+                .accessibilityIdentifier("add.amount")
+                .onChange(of: amountText) { _, typed in
+                    let grouped = AmountTyping.grouped(typed)
+                    if grouped != typed { amountText = grouped }
+                }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, UZSpacing.m)
+        .contentShape(.rect)
+        .onTapGesture { amountFocused = true }
+    }
+
+    /// "from HBL ▾ · 12 Oct ▾" (mockup P).
+    private var accountDateRow: some View {
+        HStack(spacing: UZSpacing.s) {
+            accountMenu(kind == .expense ? "from" : "into", selection: $accountID, identifier: "add.account")
+            Text("·").foregroundStyle(UZColor.label3)
+            DatePicker("Date", selection: $date, displayedComponents: .date)
+                .labelsHidden()
+                .accessibilityIdentifier("add.date")
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func accountMenu(_ prefix: String, selection: Binding<UUID?>, identifier: String) -> some View {
+        let chosen = ledger.account(selection.wrappedValue)
+        return Menu {
+            Picker(prefix, selection: selection) {
+                ForEach(ledger.activeAccounts) { account in
+                    Text(account.currency == ledger.base ? account.name : "\(account.name) (\(account.currency.code))")
+                        .tag(UUID?.some(account.id))
+                }
+            }
+        } label: {
+            HStack(spacing: UZSpacing.xxs) {
+                Text(prefix).foregroundStyle(UZColor.label2)
+                Text(chosen?.name ?? "choose account").fontWeight(.semibold).lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+            }
+            .font(.subheadline)
+        }
+        .accessibilityIdentifier(identifier)
+    }
+
+    /// Scan receipt · Split · More (mockup P).
+    private var actionRow: some View {
+        HStack(spacing: UZSpacing.m) {
+            if kind != .transfer && editing == nil { scanButton }
+            if kind == .expense || kind == .income {
+                NavigationLink {
+                    SplitEditorView(session: session, total: currentTotal, isIncome: kind == .income, caption: splitCaption,
+                                    draft: $splitDraft)
+                } label: {
+                    actionTile(splitDraft == nil ? "Split" : "Split ✓", systemImage: "person.2")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("add.split")
+            }
+            NavigationLink {
+                AddMoreView(session: session, note: $note, isPending: $isPending, tagIDs: $tagIDs,
+                            hasReceipt: receiptPhoto != nil, canChangeKind: editing == nil, onPhoto: readReceipt) {
+                    kind = .refund
+                }
+            } label: {
+                actionTile(moreBadge ? "More ✓" : "More", systemImage: "ellipsis.circle")
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("add.more")
+        }
+    }
+
+    private var moreBadge: Bool {
+        !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isPending || !tagIDs.isEmpty
+    }
+
+    private func actionTile(_ title: String, systemImage: String) -> some View {
+        VStack(spacing: UZSpacing.xs) {
+            Image(systemName: systemImage).font(.title3)
+            Text(title).font(.footnote.weight(.medium)).lineLimit(1)
+        }
+        .foregroundStyle(UZColor.tint)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, UZSpacing.m)
+        .background(UZColor.card, in: .rect(cornerRadius: 14))
+        .contentShape(.rect)
+    }
+
     /// "Scan receipt": fills amount, date and shop from a photo, read on this iPhone (AI-02, J2 step 4).
+    private var scanButton: some View {
+        // Tap opens the auto-capture scanner; hold for a photo instead.
+        Menu {
+            if ReceiptScanner.isAvailable {
+                Button("Scan with camera", systemImage: "doc.viewfinder") { showingScanner = true }
+            } else if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button("Take photo", systemImage: "camera") { showingCamera = true }
+            }
+            Button("Choose photo", systemImage: "photo") { showingPhotos = true }
+        } label: {
+            actionTile(receiptPhoto == nil ? "Scan receipt" : "Scan again", systemImage: "doc.text.viewfinder")
+        } primaryAction: {
+            if ReceiptScanner.isAvailable { showingScanner = true }
+            else if UIImagePickerController.isSourceTypeAvailable(.camera) { showingCamera = true }
+            else { showingPhotos = true }
+        }
+        .accessibilityIdentifier("add.scanReceipt")
+    }
+
     @ViewBuilder
-    private var scanRow: some View {
+    private var receiptStatus: some View {
         if isReadingReceipt {
             HStack(spacing: UZSpacing.m) {
                 ProgressView()
-                Text("Reading the receipt on this iPhone…").foregroundStyle(UZColor.label2)
+                Text("Reading the receipt on this iPhone…").font(.footnote).foregroundStyle(UZColor.label2)
             }
             .accessibilityIdentifier("add.readingReceipt")
-        } else {
-            // Tap opens the auto-capture scanner; hold for a photo instead.
-            Menu {
-                if ReceiptScanner.isAvailable {
-                    Button("Scan with camera", systemImage: "doc.viewfinder") { showingScanner = true }
-                } else if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                    Button("Take photo", systemImage: "camera") { showingCamera = true }
-                }
-                Button("Choose photo", systemImage: "photo") { showingPhotos = true }
-            } label: {
-                Label(receiptPhoto == nil ? "Scan receipt" : "Scan another receipt", systemImage: "doc.text.viewfinder")
-            } primaryAction: {
-                if ReceiptScanner.isAvailable { showingScanner = true }
-                else if UIImagePickerController.isSourceTypeAvailable(.camera) { showingCamera = true }
-                else { showingPhotos = true }
-            }
-            .accessibilityIdentifier("add.scanReceipt")
-            if let receiptNote {
-                Text(receiptNote).font(.footnote).foregroundStyle(UZColor.label2)
-                    .accessibilityIdentifier("add.receiptNote")
-            }
+        } else if let receiptNote {
+            Text(receiptNote).font(.footnote).foregroundStyle(UZColor.label2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("add.receiptNote")
+        }
+        if splitDraft != nil {
+            Text("Split · \(splitSummary)").font(.footnote).foregroundStyle(UZColor.label2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("add.splitSummary")
         }
     }
 
@@ -252,6 +368,15 @@ struct AddSheet: View {
             : "Filled \(ListFormatter.localizedString(byJoining: filled)) from the receipt. Check them before saving. The photo will be attached."
     }
 
+    private func applyTags(to transactionID: UUID) {
+        guard tagIDs != tagsBefore else { return }
+        if session.perform("Saved, but couldn't add the tags. Add them from the transaction.", {
+            try session.activity.setTags(tagIDs, transactionID)
+        }) {
+            session.reload()
+        }
+    }
+
     private func attachReceipt(to transactionID: UUID) {
         guard let receiptPhoto else { return }
         if session.perform("Saved, but couldn't attach the receipt. Attach it from the transaction.", {
@@ -261,53 +386,82 @@ struct AddSheet: View {
         }
     }
 
-    private var detailsSection: some View {
-        Section {
-            accountPicker("Account", selection: $accountID, identifier: "add.account")
-            let recents = recentCategories
-            if !recents.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: UZSpacing.m) {
-                        ForEach(recents) { category in
-                            Button {
-                                categoryID = category.id
-                            } label: {
-                                Label(category.name, systemImage: category.group.symbolName)
-                                    .font(.subheadline)
-                                    .padding(.horizontal, UZSpacing.l)
-                                    .padding(.vertical, UZSpacing.s)
-                                    .background(categoryID == category.id ? UZColor.tint.opacity(0.2) : UZColor.fill, in: .capsule)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("add.recent.\(category.name)")
-                        }
+    private static let gridColumns = Array(repeating: GridItem(.flexible(), spacing: UZSpacing.m), count: 3)
+
+    /// Five one-tap categories plus More (mockup P). The chosen one always shows, even if it came from More.
+    private var categoryGrid: some View {
+        VStack(spacing: UZSpacing.s) {
+            LazyVGrid(columns: Self.gridColumns, spacing: UZSpacing.m) {
+                ForEach(gridCategories) { category in
+                    Button {
+                        categoryID = category.id
+                    } label: {
+                        categoryTile(category.name, style: CategoryStyle(category.group), isOn: categoryID == category.id)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(categoryID == category.id ? .isSelected : [])
+                    .accessibilityIdentifier("add.recent.\(category.name)")
                 }
-            }
-            NavigationLink {
-                CategoryPicker(categories: ledger.categories, type: categoryType(for: kind), selection: $categoryID)
-            } label: {
-                LabeledContent("Category") {
-                    Text(ledger.categoryPath(categoryID) ?? "Choose").foregroundStyle(categoryID == nil ? UZColor.label2 : UZColor.label)
-                }
-            }
-            .accessibilityIdentifier("add.category")
-            TextField(kind == .income ? "From (payer)" : kind == .refund ? "Refund from" : "Paid to (payee)", text: $payee)
-                .textInputAutocapitalization(.words)
-                .accessibilityIdentifier("add.payee")
-                .onChange(of: payee) { _, newPayee in suggestCategory(for: newPayee) }
-            if kind == .expense || kind == .income {
                 NavigationLink {
-                    SplitEditorView(session: session, total: currentTotal, isIncome: kind == .income, caption: splitCaption,
-                                    draft: $splitDraft)
+                    CategoryPicker(categories: ledger.categories, type: categoryType(for: kind), selection: $categoryID)
                 } label: {
-                    LabeledContent("Split") {
-                        Text(splitSummary).foregroundStyle(splitDraft == nil ? UZColor.label2 : UZColor.label)
+                    VStack(spacing: UZSpacing.xs) {
+                        Image(systemName: "square.grid.2x2").font(.body.weight(.semibold))
+                            .frame(width: 36, height: 36)
+                            .foregroundStyle(UZColor.label2)
+                            .background(UZColor.fill, in: .circle)
+                        Text("More").font(.footnote).foregroundStyle(UZColor.label)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, UZSpacing.m)
+                    .background(UZColor.card, in: .rect(cornerRadius: 16))
                 }
-                .accessibilityIdentifier("add.split")
+                .buttonStyle(.plain)
+                .accessibilityLabel("More categories")
+                .accessibilityIdentifier("add.category")
+            }
+            if let path = ledger.categoryPath(categoryID) {
+                Text(path).font(.footnote).foregroundStyle(UZColor.label2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("add.categoryPath")
             }
         }
+    }
+
+    private func categoryTile(_ name: String, style: CategoryStyle, isOn: Bool) -> some View {
+        VStack(spacing: UZSpacing.xs) {
+            Image(systemName: style.symbolName).font(.body.weight(.semibold))
+                .frame(width: 36, height: 36)
+                .foregroundStyle(style.glyph)
+                .background(style.color.opacity(0.15), in: .circle)
+            Text(name).font(.footnote).foregroundStyle(UZColor.label).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, UZSpacing.m)
+        .padding(.horizontal, UZSpacing.xs)
+        .background(isOn ? UZColor.tint.opacity(0.12) : UZColor.card, in: .rect(cornerRadius: 16))
+        .overlay {
+            if isOn { RoundedRectangle(cornerRadius: 16).strokeBorder(UZColor.tint, lineWidth: 2) }
+        }
+        .contentShape(.rect)
+    }
+
+    private var gridCategories: [SpendCategory] {
+        let recents = recentCategories
+        guard let chosen = ledger.category(categoryID), !recents.prefix(5).contains(where: { $0.id == chosen.id }) else {
+            return Array(recents.prefix(5))
+        }
+        return [chosen] + recents.prefix(4)
+    }
+
+    private var payeeField: some View {
+        TextField(kind == .income ? "From whom? (optional)" : kind == .refund ? "Refund from? (optional)" : "Where? (optional)",
+                  text: $payee)
+            .textInputAutocapitalization(.words)
+            .padding(UZSpacing.l)
+            .background(UZColor.card, in: .rect(cornerRadius: 12))
+            .accessibilityIdentifier("add.payee")
+            .onChange(of: payee) { _, newPayee in suggestCategory(for: newPayee) }
     }
 
     private var currentTotal: Money {
@@ -337,10 +491,17 @@ struct AddSheet: View {
         suggestedCategoryID = suggestion
     }
 
-    private var transferSection: some View {
-        Section {
-            accountPicker("From", selection: $accountID, identifier: "add.from")
-            accountPicker("To", selection: $toAccountID, identifier: "add.to")
+    /// "from Wise ▾ · to HBL ▾", the date, and what arrived when the currencies differ.
+    private var transferFields: some View {
+        VStack(spacing: UZSpacing.m) {
+            HStack(spacing: UZSpacing.s) {
+                accountMenu("from", selection: $accountID, identifier: "add.from")
+                Text("·").foregroundStyle(UZColor.label3)
+                accountMenu("to", selection: $toAccountID, identifier: "add.to")
+            }
+            DatePicker("Date", selection: $date, displayedComponents: .date)
+                .labelsHidden()
+                .accessibilityIdentifier("add.date")
             if needsReceived, let toAccount {
                 HStack {
                     Text("Arrived").foregroundStyle(UZColor.label2)
@@ -354,32 +515,24 @@ struct AddSheet: View {
                         .accessibilityLabel("Amount that arrived")
                         .accessibilityIdentifier("add.received")
                 }
+                .padding(UZSpacing.l)
+                .background(UZColor.card, in: .rect(cornerRadius: 12))
                 if let rateLine { Text(rateLine).font(.footnote).foregroundStyle(UZColor.label2).accessibilityIdentifier("add.rate") }
                 if let wiseFill, wiseFill.text == receivedText {
                     Text(wiseFill.note).font(.footnote).foregroundStyle(UZColor.label2).accessibilityIdentifier("add.wise")
                 }
             }
-        } footer: {
-            Text("Transfers move your own money. They are not spending or income.")
+            Text("Moving your own money between accounts. It isn't spending or income.")
+                .font(.footnote).foregroundStyle(UZColor.label2)
         }
-    }
-
-    private func accountPicker(_ label: String, selection: Binding<UUID?>, identifier: String) -> some View {
-        Picker(label, selection: selection) {
-            Text("Choose").tag(UUID?.none)
-            ForEach(ledger.activeAccounts) { account in
-                Text(account.currency == ledger.base ? account.name : "\(account.name) (\(account.currency.code))")
-                    .tag(UUID?.some(account.id))
-            }
-        }
-        .accessibilityIdentifier(identifier)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: Logic
 
     private var title: String {
         if editing != nil { return "Edit \(kind.name.lowercased())" }
-        return "New \(kind.name.lowercased())"
+        return kind == .refund ? "New refund" : ""
     }
 
 
@@ -474,6 +627,8 @@ struct AddSheet: View {
         case .edit(let transaction):
             editing = transaction
             fill(from: transaction, keepDate: true)
+            tagIDs = session.tagMap[transaction.id] ?? []
+            tagsBefore = tagIDs
             splitDraft = session.people.split(for: transaction.id).map { SplitDraft($0) }
             hadSplit = splitDraft != nil
         case .repeatOf(let transaction):
@@ -566,6 +721,7 @@ struct AddSheet: View {
             : session.save(transaction, isNew: editing == nil)
         if saved {
             attachReceipt(to: transaction.id)
+            applyTags(to: transaction.id)
             session.isAddPresented = false
         }
     }

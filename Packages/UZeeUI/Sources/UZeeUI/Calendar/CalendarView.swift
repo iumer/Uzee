@@ -68,6 +68,7 @@ struct CalendarTabView: View {
             VStack(alignment: .leading, spacing: UZSpacing.xl) {
                 if first <= today && today <= first.lastOfMonth { salaryCard(model) }
                 if showsAgenda {
+                    billsRow(model)
                     agenda(events, model: model)
                 } else {
                     UZCard(padding: UZSpacing.l) {
@@ -77,6 +78,7 @@ struct CalendarTabView: View {
                             legend
                         }
                     }
+                    billsRow(model)
                     dayList(events, model: model, first: first)
                 }
                 Text("Tap a row to open it. Pay marks it paid and records the transaction. " + session.usdRateNote + ".")
@@ -86,26 +88,25 @@ struct CalendarTabView: View {
             .padding(.bottom, 96)
         }
         .background(UZColor.bg)
-        .navigationTitle("Calendar")
+        .navigationTitle("Plan")
         .toolbar {
-            // Top left is the profile icon on every tab, so Today sits on the right.
+            // Top left is the profile icon and top right is UZee on every tab, so the rest sits in one menu.
             ToolbarItem(placement: .primaryAction) {
-                Button("Today") {
-                    withAnimation(.snappy) { month = nil; selected = nil }
+                Menu {
+                    Button("Today", systemImage: "calendar.circle") {
+                        withAnimation(.snappy) { month = nil; selected = nil }
+                    }
+                    .accessibilityIdentifier("calendar.today")
+                    Button("Add reminder or event", systemImage: "calendar.badge.plus") { addingEvent = true }
+                        .accessibilityIdentifier("calendar.addEvent")
+                    Button(showsAgenda ? "Month" : "Agenda list", systemImage: showsAgenda ? "calendar" : "list.bullet") {
+                        withAnimation(.snappy) { showsAgenda.toggle() }
+                    }
+                    .accessibilityIdentifier("calendar.mode")
+                } label: {
+                    Label("More", systemImage: "ellipsis")
                 }
-                .accessibilityIdentifier("calendar.today")
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button("Add reminder or event", systemImage: "calendar.badge.plus") { addingEvent = true }
-                    .accessibilityIdentifier("calendar.addEvent")
-                Button(showsAgenda ? "Month" : "Agenda list", systemImage: showsAgenda ? "calendar" : "list.bullet") {
-                    withAnimation(.snappy) { showsAgenda.toggle() }
-                }
-                .accessibilityIdentifier("calendar.mode")
-                NavigationLink(value: Route.bills) {
-                    Label("Bills & subscriptions", systemImage: "arrow.triangle.2.circlepath")
-                }
-                .accessibilityIdentifier("calendar.bills")
+                .accessibilityIdentifier("calendar.menu")
             }
         }
         .sheet(item: $paying) { MarkPaidSheet(session: session, occurrence: $0) }
@@ -119,6 +120,28 @@ struct CalendarTabView: View {
             session.calendarFocus = nil
         }
         .accessibilityIdentifier("screen.calendar")
+    }
+
+    /// "Bills & subscriptions · 6 a month · Rs 14,065" under the month (round 3 mockup O).
+    private func billsRow(_ model: RecurringModel) -> some View {
+        let bills = model.active.filter { !$0.type.isIncome }
+        return NavigationLink(value: Route.bills) {
+            UZCard(padding: UZSpacing.l) {
+                HStack(spacing: UZSpacing.l) {
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.title3).foregroundStyle(UZColor.tint)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                        Text("Bills & subscriptions").font(.body.weight(.medium)).foregroundStyle(UZColor.label)
+                        Text(bills.count == 1 ? "1 repeating payment" : "\(bills.count) repeating payments")
+                            .font(.footnote).foregroundStyle(UZColor.label2)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(UZColor.label3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("calendar.bills")
     }
 
     // MARK: Data

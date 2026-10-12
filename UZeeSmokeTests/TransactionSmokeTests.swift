@@ -66,9 +66,8 @@ final class TransactionSmokeTests: XCTestCase {
         type("10000", into: "accountForm.opening")
         tap("accountForm.save")
         XCTAssertTrue(element("accountForm.name").waitForNonExistence(timeout: 30), "Account form still open")
-        // The list can redraw while the sheet closes; look for the row or its name.
-        let listed = element("account.HBL").waitForExistence(timeout: 30) || app.staticTexts["HBL"].waitForExistence(timeout: 15)
-        XCTAssertTrue(listed, "HBL not listed")
+        // Home swaps the empty state for "You have", which opens the account list.
+        XCTAssertTrue(element("home.accounts").waitForExistence(timeout: 30), "Home still empty after adding HBL")
     }
 
     /// Opens "+" and saves an expense in Food › Groceries (first in the list, so no scrolling).

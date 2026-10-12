@@ -28,6 +28,8 @@ public final class AppSession {
     public let toasts = ToastCenter()
 
     public var selectedTab: AppTab = .home
+    /// Which half of the Plan tab shows: Budget or Calendar.
+    public var planPart: PlanPart = .budget
     public var paths: [AppTab: [Route]] = [:]
     /// A day the Calendar should jump to (from a reminder).
     public var calendarFocus: LocalDate?
@@ -406,11 +408,11 @@ public final class AppSession {
     public func openReminder(item: UUID?, date: LocalDate?) {
         // A namaz reminder just opens UZee.
         guard item != nil || date != nil else { return }
-        selectedTab = .calendar
+        open(.calendar)
         if let item, recurring.item(item) != nil {
-            paths[.calendar] = [.bills, .recurring(item)]
+            paths[.plan] = [.bills, .recurring(item)]
         } else {
-            paths[.calendar] = []
+            paths[.plan] = []
             calendarFocus = date
         }
     }
@@ -485,6 +487,12 @@ public final class AppSession {
                 }
             }
         )
+    }
+
+    /// Opens the Plan tab on Budget or Calendar.
+    public func open(_ part: PlanPart) {
+        planPart = part
+        selectedTab = .plan
     }
 
     public func path(for tab: AppTab) -> Binding<[Route]> {
