@@ -188,6 +188,7 @@ final class VoiceModel {
 
     private func heard(_ text: String, isFinal: Bool) {
         guard isListening else { return }
+        let text = RupeeText.pakistani(text)
         if !text.isEmpty, text != liveText {
             liveText = text
             lastSound = Date()
@@ -236,7 +237,7 @@ final class VoiceModel {
     // MARK: Conversation
 
     func submit(_ text: String) {
-        let sentence = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sentence = RupeeText.pakistani(text).trimmingCharacters(in: .whitespacesAndNewlines)
         // One reply at a time: the on-device model can't take a second request mid-answer.
         guard !sentence.isEmpty, !isThinking else { return }
         draft = ""
@@ -305,6 +306,7 @@ final class VoiceModel {
     }
 
     private func say(_ text: String) {
+        let text = RupeeText.pakistani(text)
         lines.append(Line(speaker: .uzee, text: text))
         speakThenListen(text)
     }

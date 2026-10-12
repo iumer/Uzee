@@ -76,6 +76,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-016 | 2026-10-12 | Budget with limits but no total showed "Rs 48,000 over the total" and still "No budget yet"; voice read "PKR ₹40,000 check into my HBL account" as HBL to HBL | Empty total saved as 0; ₹ not read; the model's same-account transfer kept | VoiceTests.chequeDeposit; Phone | 0.13.4 | Fixed, check on phone |
 | BUG-017 | 2026-10-12 | Typing 40000 fast saved 4,000 (limits, split amount); empty limit box hard to tap; UZee/+ over fields with keyboard up and over Coming up amounts | Fields rewrote their own text with commas on each keystroke; tiny box; floating buttons ignored keyboard | Mac check; Phone | 0.13.7 | Fixed, check on phone |
 | BUG-018 | 2026-10-13 | Voice: Apple Intelligence answered "How much is in HBL?" with the total, swapped lent/borrowed, logged a debt for "How much do I owe Ammi?", picked accounts never said; rules missed Netflix/Careem/ChatGPT categories, "Paid Ammi back", "Top up … from HBL", "reimbursed", "kal", "coming up", "afford" | Every sentence went to the on-device model first; rules lacked those words | Auto: VoiceTests (3 new suites) | 0.13.8 | Fixed, check on phone |
+| BUG-019 | 2026-10-12 | Ask UZee often showed the Indian rupee sign ₹ instead of Rs | iOS dictation and the on-device model write ₹ | VoiceTests.RupeeTextTests; Phone | 0.13.9 | Fixed, check on phone |
 
 ## Waiting on the owner
 

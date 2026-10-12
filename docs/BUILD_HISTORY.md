@@ -19,6 +19,7 @@
 | Version (build) | Date | Milestone | Highlights | Tests run / pass / fail | Installed on |
 |---|---|---|---|---|---|
 | 0.13.3 (26) | 2026-10-12 | Splitwise-style splitting | New Add an expense sheet (With you and…, Paid by … and split …), split from Add uses the same steps, person page like Splitwise | CI pending | – |
+| 0.13.9 (32) | 2026-10-12 | Rupee sign | Ask UZee shows and says Rs/PKR, never ₹ or INR (dictation and Apple Intelligence) | CI pending | – |
 | 0.13.8 (31) | 2026-10-13 | Voice check | 51-sentence voice check: rules first (51/51, unseen 25/25), Apple Intelligence only for what the rules don't understand (alone it got 20/50); no made-up accounts or people; categories from shop names; afford questions; reminder titles | UZeeCore 175 / 175 / 0; UZeeSystem 5 / 5 / 0 (Mac) | Owner's iPhone 17 |
 | 0.13.7 (30) | 2026-10-12 | Typing fixes | Amounts no longer lose the last digit when typed fast (no live commas), empty limit boxes easy to tap, UZee and + hide while the keyboard is up, more room under the last card | CI pending | – |
 | 0.13.6 (29) | 2026-10-12 | Owner changes | Home: one tile with You have and Spent circles side by side; budget limits can be typed; People: bottom + adds an expense with someone, no extra + buttons | CI pending | – |

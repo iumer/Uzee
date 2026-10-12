@@ -470,3 +470,19 @@ struct VoiceRoutingTests {
         #expect(!VoiceRuleParser.understandsOnItsOwn(sentence, vocabulary: names, today: today))
     }
 }
+
+@Suite("Rupee sign")
+struct RupeeTextTests {
+    @Test("₹ and INR become Rs and PKR; other text stays", arguments: [
+        ("I submitted PKR ₹40,000 check into my HBL account", "I submitted PKR 40,000 check into my HBL account"),
+        ("Spent ₹2,500 on groceries", "Spent Rs 2,500 on groceries"),
+        ("You have ₹ 1,200 left", "You have Rs 1,200 left"),
+        ("Paid 500 INR", "Paid 500 PKR"),
+        ("That's 300 Indian rupees", "That's 300 rupees"),
+        ("Dinner with Inra 1,000", "Dinner with Inra 1,000"),
+        ("Rs 5,000 from HBL", "Rs 5,000 from HBL")
+    ])
+    func replaced(text: String, expected: String) {
+        #expect(RupeeText.pakistani(text) == expected)
+    }
+}
