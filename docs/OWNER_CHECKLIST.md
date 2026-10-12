@@ -48,6 +48,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-035 | 2026-10-12 | UZee floats bottom right on every screen, where the old + was, and now and then says "need help? try me" | Auto: OWN023 position; Phone for the bubble | – | – | – |
 | OWN-036 | 2026-10-12 | Home: rings on You have (by account) and Spent (budget used), plus a big category circle | Phone | – | – | – |
 | OWN-037 | 2026-10-12 | "I submitted a cash cheque in my HBL account" by voice records money into HBL | Auto: VoiceTests chequeDeposit | – | – | – |
+| OWN-038 | 2026-10-12 | Splitting works like Splitwise: With you and… (search, add new), what, amount, "Paid by you and split equally" (each part tappable), who owes what, Save; person page shows one balance, Settle up, Add expense and every item as "you lent / you borrowed" | Auto: OWN038 smoke; Phone | – | – | – |
 
 ## Bugs
 

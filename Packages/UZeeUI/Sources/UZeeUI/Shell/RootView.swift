@@ -63,7 +63,12 @@ public struct RootView: View {
         }
         .task { await showHints() }
         .sheet(isPresented: $session.isAddPresented) {
-            AddSheet(session: session).sessionErrors(session)
+            // A shared expense opens the Splitwise-style sheet; everything else opens Add.
+            if case .shared(let group, let person) = session.addRequest {
+                SharedExpenseSheet(session: session, group: group, person: person).sessionErrors(session)
+            } else {
+                AddSheet(session: session).sessionErrors(session)
+            }
         }
         .sheet(isPresented: $session.isVoicePresented) {
             VoiceSheet(session: session).sessionErrors(session)

@@ -100,4 +100,22 @@ final class OwnerRequestSmokeTests: XCTestCase {
         tap("tab.voice")
         XCTAssertTrue(element("voice.close").waitForExistence(timeout: 30), "Ask UZee didn't open")
     }
+
+    /// Owner, 2026-10-12: splitting works like Splitwise. Pick who, say what and how much, see who owes what, save.
+    func testOWN038_splitLikeSplitwise() {
+        backToHome()
+        let tab = app.tabBars.buttons["People"]
+        if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons["People"].firstMatch.tap() }
+        tap("people.addShared")
+        tap("with.person.Usama")
+        tap("shared.what")
+        app.typeText("Dinner")
+        tap("shared.amount")
+        app.typeText("1200")
+        let effects = element("split.effects")
+        XCTAssertTrue(effects.waitForExistence(timeout: 10), "Who-owes-what line missing")
+        XCTAssertTrue(effects.label.contains("Usama owes you") && effects.label.contains("600"), "Effects were \(effects.label)")
+        tap("shared.save")
+        XCTAssertTrue(element("shared.sheet").waitForNonExistence(timeout: 30), "Add an expense still open")
+    }
 }

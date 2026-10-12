@@ -15,7 +15,7 @@ struct PeopleView: View {
                 Button {
                     session.openAdd(.shared(group: nil, person: nil))
                 } label: {
-                    Label("Add shared expense", systemImage: "person.2.badge.plus")
+                    Label("Add an expense", systemImage: "person.2.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
