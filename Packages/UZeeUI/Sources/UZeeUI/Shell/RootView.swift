@@ -29,7 +29,9 @@ public struct RootView: View {
             Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) { TabRoot(tab: .home, session: session) }
             Tab(AppTab.activity.title, systemImage: AppTab.activity.symbol, value: AppTab.activity) { TabRoot(tab: .activity, session: session) }
             // Choosing it opens Add (AppSession.tabSelection); on iPhone the big "+" below sits on top of it.
-            Tab(AppTab.add.title, systemImage: "plus.circle.fill", value: AppTab.add) { Color.clear }
+            // On iPhone it has no title, or its label would peek out under the big "+".
+            Tab(sizeClass == .compact ? "" : AppTab.add.title, systemImage: "plus.circle.fill",
+                value: AppTab.add) { Color.clear }
             Tab(AppTab.plan.title, systemImage: AppTab.plan.symbol, value: AppTab.plan) { TabRoot(tab: .plan, session: session) }
             Tab(AppTab.people.title, systemImage: AppTab.people.symbol, value: AppTab.people) { TabRoot(tab: .people, session: session) }
         }

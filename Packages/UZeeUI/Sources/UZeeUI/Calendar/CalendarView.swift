@@ -66,6 +66,7 @@ struct CalendarTabView: View {
         let events = events(from: first, through: first.lastOfMonth, model: model)
         ScrollView {
             VStack(alignment: .leading, spacing: UZSpacing.xl) {
+                PlanSwitch(session: session)
                 if first <= today && today <= first.lastOfMonth { salaryCard(model) }
                 if showsAgenda {
                     billsRow(model)

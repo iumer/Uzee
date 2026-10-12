@@ -85,7 +85,9 @@ final class SmokeTests: XCTestCase {
     func testSMK005_UI001_tabsInOrderAndOpen() {
         if app.tabBars.firstMatch.waitForExistence(timeout: 30) {
             let labels = app.tabBars.firstMatch.buttons.allElementsBoundByIndex.map { $0.label }
-            XCTAssertEqual(Array(labels.prefix(5)), bar, "Tab order")
+            // On iPhone the middle item has no label: the big "+" (tab.add) sits on it.
+            let named = labels.prefix(5).map { $0.isEmpty ? "Add" : $0 }
+            XCTAssertEqual(named, bar, "Tab order")
         }
         for tab in tabs {
             tapTab(tab)

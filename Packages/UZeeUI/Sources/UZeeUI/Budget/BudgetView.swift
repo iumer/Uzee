@@ -58,6 +58,7 @@ struct BudgetView: View {
         let period = periodStart.map { BudgetPeriod.containing($0, kind: model.kind) } ?? model.current
         ScrollView {
             VStack(alignment: .leading, spacing: UZSpacing.xl) {
+                PlanSwitch(session: session)
                 if let summary = model.summary(for: period) {
                     overview(summary, model: model)
                     categories(summary, model: model)
