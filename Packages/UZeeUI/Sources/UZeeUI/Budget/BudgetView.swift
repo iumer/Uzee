@@ -11,6 +11,8 @@ struct BudgetModel {
 
     init(session: AppSession) {
         self.session = session
+        // Read so a saved budget redraws every screen built from this model.
+        _ = session.budgetRevision
         let settings = (try? session.budgets.settings()) ?? (.calendarMonth, 80)
         kind = settings.kind
         warnPercent = settings.warnPercent
@@ -84,8 +86,8 @@ struct BudgetView: View {
         .background(UZColor.bg)
         .navigationTitle("Plan")
         .toolbar {
-            // Top left is the profile icon and top right UZee on every tab; the period menu sits beside UZee.
-            ToolbarItem(placement: .primaryAction) { periodMenu(model: model, selected: period) }
+            // Top right is the profile icon on every tab, so the period menu sits on the left.
+            ToolbarItem(placement: .topBarLeading) { periodMenu(model: model, selected: period) }
         }
     }
 

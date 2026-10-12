@@ -30,6 +30,9 @@ public final class AppSession {
     public var selectedTab: AppTab = .home
     /// Which half of the Plan tab shows: Budget or Calendar.
     public var planPart: PlanPart = .budget
+    /// Budgets live behind `budgets` (not observed), so screens read this and saves bump it. Without it the
+    /// Budget screen kept asking to set a budget after one was saved (owner, 2026-10-12).
+    public var budgetRevision = 0
     public var paths: [AppTab: [Route]] = [:]
     /// A day the Calendar should jump to (from a reminder).
     public var calendarFocus: LocalDate?
@@ -127,6 +130,7 @@ public final class AppSession {
 
     /// Re-reads the ledger after any change; balances are always derived, never cached (ACC-03).
     public func reload() {
+        budgetRevision += 1
         do {
             ledger = try client.snapshot()
             transactions = try client.transactions()

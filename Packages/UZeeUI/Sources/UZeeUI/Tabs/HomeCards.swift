@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 import UZeeCore
 
@@ -11,6 +12,7 @@ struct HomeCards: View {
     var body: some View {
         VStack(alignment: .leading, spacing: UZSpacing.l) {
             spentCard
+            whereItWent
             comingUp
             peopleRow
         }
@@ -32,41 +34,99 @@ struct HomeCards: View {
             session.open(.budget)
         } label: {
             UZCard {
-                VStack(alignment: .leading, spacing: UZSpacing.s) {
-                    HStack {
+                HStack(spacing: UZSpacing.l) {
+                    VStack(alignment: .leading, spacing: UZSpacing.s) {
                         Text("Spent in \(monthName)").font(.subheadline).foregroundStyle(UZColor.label2)
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(UZColor.label3)
-                    }
-                    HStack(alignment: .firstTextBaseline, spacing: UZSpacing.s) {
-                        Text(MoneyFormatter.string(spent)).font(.system(.title, weight: .bold)).monospacedDigit()
-                            .minimumScaleFactor(0.7).lineLimit(1)
+                        HStack(alignment: .firstTextBaseline, spacing: UZSpacing.s) {
+                            Text(MoneyFormatter.string(spent)).font(.system(.title, weight: .bold)).monospacedDigit()
+                                .minimumScaleFactor(0.7).lineLimit(1)
+                            if let summary {
+                                Text("of \(MoneyFormatter.string(summary.total))").font(.subheadline).foregroundStyle(UZColor.label2)
+                                    .lineLimit(1)
+                            }
+                        }
                         if let summary {
-                            Text("of \(MoneyFormatter.string(summary.total))").font(.subheadline).foregroundStyle(UZColor.label2)
-                                .lineLimit(1)
+                            if summary.isOver {
+                                Text("Over budget by \(MoneyFormatter.string((try? summary.left.negated()) ?? summary.left))")
+                                    .font(.footnote.weight(.semibold)).foregroundStyle(UZColor.negative)
+                            } else {
+                                Text("\(MoneyFormatter.string(summary.left)) left for \(daysLeft) \(daysLeft == 1 ? "day" : "days")")
+                                    .font(.footnote).foregroundStyle(UZColor.label2)
+                            }
+                        } else {
+                            Text("No budget yet · tap to set one").font(.footnote).foregroundStyle(UZColor.label2)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     if let summary {
                         let total = Double(summary.total.minorUnits)
-                        ProgressBarView(fraction: total > 0 ? Double(summary.spent.minorUnits) / total : 0,
-                                        label: "\(MoneyFormatter.string(summary.spent)) of \(MoneyFormatter.string(summary.total))")
-                        if summary.isOver {
-                            Text("Over budget by \(MoneyFormatter.string((try? summary.left.negated()) ?? summary.left))")
-                                .font(.footnote.weight(.semibold)).foregroundStyle(UZColor.negative)
-                        } else {
-                            Text("\(MoneyFormatter.string(summary.left)) left for \(daysLeft) \(daysLeft == 1 ? "day" : "days")")
-                                .font(.footnote).foregroundStyle(UZColor.label2)
+                        ProgressRingView(remaining: total > 0 ? 1 - Double(summary.spent.minorUnits) / total : 1,
+                                         label: "\(BudgetCalculator.percentText(summary.usedBasisPoints)) of the budget used") {
+                            VStack(spacing: 0) {
+                                Text(BudgetCalculator.percentText(summary.usedBasisPoints)).font(.subheadline.bold()).monospacedDigit()
+                                Text("used").font(.caption2).foregroundStyle(UZColor.label2)
+                            }
                         }
-                    } else {
-                        Text("No budget yet · tap to set one").font(.footnote).foregroundStyle(UZColor.label2)
+                        .frame(width: 76, height: 76)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("home.budget")
+    }
+
+    // MARK: Where it went
+
+    static let palette: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .yellow, .indigo, .mint, .gray]
+
+    /// The big circle: this month's spending by category (owner, 2026-10-12). Opens Reports.
+    @ViewBuilder
+    private var whereItWent: some View {
+        let shares = ReportCalculator.byGroup(session.transactions, from: today.firstOfMonth, through: today.lastOfMonth,
+                                              categories: session.ledger.categories, base: base, rates: session.ledger.rates)
+        if !shares.isEmpty {
+            let month = today.startDate(in: .current).formatted(.dateTime.month(.wide))
+            Button {
+                session.paths[.home, default: []].append(.reports)
+            } label: {
+                UZCard {
+                    VStack(alignment: .leading, spacing: UZSpacing.l) {
+                        Text("Where it went in \(month)").font(.headline).foregroundStyle(UZColor.label)
+                        HStack(spacing: UZSpacing.xxl) {
+                            Chart(shares) { share in
+                                SectorMark(angle: .value("Amount", Double(share.amount.minorUnits)), innerRadius: .ratio(0.6), angularInset: 1.5)
+                                    .cornerRadius(3)
+                                    .foregroundStyle(color(share.categoryID))
+                            }
+                            .chartLegend(.hidden)
+                            .frame(width: 140, height: 140)
+                            .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: UZSpacing.s) {
+                                ForEach(shares.prefix(6)) { share in
+                                    HStack(spacing: UZSpacing.s) {
+                                        Circle().fill(color(share.categoryID)).frame(width: 8, height: 8)
+                                        Text(session.ledger.category(share.categoryID)?.name ?? "Other").font(.footnote).lineLimit(1)
+                                        Spacer(minLength: 0)
+                                        Text("\(share.percent)%").font(.footnote.weight(.semibold)).monospacedDigit()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(shares.prefix(6).map { "\(session.ledger.category($0.categoryID)?.name ?? "Other") \($0.percent) percent" }
+                                    .joined(separator: ", "))
+            .accessibilityIdentifier("home.whereItWent")
+        }
+    }
+
+    private func color(_ id: UUID) -> Color {
+        session.ledger.category(id).map { CategoryStyle($0.group).color } ?? UZColor.label3
     }
 
     // MARK: Coming up

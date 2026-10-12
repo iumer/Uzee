@@ -64,8 +64,8 @@ final class OwnerRequestSmokeTests: XCTestCase {
         XCTAssertTrue(element("person.repay").waitForExistence(timeout: 30), "They paid you missing")
     }
 
-    /// OWN-023, OWN-025 and round 3 (pick M): the profile icon is top left and UZee top right on every tab,
-    /// and "+" sits in the middle of the bottom bar.
+    /// OWN-023, OWN-025, round 3 and the owner's 2026-10-12 note: the profile icon is top right and UZee
+    /// bottom right on every tab, always in the same spot, and "+" sits in the middle of the bottom bar.
     func testOWN023_uzeeOnEveryTab() {
         backToHome()
         var profileFrame: CGRect?
@@ -73,16 +73,16 @@ final class OwnerRequestSmokeTests: XCTestCase {
         for name in ["Activity", "Plan", "People", "Home"] {
             let tab = app.tabBars.buttons[name]
             if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons[name].firstMatch.tap() }
-            let id = name == "Home" ? "" : ".\(name.lowercased())"
-            let voice = element("tab.voice" + id)
+            let voice = element("tab.voice")
             XCTAssertTrue(voice.waitForExistence(timeout: 30), "UZee missing on \(name)")
             let add = element("tab.add")
             XCTAssertTrue(add.exists, "+ missing on \(name)")
-            let profile = element("tab.settings" + id)
+            let profile = element(name == "Home" ? "tab.settings" : "tab.settings.\(name.lowercased())")
             XCTAssertTrue(profile.waitForExistence(timeout: 10), "Profile (Settings) missing on \(name)")
-            // Same spots on every tab: profile top left, UZee top right.
-            XCTAssertLessThan(profile.frame.midX, app.frame.width / 3, "Profile not top left on \(name)")
-            XCTAssertGreaterThan(voice.frame.midX, app.frame.width * 2 / 3, "UZee not top right on \(name)")
+            XCTAssertGreaterThan(profile.frame.midX, app.frame.width * 2 / 3, "Profile not top right on \(name)")
+            XCTAssertLessThan(profile.frame.midY, app.frame.height / 4, "Profile not at the top on \(name)")
+            XCTAssertGreaterThan(voice.frame.midX, app.frame.width * 2 / 3, "UZee not on the right on \(name)")
+            XCTAssertGreaterThan(voice.frame.midY, app.frame.height * 2 / 3, "UZee not at the bottom on \(name)")
             if app.frame.width < 600 {
                 XCTAssertEqual(add.frame.midX, app.frame.midX, accuracy: 4, "+ not in the middle of the bottom bar on \(name)")
                 XCTAssertGreaterThan(add.frame.midY, app.frame.height * 0.85, "+ not at the bottom on \(name)")
@@ -90,6 +90,7 @@ final class OwnerRequestSmokeTests: XCTestCase {
             if let first = profileFrame, let firstVoice = voiceFrame {
                 XCTAssertEqual(profile.frame.midX, first.midX, accuracy: 3, "Profile moved sideways on \(name)")
                 XCTAssertEqual(profile.frame.midY, first.midY, accuracy: 3, "Profile moved up or down on \(name)")
+                XCTAssertEqual(voice.frame.midX, firstVoice.midX, accuracy: 3, "UZee moved sideways on \(name)")
                 XCTAssertEqual(voice.frame.midY, firstVoice.midY, accuracy: 3, "UZee moved up or down on \(name)")
             } else {
                 profileFrame = profile.frame

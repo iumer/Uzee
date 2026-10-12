@@ -187,6 +187,7 @@ struct BudgetLimitsView: View {
             try session.budgets.save(plan)
         }
         if ok {
+            session.budgetRevision += 1
             session.toasts.show(previousKind == kind ? "Budget saved" : "Budget saved · period changed")
             dismiss()
         }

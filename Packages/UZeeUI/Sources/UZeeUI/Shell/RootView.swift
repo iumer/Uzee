@@ -18,6 +18,8 @@ public struct RootView: View {
     @State private var backgroundedAt: Date?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var sizeClass
+    /// UZee's "try me" bubble, now and then.
+    @State private var hint: String?
 
     public init(session: AppSession) {
         self.session = session
@@ -39,14 +41,27 @@ public struct RootView: View {
         .tabBarMinimizeBehavior(.never)
         .onAppear { Appearance.apply() }
         // iPhone: the big "+" sits in the middle of the bottom bar, over the Add item (owner, 2026-10-12).
-        // iPad has no bottom bar, so "+" floats at the bottom right instead.
-        .overlay(alignment: sizeClass == .compact ? .bottom : .bottomTrailing) {
-            AddButton(isLarge: sizeClass == .compact) { session.isAddPresented = true }
-                .padding(.trailing, sizeClass == .compact ? 0 : UZSpacing.xxl)
-                .padding(.bottom, sizeClass == .compact ? 0 : UZSpacing.xxl)
-                // Stay put when the keyboard opens instead of riding up over the fields.
-                .ignoresSafeArea(.keyboard)
+        .overlay(alignment: .bottom) {
+            if sizeClass == .compact {
+                AddButton(isLarge: true) { session.isAddPresented = true }
+                    // Stay put when the keyboard opens instead of riding up over the fields.
+                    .ignoresSafeArea(.keyboard)
+            }
         }
+        // UZee floats bottom right on every screen, just above the bottom bar, where "+" used to be (owner,
+        // 2026-10-12). iPad has no bottom bar, so "+" floats under UZee there.
+        .overlay(alignment: .bottomTrailing) {
+            VStack(alignment: .trailing, spacing: UZSpacing.m) {
+                VoiceButton(hint: hint) { hint = nil; session.isVoicePresented = true }
+                if sizeClass != .compact {
+                    AddButton { session.isAddPresented = true }
+                }
+            }
+            .padding(.trailing, UZSpacing.xxl)
+            .padding(.bottom, sizeClass == .compact ? 72 : UZSpacing.xxl)
+            .ignoresSafeArea(.keyboard)
+        }
+        .task { await showHints() }
         .sheet(isPresented: $session.isAddPresented) {
             AddSheet(session: session).sessionErrors(session)
         }
@@ -100,6 +115,24 @@ public struct RootView: View {
         }
     }
 
+    /// Every few hours of use, UZee pops up a friendly "try me" line for a few seconds (owner, 2026-10-12).
+    /// Never during screen tests.
+    private func showHints() async {
+        guard !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory") else { return }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(25))
+            let last = UserDefaults.standard.double(forKey: VoiceHint.lastShownKey)
+            let quiet = Date().timeIntervalSince1970 - last > VoiceHint.gap
+            if quiet, scenePhase == .active, !isLocked, !showingOnboarding, !session.isAddPresented, !session.isVoicePresented {
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: VoiceHint.lastShownKey)
+                withAnimation(.spring(duration: 0.5, bounce: 0.35)) { hint = VoiceHint.lines.randomElement() }
+                try? await Task.sleep(for: .seconds(7))
+                withAnimation(.easeOut(duration: 0.3)) { hint = nil }
+            }
+            try? await Task.sleep(for: .seconds(60))
+        }
+    }
+
     private var curtain: LockCurtain.Mode {
         if isLocked { return .locked }
         return AppLock.isOn && scenePhase != .active ? .privacy : .none
@@ -140,19 +173,55 @@ struct AddButton: View {
     }
 }
 
-/// The singing UZee, top right on every tab: opens Ask UZee.
+/// The singing UZee, bottom right on every screen: opens Ask UZee. Now and then a bubble says "try me".
 struct VoiceButton: View {
+    var hint: String?
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            SingingMic(size: 28)
-                .frame(width: 36, height: 36)
-                .contentShape(.circle)
+        HStack(spacing: UZSpacing.s) {
+            if let hint {
+                Button(action: action) {
+                    Text(hint)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(UZColor.label)
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, UZSpacing.l)
+                        .padding(.vertical, UZSpacing.m)
+                        .frame(maxWidth: 230, alignment: .leading)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 18))
+                }
+                .buttonStyle(.plain)
+                .transition(.scale(scale: 0.4, anchor: .trailing).combined(with: .opacity))
+                .accessibilityIdentifier("tab.voiceHint")
+            }
+            Button(action: action) {
+                SingingMic(size: 40)
+                    .frame(width: 56, height: 56)
+                    .glassEffect(.regular, in: .circle)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Ask UZee")
+            .accessibilityIdentifier("tab.voice")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Ask UZee")
     }
+}
+
+/// UZee's friendly nudges.
+enum VoiceHint {
+    static let lastShownKey = "uzee.voiceHint.lastShown"
+    /// At most one nudge every 4 hours.
+    static let gap: TimeInterval = 4 * 3600
+    static let lines = [
+        "Psst… need help with anything? Try me! 😊",
+        "Spent something? Just tell me, I'll write it down ✍️",
+        "Ask me \u{201C}how much did I spend on food?\u{201D} 🍔",
+        "I don't bite, I only count! Tap me 💚",
+        "Tired of typing? Say it and I'll do the rest 🎙️",
+        "Wondering who owes you? Ask me 👀",
+        "Bills coming up? I can tell you before they bite 🗓️",
+    ]
 }
 
 /// One tab: its NavigationStack, its root screen, the sample banner and shared destinations.
@@ -163,15 +232,10 @@ struct TabRoot: View {
     var body: some View {
         NavigationStack(path: session.path(for: tab)) {
             screen
-                // Settings sits behind the profile icon, always top left on every tab (OWN-025); no tab puts anything else there.
-                // UZee is always the right-most button (round 3 mockups).
+                // Settings sits behind the profile icon, always top right on every tab (owner, 2026-10-12); no tab puts
+                // anything else on the right, so it never moves.
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        VoiceButton { session.isVoicePresented = true }
-                            // Home keeps the plain id the screen tests use; other tabs get their own so ids never clash.
-                            .accessibilityIdentifier(tab == .home ? "tab.voice" : "tab.voice.\(tab)")
-                    }
-                    ToolbarItem(placement: .topBarLeading) {
                         NavigationLink(value: Route.settings) {
                             Image(systemName: "person.crop.circle").font(.title3)
                         }
@@ -209,6 +273,8 @@ struct TabRoot: View {
                     }
                 }
         }
+        // Room under the last row on every screen, so the floating UZee never covers an amount.
+        .contentMargins(.bottom, 90, for: .scrollContent)
     }
 
     @ViewBuilder private var screen: some View {

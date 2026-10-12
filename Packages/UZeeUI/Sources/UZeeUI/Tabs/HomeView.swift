@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 import UZeeCore
 
@@ -48,26 +49,49 @@ struct HomeView: View {
         .sheet(item: $paying) { MarkPaidSheet(session: session, occurrence: $0) }
     }
 
+    /// Where the money sits: one slice per account, biggest first (owner, 2026-10-12).
+    private var accountsRing: some View {
+        let shares = accountShares
+        return Chart(Array(shares.enumerated()), id: \.offset) { item in
+            SectorMark(angle: .value("Balance", item.element.value), innerRadius: .ratio(0.62), angularInset: 1.5)
+                .foregroundStyle(HomeCards.palette[item.offset % HomeCards.palette.count])
+        }
+        .chartLegend(.hidden)
+        .frame(width: 76, height: 76)
+        .accessibilityLabel(shares.prefix(4).map(\.name).joined(separator: ", "))
+    }
+
+    private var accountShares: [(name: String, value: Double)] {
+        let ledger = session.ledger
+        return ledger.activeAccounts.compactMap { account -> (name: String, value: Double)? in
+            let amount = NSDecimalNumber(decimal: ledger.balance(of: account).decimalValue).doubleValue
+            let rate = account.currency == ledger.base ? 1 : NSDecimalNumber(decimal: ledger.rate(for: account.currency)).doubleValue
+            let value = amount * rate
+            return value > 0 ? (account.name, value) : nil
+        }
+        .sorted { $0.value > $1.value }
+    }
+
     /// "You have Rs 484,800 · In 9 accounts"; opens the account list.
     private var haveCard: some View {
         let count = session.ledger.activeAccounts.count
         return NavigationLink(value: Route.accounts) {
             UZCard {
-                VStack(alignment: .leading, spacing: UZSpacing.xs) {
-                    HStack {
+                HStack(spacing: UZSpacing.l) {
+                    VStack(alignment: .leading, spacing: UZSpacing.xs) {
                         Text("You have").font(.subheadline).foregroundStyle(UZColor.label2)
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(UZColor.label3)
+                        AmountText(session.ledger.available, font: .system(.title, weight: .bold))
+                            .minimumScaleFactor(0.6).lineLimit(1)
+                            .accessibilityIdentifier("home.available")
+                        Text(count == 1 ? "In 1 account" : "In \(count) accounts").font(.footnote).foregroundStyle(UZColor.label2)
+                        if let footnote = session.ledger.footnote {
+                            Text(footnote).font(.caption).foregroundStyle(UZColor.label2)
+                                .accessibilityIdentifier("home.footnote")
+                        }
                     }
-                    AmountText(session.ledger.available, font: .system(.largeTitle, weight: .bold))
-                        .accessibilityIdentifier("home.available")
-                    Text(count == 1 ? "In 1 account" : "In \(count) accounts").font(.footnote).foregroundStyle(UZColor.label2)
-                    if let footnote = session.ledger.footnote {
-                        Text(footnote).font(.caption).foregroundStyle(UZColor.label2)
-                            .accessibilityIdentifier("home.footnote")
-                    }
+                    Spacer(minLength: 0)
+                    accountsRing
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .buttonStyle(.plain)

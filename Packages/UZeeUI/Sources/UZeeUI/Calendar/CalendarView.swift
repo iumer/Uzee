@@ -91,8 +91,8 @@ struct CalendarTabView: View {
         .background(UZColor.bg)
         .navigationTitle("Plan")
         .toolbar {
-            // Top left is the profile icon and top right is UZee on every tab, so the rest sits in one menu.
-            ToolbarItem(placement: .primaryAction) {
+            // Top right is the profile icon on every tab, so the rest sits in one menu on the left.
+            ToolbarItem(placement: .topBarLeading) {
                 Menu {
                     Button("Today", systemImage: "calendar.circle") {
                         withAnimation(.snappy) { month = nil; selected = nil }

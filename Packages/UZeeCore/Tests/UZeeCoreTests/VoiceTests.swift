@@ -61,6 +61,19 @@ struct VoiceRuleParserTests {
     }
 
     // VOX-008: a new person is kept as said.
+    // Owner, 2026-10-12: a cheque deposit is money into that bank, and "cash cheque" is not the Cash account.
+    @Test("Cheque deposits are money in")
+    func chequeDeposit() {
+        let cheque = parse("I submitted a cash cheque of 45,000 in my HBL account today")
+        #expect(cheque.action == .income)
+        #expect(cheque.amount?.value == 45_000)
+        #expect(cheque.account == "HBL")
+        #expect(cheque.date == today)
+        let deposit = parse("Deposited a cheque of 20k into Meezan")
+        #expect(deposit.action == .income)
+        #expect(deposit.account == "Meezan")
+    }
+
     @Test("Unknown names are kept for the card")
     func newPerson() {
         let command = parse("Lent 5000 to Hamza from Easypaisa")

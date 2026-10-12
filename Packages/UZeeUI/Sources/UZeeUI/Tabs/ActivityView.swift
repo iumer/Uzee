@@ -42,12 +42,13 @@ struct ActivityView: View {
         .searchable(text: $session.activityFilter.text, prompt: "Payee, note or amount")
         .navigationTitle("Activity")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            // Top right is the profile icon on every tab, so this screen's buttons sit on the left.
+            ToolbarItem(placement: .topBarLeading) {
                 Button { session.openAdd(.transfer) } label: { Image(systemName: "arrow.left.arrow.right") }
                     .accessibilityLabel("New transfer")
                     .accessibilityIdentifier("activity.transfer")
             }
-            ToolbarItem(placement: .primaryAction) { filterMenu }
+            ToolbarItem(placement: .topBarLeading) { filterMenu }
         }
         .sheet(isPresented: $showingRange) {
             DateRangeSheet(filter: $session.activityFilter)

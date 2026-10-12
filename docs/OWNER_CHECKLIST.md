@@ -44,6 +44,10 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-031 | 2026-10-12 | Home shows only You have, Spent this month, Coming up and People (M) | Phone | – | – | – |
 | OWN-032 | 2026-10-12 | Add: Spent / Got / Moved, big amount, account and date in one line, 6 category tiles, Scan / Split / More (P); More holds note, pending, tags, receipt, lent/borrowed, refund, fix a balance (Q) | Auto: SMK007, SMK012; Phone | – | – | – |
 | OWN-033 | 2026-10-12 | UZee is top right on every tab, the profile icon top left | Auto: OWN023 | – | – | – |
+| OWN-034 | 2026-10-12 | Profile icon top right on every tab, always the same spot (replaces OWN-025's top left); tab buttons sit on the left | Auto: OWN023 | – | – | – |
+| OWN-035 | 2026-10-12 | UZee floats bottom right on every screen, where the old + was, and now and then says "need help? try me" | Auto: OWN023 position; Phone for the bubble | – | – | – |
+| OWN-036 | 2026-10-12 | Home: rings on You have (by account) and Spent (budget used), plus a big category circle | Phone | – | – | – |
+| OWN-037 | 2026-10-12 | "I submitted a cash cheque in my HBL account" by voice records money into HBL | Auto: VoiceTests chequeDeposit | – | – | – |
 
 ## Bugs
 
@@ -63,6 +67,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-012 | 2026-10-12 | Import found subscriptions but never asked to add reminders | Finder only saw one month; the offer sat below the fold | Auto: RecurringFinderTests | 0.12.2 | Fixed, check on phone |
 | BUG-013 | 2026-10-12 | "Repeat this" looked broken (it only copied the payment to today) | Wrong expectation from the label | Phone | 0.12.2 | Fixed, check on phone |
 | BUG-014 | 2026-10-12 | Audit (3 checkers): floating buttons over Namaz, erase dialog, failed saves silent in sheets, Recently Deleted link, preset currency, reconcile minus, budget overflow, duplicate person, and more | See commit | AuditWalkTests (Mac) | 0.12.2 | Fixed, recheck |
+| BUG-015 | 2026-10-12 | After saving a budget, Budget still asked to set one | Budget screen didn't redraw (budgets aren't observed) | Phone; budgetRevision bump | 0.13.2 | Fixed, check on phone |
 
 ## Waiting on the owner
 

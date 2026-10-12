@@ -89,6 +89,7 @@ public enum VoiceRuleParser {
         "she", "back", "friend", "cash", "account", "bank", "card", "today", "yesterday", "rs", "pkr", "usd", "dollars", "rupees",
         "and", "later", "will", "some", "someone", "somebody", "money", "loan", "this", "that", "month", "week", "last",
         "paid", "pay", "sent", "gave", "lent", "borrowed", "returned", "received", "got", "spent", "bought", "salary", "please",
+        "cheque", "check", "submitted", "deposited", "deposit", "cashed",
         "uzee", "hey", "ok", "okay", "so", "just", "also", "then", "k", "lakh", "thousand", "hundred", "with", "by", "into",
         "who", "what", "whats", "how", "when", "which", "where", "why", "is", "are", "do", "does", "did", "hello", "hi"
     ]
@@ -265,6 +266,9 @@ public enum VoiceRuleParser {
         for name in vocabulary.accounts.sorted(by: { $0.count > $1.count }) {
             let key = " " + normalise(name) + " "
             guard key.count > 2, let range = t.range(of: key) else { continue }
+            // "A cash cheque" is a kind of cheque, not the Cash account.
+            let after = t[range.upperBound...]
+            if ["cheque", "check", "cheq"].contains(where: { after.hasPrefix($0) }) { continue }
             let position = t.distance(from: t.startIndex, to: range.lowerBound)
             if found.contains(where: { abs($0.position - position) < max(key.count, 3) }) { continue }
             found.append((name, position))
@@ -394,6 +398,11 @@ public enum VoiceRuleParser {
         if has(t, [" borrowed", " took a loan", " loan from", " i will return", " i will pay it back", " i will pay back",
                    " i need to return", " i have to return", " gave me a loan", " lent me", " loaned me"]) {
             return .borrow
+        }
+        // "I submitted a cash cheque in my HBL account", "deposited a cheque in Meezan": money into that account.
+        if has(t, [" cheque", " check ", " cheq "]) && has(t, [" deposit", " submit", " cashed", " cleared", " put ", " in my ", " into "])
+            || (has(t, [" deposited", " deposit "]) && accounts.count < 2) {
+            return .income
         }
         if has(t, [" transfer", " moved ", " move ", " withdrew", " withdraw"]) || (accounts.count >= 2 && t.contains(" from ") && t.contains(" to ")) {
             return .transfer

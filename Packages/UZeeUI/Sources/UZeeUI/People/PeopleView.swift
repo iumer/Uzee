@@ -57,15 +57,15 @@ struct PeopleView: View {
         .navigationTitle("People")
         .accessibilityIdentifier("screen.people")
         .toolbar {
-            // Top left is the profile icon on every tab, so Groups sits on the right.
-            ToolbarItem(placement: .topBarTrailing) {
+            // Top right is the profile icon on every tab, so Groups and Add sit on the left.
+            ToolbarItem(placement: .topBarLeading) {
                 NavigationLink(value: Route.groups) {
                     Label("Groups", systemImage: "person.3")
                         .labelStyle(.titleAndIcon)
                 }
                 .accessibilityIdentifier("people.groups")
             }
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .topBarLeading) {
                 Menu {
                     Button("Add person", systemImage: "person.badge.plus") { sheet = .addPerson }
                         .accessibilityIdentifier("people.addPerson")

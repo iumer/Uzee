@@ -18,6 +18,7 @@
 
 | Version (build) | Date | Milestone | Highlights | Tests run / pass / fail | Installed on |
 |---|---|---|---|---|---|
+| 0.13.2 (25) | 2026-10-12 | Owner fixes | Budget redraws after save, cheque deposits by voice, Home rings and category circle, profile top right, UZee bottom right with hints | CI pending | – |
 | 0.13.1 (24) | 2026-10-12 | Round 3 fixes | Plan title shows, no dot under + | CI pending | – |
 | 0.13.0 (23) | 2026-10-12 | Round 3 design (owner pick M, N, O, P, Q) | "+" in the middle of a 5-item bottom bar, Plan tab (Budget + Calendar), simpler Home, new Add screen with More page, UZee top right | Built on the Mac, not run in CI | Owner's iPhone 17 |
 | 0.1.0 (2) | 2026-10-07 | M1 — Navigation shell & design system | Five tabs, floating "+" Add sheet, Settings, sample data banner, design system components | 21 run / 21 pass (3 partial) / 0 fail | Owner's iPhone 17 Pro Max (iOS 27) |

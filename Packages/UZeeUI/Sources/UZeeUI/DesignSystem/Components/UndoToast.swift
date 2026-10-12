@@ -98,8 +98,8 @@ struct ToastOverlay: ViewModifier {
                         .id(toast.id)
                 }
             }
-            // Just above the bottom bar and its raised "+".
-            .padding(.bottom, 110)
+            // Above the bottom bar and the floating UZee.
+            .padding(.bottom, 140)
             .animation(UZMotion.pick(UZMotion.toast, reduceMotion: reduceMotion), value: center.current)
             .onChange(of: focused) { _, isFocused in center.hold(isFocused) }
         }
