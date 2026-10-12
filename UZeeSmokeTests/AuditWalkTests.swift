@@ -27,7 +27,7 @@ final class AuditWalkTests: XCTestCase {
 
     /// The amount text lowest on screen, from one snapshot of the screen (querying element by element is too
     /// slow for the 3-minute test limit).
-    private func lowestAmount() -> (label: String, frame: CGRect)? {
+    @MainActor private func lowestAmount() -> (label: String, frame: CGRect)? {
         guard let root = try? app.snapshot() else { return nil }
         let window = root.frame
         var best: (label: String, frame: CGRect)?
