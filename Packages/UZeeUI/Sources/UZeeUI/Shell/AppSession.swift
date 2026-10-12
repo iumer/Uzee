@@ -131,22 +131,49 @@ public final class AppSession {
     /// Re-reads the ledger after any change; balances are always derived, never cached (ACC-03).
     public func reload() {
         budgetRevision += 1
-        do {
-            ledger = try client.snapshot()
-            transactions = try client.transactions()
+        // Each part on its own, so one that can't be read never blanks the rest (BUG-021: one missing rate
+        // emptied Home and turned every save into "Something went wrong").
+        var failed: [String] = []
+        func read(_ part: String, _ work: () throws -> Void) {
+            do { try work() } catch { failed.append("\(part): \(error)") }
+        }
+        read("accounts") { ledger = try client.snapshot() }
+        read("transactions") { transactions = try client.transactions() }
+        read("tags") {
             tags = try activity.tags()
             tagMap = try activity.tagMap()
             withReceipts = try activity.withAttachments()
-            people = try peopleClient.snapshot()
-            balances = PeopleLedger(selfID: people.selfID, transactions: transactions, splits: people.splits, loans: people.loans,
-                                    base: ledger.base, rates: ledger.rates)
-            recurring = try recurringClient.snapshot()
+        }
+        read("people") { people = try peopleClient.snapshot() }
+        balances = PeopleLedger(selfID: people.selfID, transactions: transactions, splits: people.splits, loans: people.loans,
+                                base: ledger.base, rates: ledger.rates)
+        read("bills") { recurring = try recurringClient.snapshot() }
+        read("calendar") {
             events = try calendar.events()
             reminderSettings = try calendar.reminderSettings()
-        } catch {
-            errorMessage = "Couldn't read your accounts. Close UZee and open it again."
         }
+        if !failed.isEmpty {
+            #if DEBUG
+            errorMessage = "Couldn't read your data. Close UZee and open it again. [\(failed.joined(separator: "; "))]"
+            #else
+            errorMessage = "Couldn't read your data. Close UZee and open it again."
+            #endif
+        }
+        fetchMissingRates()
         rescheduleReminders()
+    }
+
+    /// Currencies already asked of Wise this run, so a currency Wise can't price isn't asked on every reload.
+    private var askedRates: Set<String> = []
+
+    /// An account in a currency with no rate (a new Wise EUR account): get today's rate from Wise right away
+    /// instead of waiting for the next refresh (BUG-021).
+    private func fetchMissingRates() {
+        let currencies = Set(ledger.activeAccounts.map(\.currency))
+        let missing = RateTable.missing(currencies, base: ledger.base, rates: ledger.rates).filter { !askedRates.contains($0.code) }
+        guard !missing.isEmpty, !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory") else { return }
+        askedRates.formUnion(missing.map(\.code))
+        Task { await refreshWiseRates(force: true) }
     }
 
     /// After a restore: everything, including sample mode, comes from the backup.

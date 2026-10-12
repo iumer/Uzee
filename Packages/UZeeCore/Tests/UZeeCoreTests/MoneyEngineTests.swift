@@ -291,3 +291,21 @@ enum SampleAccounts {
         }
     }
 }
+
+@Suite("Missing exchange rate")
+struct MissingRateTests {
+    /// BUG-021: importing a Wise EUR statement made an EUR account with no EUR rate, and every screen failed.
+    @Test("An account with no rate is left out of totals and named in the footnote")
+    func missingRate() throws {
+        let pkr = Account(name: "HBL", kind: .bank, currency: .pkr, openingBalance: Money(minorUnits: 100_000, currency: .pkr),
+                          openingDate: LocalDate(year: 2026, month: 1, day: 1))
+        let eur = Account(name: "Wise EUR", kind: .wallet, currency: .eur, openingBalance: Money(minorUnits: 5_000, currency: .eur),
+                          openingDate: LocalDate(year: 2026, month: 1, day: 1))
+        let balances = [pkr.id: pkr.openingBalance, eur.id: eur.openingBalance]
+        let rates: [String: Decimal] = ["USD": 280]
+        let total = try BalanceCalculator.available(accounts: [pkr, eur], balances: balances, base: .pkr, rates: rates)
+        #expect(total == pkr.openingBalance)
+        #expect(RateTable.missing([.pkr, .eur, .usd], base: .pkr, rates: rates) == [.eur])
+        #expect(RateTable.footnote(for: [.pkr, .eur], base: .pkr, rates: rates) == "EUR not counted until it has a rate")
+    }
+}

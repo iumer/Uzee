@@ -30,11 +30,13 @@ public enum BalanceCalculator {
 
     /// "Available" (DSH-01): non-archived accounts with include-in-totals, each converted to base
     /// at the table rate first, then summed. Sample: Rs 300,000 + $660 → Rs 484,800.
+    /// An account in a currency with no rate yet is left out (the footnote says so) instead of failing the
+    /// whole total: a new Wise EUR account broke every screen (BUG-021).
     public static func available(accounts: [Account], balances: [UUID: Money], base: Currency,
                                  rates: [String: Decimal]) throws(MoneyError) -> Money {
         var total = Money.zero(base)
         for account in accounts where account.includeInTotals && !account.isArchived {
-            guard let balance = balances[account.id] else { continue }
+            guard let balance = balances[account.id], RateTable.hasRate(balance.currency, base: base, rates: rates) else { continue }
             total = try total.adding(try RateTable.toBase(balance, base: base, rates: rates))
         }
         return total
@@ -43,6 +45,15 @@ public enum BalanceCalculator {
 
 /// Current table rates keyed by currency code, base units per 1 unit (CUR-04).
 public enum RateTable {
+    public static func hasRate(_ currency: Currency, base: Currency, rates: [String: Decimal]) -> Bool {
+        currency == base || rates[currency.code] != nil
+    }
+
+    /// Currencies in `currencies` that can't be converted yet, sorted by code.
+    public static func missing(_ currencies: Set<Currency>, base: Currency, rates: [String: Decimal]) -> [Currency] {
+        currencies.filter { !hasRate($0, base: base, rates: rates) }.sorted { $0.code < $1.code }
+    }
+
     public static func toBase(_ money: Money, base: Currency, rates: [String: Decimal]) throws(MoneyError) -> Money {
         if money.currency == base { return money }
         guard let rate = rates[money.currency.code] else { throw .currencyMismatch }
@@ -59,7 +70,9 @@ public enum RateTable {
             let value = (try? Money.fromMajor(rate, base)).map { MoneyFormatter.string($0) } ?? ExchangeRate.display(rate)
             return "\(currency.code) at \(one) = \(value)"
         }
-        return parts.joined(separator: " · ")
+        let missing = missing(currencies, base: base, rates: rates).map(\.code)
+        let note = missing.isEmpty ? [] : ["\(missing.joined(separator: ", ")) not counted until it has a rate"]
+        return (parts + note).joined(separator: " · ")
     }
 }
 
@@ -79,6 +92,8 @@ public struct PeriodTotals: Equatable, Sendable {
         var spending = Money.zero(base)
         var income = Money.zero(base)
         for transaction in transactions where transaction.isEffective && transaction.localDate >= start && transaction.localDate <= end {
+            // No rate yet for this currency: left out rather than failing every total (BUG-021).
+            guard RateTable.hasRate(transaction.myShare.currency, base: base, rates: rates) else { continue }
             let share = try RateTable.toBase(transaction.myShare, base: base, rates: rates)
             switch SpendingRules.spendingSign(transaction.kind) {
             case 1: spending = try spending.adding(share)

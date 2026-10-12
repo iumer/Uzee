@@ -21,15 +21,17 @@ extension AppSession {
     @discardableResult
     func refreshWiseRates(force: Bool = false) async -> Bool {
         guard usesWiseRates, !ProcessInfo.processInfo.arguments.contains("-uzee-in-memory") else { return false }
-        if !force, let last = wiseRatesUpdated, Date().timeIntervalSince(last) < 3 * 3600 { return false }
         let base = ledger.base
+        // A currency with no rate at all is always fetched, however recent the last refresh (BUG-021).
+        let missing = !RateTable.missing(Set(ledger.activeAccounts.map(\.currency)), base: base, rates: ledger.rates).isEmpty
+        if !force, !missing, let last = wiseRatesUpdated, Date().timeIntervalSince(last) < 3 * 3600 { return false }
         var currencies = Set(ledger.activeAccounts.map(\.currency).filter { $0 != base })
         if base != .usd { currencies.insert(.usd) }
         var got = false
         for currency in currencies.sorted(by: { $0.code < $1.code }) {
             guard let rate = await smart.wiseRate(currency, base, nil) else { continue }
             got = true
-            if rate != ledger.rate(for: currency) {
+            if ledger.rates[currency.code] != rate {
                 _ = perform("Couldn't save the rate from Wise.") { try client.setRate(rate, currency) }
             }
         }

@@ -81,6 +81,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-018 | 2026-10-13 | Voice: Apple Intelligence answered "How much is in HBL?" with the total, swapped lent/borrowed, logged a debt for "How much do I owe Ammi?", picked accounts never said; rules missed Netflix/Careem/ChatGPT categories, "Paid Ammi back", "Top up … from HBL", "reimbursed", "kal", "coming up", "afford" | Every sentence went to the on-device model first; rules lacked those words | Auto: VoiceTests (3 new suites) | 0.13.8 | Fixed, check on phone |
 | BUG-019 | 2026-10-12 | Ask UZee often showed the Indian rupee sign ₹ instead of Rs | iOS dictation and the on-device model write ₹ | VoiceTests.RupeeTextTests; Phone | 0.13.9 | Fixed, check on phone |
 | BUG-020 | 2026-10-13 | Statement import: Easypaisa money in read as spending and not recognised; NayaPay descriptions and balances lost; HBL oldest credit read as debit; opening/closing balances missed | No Easypaisa layout; PDFKit line order put NayaPay text after amounts; balances printed under their labels weren't read | Auto: StatementLayoutTests; Mac check | 0.13.10 | Fixed, check on phone |
+| BUG-021 | 2026-10-13 | "Something went wrong" after importing Wise EUR, then on adding a person and on Reconcile (they saved, then the alert) | No EUR rate: Available threw, so every reload failed after each action | MissingRateTests; Mac check with owner data; Phone | 0.13.12 | Fixed, check on phone |
 
 ## Waiting on the owner
 
