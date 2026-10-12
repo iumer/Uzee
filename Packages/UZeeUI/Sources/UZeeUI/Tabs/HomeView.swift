@@ -49,15 +49,6 @@ struct HomeView: View {
         .navigationTitle("Home")
         .sheet(isPresented: $isAddingAccount) { AccountFormSheet(session: session, editing: nil) }
         .sheet(item: $paying) { MarkPaidSheet(session: session, occurrence: $0) }
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                NavigationLink(value: Route.settings) {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel("Settings")
-                .accessibilityIdentifier("home.settings")
-            }
-        }
     }
 
     @ViewBuilder

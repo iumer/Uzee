@@ -10,8 +10,8 @@ final class OwnerRequestSmokeTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-uzee-in-memory"]
         app.launch()
-        tap("home.settings")
-        if !element("settings.sampleOn").waitForExistence(timeout: 10), element("home.settings").exists { element("home.settings").tap() }
+        tap("tab.settings")
+        if !element("settings.sampleOn").waitForExistence(timeout: 10), element("tab.settings").exists { element("tab.settings").tap() }
         tap("settings.sampleOn")
         XCTAssertTrue(element("settings.sampleOff").waitForExistence(timeout: 30))
     }
@@ -64,7 +64,7 @@ final class OwnerRequestSmokeTests: XCTestCase {
         XCTAssertTrue(element("person.repay").waitForExistence(timeout: 30), "They paid you missing")
     }
 
-    /// OWN-023: the singing UZee sits above "+" on every tab and opens Ask UZee.
+    /// OWN-023 and OWN-025: the singing UZee sits above "+" and the profile icon (Settings) is top right on every tab.
     func testOWN023_uzeeOnEveryTab() {
         backToHome()
         for name in ["Activity", "Budget", "Calendar", "People", "Home"] {
@@ -72,6 +72,8 @@ final class OwnerRequestSmokeTests: XCTestCase {
             if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons[name].firstMatch.tap() }
             XCTAssertTrue(element("tab.voice").waitForExistence(timeout: 30), "UZee missing on \(name)")
             XCTAssertTrue(element("tab.add").exists, "+ missing on \(name)")
+            let settings = name == "Home" ? "tab.settings" : "tab.settings.\(name.lowercased())"
+            XCTAssertTrue(element(settings).waitForExistence(timeout: 10), "Profile (Settings) missing on \(name)")
         }
         tap("tab.voice")
         XCTAssertTrue(element("voice.close").waitForExistence(timeout: 30), "Ask UZee didn't open")

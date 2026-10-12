@@ -166,6 +166,17 @@ struct TabRoot: View {
             screen
                 // Room under the last row so the floating UZee and "+" never cover an amount.
                 .contentMargins(.bottom, 128, for: .scrollContent)
+                // Settings sits behind the profile icon, top right on every tab (OWN-025).
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink(value: Route.settings) {
+                            Image(systemName: "person.crop.circle").font(.title3)
+                        }
+                        .accessibilityLabel("Settings")
+                        // Home keeps the plain id the screen tests use; other tabs get their own so ids never clash.
+                        .accessibilityIdentifier(tab == .home ? "tab.settings" : "tab.settings.\(tab)")
+                    }
+                }
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if session.isSampleMode {
                         SampleBanner { session.removeSampleData() }

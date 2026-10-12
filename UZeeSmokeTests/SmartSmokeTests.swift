@@ -10,8 +10,8 @@ final class SmartSmokeTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-uzee-in-memory"]
         app.launch()
-        tap("home.settings")
-        if !element("settings.sampleOn").waitForExistence(timeout: 10), element("home.settings").exists { element("home.settings").tap() }
+        tap("tab.settings")
+        if !element("settings.sampleOn").waitForExistence(timeout: 10), element("tab.settings").exists { element("tab.settings").tap() }
         tap("settings.sampleOn")
         XCTAssertTrue(element("settings.sampleOff").waitForExistence(timeout: 30))
     }

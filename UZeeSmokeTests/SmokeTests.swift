@@ -36,7 +36,7 @@ final class SmokeTests: XCTestCase {
     }
 
     private func openSettings() {
-        element("home.settings").tap()
+        element("tab.settings").tap()
         expectScreen("Settings")
     }
 

@@ -24,9 +24,9 @@ final class ActivitySmokeTests: XCTestCase {
     }
 
     private func turnOnSampleData() {
-        tap("home.settings")
+        tap("tab.settings")
         // On a busy Mac the first tap can land before Home is ready; tap once more.
-        if !element("settings.sampleOn").waitForExistence(timeout: 10), element("home.settings").exists { element("home.settings").tap() }
+        if !element("settings.sampleOn").waitForExistence(timeout: 10), element("tab.settings").exists { element("tab.settings").tap() }
         tap("settings.sampleOn")
         XCTAssertTrue(element("settings.sampleOff").waitForExistence(timeout: 30))
     }

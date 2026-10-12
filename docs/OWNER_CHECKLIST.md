@@ -35,7 +35,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-022 | 2026-10-12 | Payday is picked on a small calendar grid (1–31, plus Not fixed for salary), not a long menu | Auto: REC-020 (Core) for the date; Phone for the grid | – | – | – |
 | OWN-023 | 2026-10-12 | The singing UZee sits above + on every tab | Auto: OWN023 smoke | – | – | – |
 | OWN-024 | 2026-10-12 | Statement import lists recurring payments (same payee, about the same day each month) and asks to add each to the calendar with a reminder | Auto: RecurringFinderTests (Core, synthetic rows); Phone | – | – | – |
-| OWN-025 | 2026-10-12 | Settings moves off Home (only after the owner approves where) | Waiting on the owner | – | – | – |
+| OWN-025 | 2026-10-12 | Settings opens from a profile icon at the top right of every tab (owner approved) | Auto: OWN023 smoke | – | – | – |
 
 ## Bugs
 
@@ -54,6 +54,5 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 
 ## Waiting on the owner
 
-- Where Settings goes (OWN-025): approve on the card in the thread.
 - Simpler Add expense form (mockup boards A and B): build after OK.
 - Simpler app (new Home, one top bar on every tab, budget "can I buy this?", Apple Intelligence on/off): mockups first, build after OK.
