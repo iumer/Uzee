@@ -54,7 +54,7 @@ public enum StatementParser {
     static let closingWords = ["closing balance", "balance c/f", "carried forward", "total", "available balance"]
     static let moneyInWords = ["salary", "credit", "deposit", "received", "receive", "incoming", "inward", "refund", "reversal",
                                "profit", "cashback", "cash back", "markup credit", "from", "funds received", "ibft in", "raast in",
-                               "transfer in", "money in", "top up", "topup", "load"]
+                               "transfer in", "money in", "top up", "topup", "load", "frm ", "fr "]
     static let moneyOutWords = ["purchase", "pos", "payment", "paid", "withdrawal", "atm", "debit", "charges", "fee", "tax",
                                 "transfer to", "sent", "bill", "ibft out", "raast out"]
 
@@ -123,21 +123,31 @@ public enum StatementParser {
     /// One transaction per line, with wrapped descriptions on the lines below.
     static func readTable(_ lines: [String]) -> StatementReading {
         let year = headerYear(lines)
+        let furniture = pageFurniture(lines)
         var drafts: [Draft] = []
         var opening: Decimal?
         var closing: Decimal?
+        // Easypaisa lists newest first and ends with the opening "Balance B/F" (statement check, 2026-10-13).
+        var lateOpening: Decimal?
+        let header = headerBalances(lines)
         for raw in lines {
             let line = raw.trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty else { continue }
+            guard !line.isEmpty, !furniture.contains(line) else { continue }
             let lower = line.lowercased()
-            if openingWords.contains(where: { lower.contains($0) }) {
-                if opening == nil, drafts.isEmpty, let value = TextScan.amounts(in: line).last(where: \.looksLikeMoney) {
-                    opening = signed(value)
-                }
+            // "Closing Balance B/F" (Easypaisa) is the closing balance, even though it says B/F.
+            let isClosing = closingWords.contains(where: { lower.hasPrefix($0) || lower.contains(" " + $0) })
+                || (lower.contains("closing balance") && startsWithDate(line, year: year))
+            // "-   -   -   1,400.00": the dashes are empty columns, not a minus sign.
+            let emptyColumns = line.range(of: #"(\s-\s+){2,}"#, options: .regularExpression) != nil
+            if isClosing, lower.contains("closing balance") || !startsWithDate(line, year: year) {
+                if let value = TextScan.amounts(in: line).last(where: \.looksLikeMoney) { closing = emptyColumns ? value.value : signed(value) }
                 continue
             }
-            if closingWords.contains(where: { lower.hasPrefix($0) || lower.contains(" " + $0) }), !startsWithDate(line, year: year) {
-                if let value = TextScan.amounts(in: line).last(where: \.looksLikeMoney) { closing = signed(value) }
+            if openingWords.contains(where: { lower.contains($0) }) {
+                if let found = TextScan.amounts(in: line).last(where: \.looksLikeMoney) {
+                    let value = emptyColumns ? found.value : signed(found)
+                    if opening == nil, drafts.isEmpty { opening = value } else if opening == nil { lateOpening = value }
+                }
                 continue
             }
             if let draft = row(from: line, year: year) {
@@ -151,8 +161,63 @@ public enum StatementParser {
                 drafts[drafts.count - 1] = previous
             }
         }
+        opening = opening ?? lateOpening ?? header.opening
+        closing = closing ?? header.closing
         let (rows, source) = resolveSigns(drafts, opening: opening)
         return StatementReading(rows: rows, openingBalance: opening, closingBalance: closing, signSource: source, linesRead: lines.count)
+    }
+
+    /// Lines from the top of the first page that come back on later pages (name, account number, address):
+    /// they are page headers, never part of a description.
+    static func pageFurniture(_ lines: [String]) -> Set<String> {
+        let trimmed = lines.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        // The header is what comes before the first transaction row.
+        let year = headerYear(lines)
+        let firstRow = trimmed.firstIndex { row(from: $0, year: year) != nil } ?? trimmed.count
+        let top = Set(trimmed.prefix(min(firstRow, 15)))
+        var counts: [String: Int] = [:]
+        for line in trimmed where top.contains(line) { counts[line, default: 0] += 1 }
+        return Set(counts.filter { $0.value >= 2 && TextScan.dates(in: $0.key).first.map { $0.start > 12 } ?? true }.keys)
+    }
+
+    /// Balances written under their labels in the header: "Opening Balance   Closing Balance" with
+    /// "PKR700.00   PKR250.00" on a line below (Meezan, HBL, NayaPay). Labels and figures are matched in order.
+    static func headerBalances(_ lines: [String]) -> (opening: Decimal?, closing: Decimal?) {
+        let labels = ["opening balance", "closing balance", "total spent", "total income", "total debit", "total credit",
+                      "total debits", "total credits", "available balance"]
+        for (index, raw) in lines.prefix(40).enumerated() {
+            let lower = raw.lowercased()
+            guard lower.contains("opening balance") || lower.contains("closing balance"),
+                  TextScan.amounts(in: raw).filter(\.looksLikeMoney).isEmpty else { continue }
+            var found: [(position: Int, label: String)] = []
+            for label in labels {
+                var searchFrom = lower.startIndex
+                while let range = lower.range(of: label, range: searchFrom..<lower.endIndex) {
+                    // "total debits" also contains "total debit": keep the longer one only.
+                    let position = lower.distance(from: lower.startIndex, to: range.lowerBound)
+                    if !found.contains(where: { $0.position == position }) { found.append((position, label)) }
+                    else if let at = found.firstIndex(where: { $0.position == position }), label.count > found[at].label.count {
+                        found[at] = (position, label)
+                    }
+                    searchFrom = range.upperBound
+                }
+            }
+            found.sort { $0.position < $1.position }
+            guard !found.isEmpty else { continue }
+            for next in lines.dropFirst(index + 1).prefix(3) {
+                let values = TextScan.amounts(in: next).filter { $0.looksLikeMoney && ($0.hasDecimals || $0.currencyMarker != nil) }
+                guard values.count >= found.count else { continue }
+                let matched = Array(values.suffix(found.count))
+                var opening: Decimal?
+                var closing: Decimal?
+                for (offset, item) in found.enumerated() {
+                    if item.label == "opening balance" { opening = signed(matched[offset]) }
+                    if item.label == "closing balance" { closing = signed(matched[offset]) }
+                }
+                return (opening, closing)
+            }
+        }
+        return (nil, nil)
     }
 
     /// Reads a CSV export (IMP-07): finds the date, description, amount (or debit and credit) and balance columns by name.
@@ -312,6 +377,11 @@ public enum StatementParser {
         var knownSign: Int?
         var balance: Decimal?
         switch trailing.count {
+        case 3 where trailing[0].value + trailing[1].value == trailing[2].value || trailing[0].value - trailing[1].value == trailing[2].value:
+            // Balance before, the change, balance after (Easypaisa, where incoming amounts are also in brackets).
+            balance = trailing[2].value
+            magnitude = trailing[1].value
+            knownSign = trailing[2].value > trailing[0].value ? 1 : -1
         case 3:
             // Debit, credit, balance; one of the first two is usually 0.00.
             balance = signed(trailing[2])

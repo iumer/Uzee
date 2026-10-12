@@ -54,50 +54,45 @@ public enum StatementTextReader {
         text.unicodeScalars.reduce(0) { $0 + (CharacterSet.whitespacesAndNewlines.contains($1) ? 0 : 1) }
     }
 
-    private struct Piece {
-        var box: CGRect
-        var text: String
-    }
-
-    /// Rebuilds a page's text row by row from PDFKit's text lines and where they sit, so a table row reads as
-    /// one line ("05 Oct 2026   IBFT SENDING …   15,850.00Dr   35.48") whatever order the PDF stores its text in.
+    /// Rebuilds a page's text row by row from where each character sits, so a table row reads as one line
+    /// ("05 Oct 2026   IBFT SENDING …   15,850.00Dr   35.48") whatever order the PDF stores its text in.
+    /// NayaPay, for one, stores a row's description after its amounts (statement check, 2026-10-13).
     /// Wide gaps between columns become three spaces, and indentation becomes leading spaces.
     static func layoutLines(_ page: PDFPage) -> [String] {
-        guard let all = page.selection(for: page.bounds(for: .mediaBox)) else { return [] }
-        var pieces: [Piece] = []
-        for line in all.selectionsByLine() {
-            guard let raw = line.string else { continue }
-            let box = line.bounds(for: page)
-            guard box.width.isFinite, box.height.isFinite, box.width > 0, box.height > 0 else { continue }
-            // A selection line can still hold several rows; share its height between them, top first.
-            let parts = raw.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            guard !parts.isEmpty else { continue }
-            let height = box.height / CGFloat(parts.count)
-            for (offset, part) in parts.enumerated() {
-                let text = part.trimmingCharacters(in: .whitespaces)
-                let partBox = CGRect(x: box.minX, y: box.maxY - height * CGFloat(offset + 1), width: box.width, height: height)
-                pieces.append(Piece(box: partBox, text: text))
-            }
+        guard let string = page.string, !string.isEmpty else { return [] }
+        let text = string as NSString
+        // Word by word: PDFKit's per-character bounds can be off on some PDFs (NayaPay), a word's own range isn't.
+        struct Glyph {
+            var box: CGRect
+            var character: String
         }
-        guard !pieces.isEmpty else { return [] }
-        let widths = pieces.map { $0.box.width / CGFloat(max($0.text.count, 1)) }.sorted()
+        var glyphs: [Glyph] = []
+        let words = try? NSRegularExpression(pattern: #"\S+"#)
+        for match in words?.matches(in: string, range: NSRange(location: 0, length: text.length)) ?? [] {
+            guard let selection = page.selection(for: match.range) else { continue }
+            let box = selection.bounds(for: page)
+            guard box.width.isFinite, box.height.isFinite, box.width > 0, box.height > 0 else { continue }
+            glyphs.append(Glyph(box: box, character: text.substring(with: match.range)))
+        }
+        guard !glyphs.isEmpty else { return [] }
+        let widths = glyphs.map { $0.box.width / CGFloat(max($0.character.count, 1)) }.sorted()
         let charWidth = max(widths[widths.count / 2], 1)
-        let left = pieces.map(\.box.minX).min() ?? 0
+        let left = glyphs.map(\.box.minX).min() ?? 0
 
         // PDF space runs bottom-up: top rows first, then left to right.
-        pieces.sort { $0.box.midY > $1.box.midY }
-        var rows: [[Piece]] = []
-        var current: [Piece] = []
+        glyphs.sort { $0.box.midY > $1.box.midY }
+        var rows: [[Glyph]] = []
+        var current: [Glyph] = []
         var rowY: CGFloat = 0
         var rowHeight: CGFloat = 0
-        for piece in pieces {
-            if !current.isEmpty, abs(piece.box.midY - rowY) <= min(rowHeight, piece.box.height) * 0.5 {
-                current.append(piece)
+        for glyph in glyphs {
+            if !current.isEmpty, abs(glyph.box.midY - rowY) <= min(rowHeight, glyph.box.height) * 0.45 {
+                current.append(glyph)
             } else {
                 if !current.isEmpty { rows.append(current) }
-                current = [piece]
-                rowY = piece.box.midY
-                rowHeight = piece.box.height
+                current = [glyph]
+                rowY = glyph.box.midY
+                rowHeight = glyph.box.height
             }
         }
         if !current.isEmpty { rows.append(current) }
@@ -106,13 +101,13 @@ public enum StatementTextReader {
             let sorted = row.sorted { $0.box.minX < $1.box.minX }
             var line = String(repeating: " ", count: min(max(Int(((sorted[0].box.minX - left) / charWidth).rounded()), 0), 80))
             var previousMaxX: CGFloat?
-            for piece in sorted {
+            for glyph in sorted {
                 if let previousMaxX {
-                    let gap = piece.box.minX - previousMaxX
-                    line += gap > charWidth * 2 ? "   " : gap > charWidth * 0.25 ? " " : ""
+                    let gap = glyph.box.minX - previousMaxX
+                    line += gap > charWidth * 1.8 ? "   " : gap > charWidth * 0.2 ? " " : ""
                 }
-                line += piece.text
-                previousMaxX = max(previousMaxX ?? piece.box.maxX, piece.box.maxX)
+                line += glyph.character
+                previousMaxX = max(previousMaxX ?? glyph.box.maxX, glyph.box.maxX)
             }
             return line
         }

@@ -53,6 +53,8 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-040 | 2026-10-12 | Budget limits: type an amount, not only +/- in 1k steps | Auto: OWN039 smoke; Phone | – | – | – |
 | OWN-041 | 2026-10-12 | People: one + only (bottom + adds an expense with someone); top button is a person icon for add person/group | Auto: OWN038 smoke; Phone | – | – | – |
 | OWN-042 | 2026-10-13 | UZee voice gets everyday budgeting requests right: a 51-sentence check (spend, income, cheques, transfers, loans, debts, questions, afford, reminders, search) all correct; it never makes up an account or person | Auto: VoiceTests "Fifty-sentence voice check", "unseen sentences", "Rules first"; Phone | – | – | – |
+| OWN-044 | 2026-10-13 | Statements read exactly as the PDF shows (Easypaisa, HBL, Meezan, NayaPay, Wise): every row, amount, direction and balance; opening + rows = closing where the bank prints both | Auto: StatementLayoutTests "Statement check 2026-10-13"; Mac check of the owner's PDFs; Phone | – | – | – |
+| OWN-045 | 2026-10-13 | Import several statement files at once: each reviewed in turn into its own account, empty ones skipped with a note, duplicates across files left out, one Undo | Simulator; Phone | – | – | – |
 
 ## Bugs
 
@@ -77,6 +79,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-017 | 2026-10-12 | Typing 40000 fast saved 4,000 (limits, split amount); empty limit box hard to tap; UZee/+ over fields with keyboard up and over Coming up amounts | Fields rewrote their own text with commas on each keystroke; tiny box; floating buttons ignored keyboard | Mac check; Phone | 0.13.7 | Fixed, check on phone |
 | BUG-018 | 2026-10-13 | Voice: Apple Intelligence answered "How much is in HBL?" with the total, swapped lent/borrowed, logged a debt for "How much do I owe Ammi?", picked accounts never said; rules missed Netflix/Careem/ChatGPT categories, "Paid Ammi back", "Top up … from HBL", "reimbursed", "kal", "coming up", "afford" | Every sentence went to the on-device model first; rules lacked those words | Auto: VoiceTests (3 new suites) | 0.13.8 | Fixed, check on phone |
 | BUG-019 | 2026-10-12 | Ask UZee often showed the Indian rupee sign ₹ instead of Rs | iOS dictation and the on-device model write ₹ | VoiceTests.RupeeTextTests; Phone | 0.13.9 | Fixed, check on phone |
+| BUG-019 | 2026-10-13 | Statement import: Easypaisa money in read as spending and not recognised; NayaPay descriptions and balances lost; HBL oldest credit read as debit; opening/closing balances missed | No Easypaisa layout; PDFKit line order put NayaPay text after amounts; balances printed under their labels weren't read | Auto: StatementLayoutTests; Mac check | 0.13.10 | Fixed, check on phone |
 
 ## Waiting on the owner
 

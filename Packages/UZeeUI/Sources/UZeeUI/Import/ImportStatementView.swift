@@ -56,6 +56,14 @@ struct ImportStatementView: View {
     @State private var recurringChosen: Set<String> = []
     /// What the last import added, for Undo on the done screen (the toast can hide behind this sheet).
     @State private var importedIDs: [UUID] = []
+    /// Several statements picked at once (owner, 2026-10-13): read and reviewed one after another, each into its own
+    /// account. Each is saved before the next is reviewed, so rows the files share show up as duplicates.
+    @State private var queue: [URL] = []
+    @State private var fileNumber = 0
+    @State private var fileCount = 0
+    /// Files that weren't imported, with why ("Wise AED: no transactions").
+    @State private var skipped: [String] = []
+    @State private var statementsImported = 0
 
     private var ledger: LedgerSnapshot { session.ledger }
     private var account: Account? { ledger.account(accountID) }
@@ -80,17 +88,21 @@ struct ImportStatementView: View {
                         .accessibilityIdentifier("import.close")
                 }
             }
-            .fileImporter(isPresented: $showingFiles, allowedContentTypes: [.pdf, .commaSeparatedText, .plainText]) { result in
-                guard case .success(let url) = result else { return }
-                fileURL = url
-                fileName = url.lastPathComponent
-                password = ""
-                read()
+            .fileImporter(isPresented: $showingFiles, allowedContentTypes: [.pdf, .commaSeparatedText, .plainText],
+                          allowsMultipleSelection: true) { result in
+                guard case .success(let urls) = result, !urls.isEmpty else { return }
+                queue = urls
+                fileCount = urls.count
+                fileNumber = 0
+                skipped = []
+                statementsImported = 0
+                importedIDs = []
+                nextFile()
             }
             .alert("This PDF has a password", isPresented: $askingPassword) {
                 SecureField("Password", text: $password)
                 Button("Open") { read() }
-                Button("Cancel", role: .cancel) { step = .choose }
+                Button("Cancel", role: .cancel) { skip("needs a password") }
             } message: {
                 Text("Banks often use your CNIC, date of birth or account number. UZee doesn't keep the password.")
             }
@@ -110,7 +122,7 @@ struct ImportStatementView: View {
                     problem = nil
                     showingFiles = true
                 } label: {
-                    Label("Choose a PDF or CSV statement", systemImage: "doc.text")
+                    Label("Choose PDF or CSV statements", systemImage: "doc.text")
                 }
                 .accessibilityIdentifier("import.pick")
                 if let problem {
@@ -120,10 +132,10 @@ struct ImportStatementView: View {
             } header: {
                 Text("Step 1 of 2 · Pick the statement")
             } footer: {
-                Text("Download the statement from your bank's app or website first. UZee works out the bank and the currency, then asks which account it belongs to. It reads the file on this iPhone; nothing is uploaded.")
+                Text("Download statements from your bank's app or website first. Pick one, or several at once. UZee works out each one's bank and currency, then asks which account it belongs to. It reads the files on this iPhone; nothing is uploaded.")
             }
             Section("Reads") {
-                Text("MCB, HBL, Meezan Bank, SadaPay, NayaPay and Wise statements, and most other banks' PDF or CSV statements with a date, an amount and a balance on each row.")
+                Text("MCB, HBL, Meezan Bank, Easypaisa, SadaPay, NayaPay and Wise statements, and most other banks' PDF or CSV statements with a date, an amount and a balance on each row.")
                     .font(.footnote).foregroundStyle(UZColor.label2)
             }
         }
@@ -133,12 +145,41 @@ struct ImportStatementView: View {
         VStack(spacing: UZSpacing.l) {
             ProgressView()
             Text("Reading \(fileName)…").font(.headline)
+            if fileCount > 1 {
+                Text("Statement \(fileNumber) of \(fileCount)").font(.subheadline).foregroundStyle(UZColor.label2)
+            }
             Text("Finding dates, amounts and payees. Nothing leaves this iPhone.")
                 .font(.subheadline).foregroundStyle(UZColor.label2).multilineTextAlignment(.center)
         }
         .padding(UZSpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("import.reading")
+    }
+
+    /// The next picked file, or the end when all have been read.
+    private func nextFile() {
+        guard !queue.isEmpty else {
+            finishAll()
+            return
+        }
+        let url = queue.removeFirst()
+        fileNumber += 1
+        fileURL = url
+        fileName = url.lastPathComponent
+        password = ""
+        reading = nil
+        rows = []
+        read()
+    }
+
+    /// Leaves the current file out and moves on; with a single file, shows why on the first step.
+    private func skip(_ reason: String) {
+        if fileCount > 1 {
+            skipped.append("\(fileName): \(reason)")
+            nextFile()
+        } else {
+            step = .choose
+        }
     }
 
     private func read() {
@@ -180,6 +221,10 @@ struct ImportStatementView: View {
     }
 
     private func fail(_ message: String) {
+        if fileCount > 1 {
+            skip(message)
+            return
+        }
         problem = message
         step = .choose
     }
@@ -353,7 +398,7 @@ struct ImportStatementView: View {
                         .accessibilityIdentifier("import.blocker")
                 }
             } header: {
-                Text("Step 2 of 2 · Which account is this?")
+                Text(fileCount > 1 ? "Statement \(fileNumber) of \(fileCount) · \(fileName)" : "Step 2 of 2 · Which account is this?")
             } footer: {
                 if reading?.source != nil || currencyRecognised {
                     Text("Recognised from the statement. Rows already in the account are spotted and left out.")
@@ -399,17 +444,23 @@ struct ImportStatementView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            Button {
-                confirming = true
-            } label: {
-                Text(included.isEmpty ? "Nothing to import" : "Import \(included.count) transactions").frame(maxWidth: .infinity)
+            VStack(spacing: UZSpacing.s) {
+                Button {
+                    confirming = true
+                } label: {
+                    Text(included.isEmpty ? "Nothing to import" : "Import \(included.count) transactions").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(included.isEmpty || blocker != nil)
+                .accessibilityIdentifier("import.import")
+                if fileCount > 1 {
+                    Button(queue.isEmpty ? "Skip this statement" : "Skip to the next statement") { skip("you skipped it") }
+                        .accessibilityIdentifier("import.skip")
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(included.isEmpty || blocker != nil)
             .padding(UZSpacing.xxl)
             .background(.bar)
-            .accessibilityIdentifier("import.import")
         }
         .confirmationDialog("Import \(included.count) transactions into \(account?.name ?? "this account")?", isPresented: $confirming,
                             titleVisibility: .visible) {
@@ -491,13 +542,28 @@ struct ImportStatementView: View {
             for id in ids { try? session.client.discard(id) }
             session.reload()
         }
-        // This statement plus what's already in UZee from the last six months, so repeats across imports are found too.
-        var payments = rows.map { RecurringFinder.Payment(date: $0.date, payee: $0.payee.isEmpty ? $0.description : $0.payee,
-                                                          amount: $0.amount, isMoneyIn: $0.isMoneyIn, categoryID: $0.categoryID,
-                                                          accountID: accountID) }
+        importedIDs += ids
+        statementsImported += 1
+        if !queue.isEmpty {
+            nextFile()
+            return
+        }
+        finishAll()
+    }
+
+    /// After the last statement: offer the monthly repeats found in everything imported, then the summary.
+    private func finishAll() {
+        let ids = importedIDs
+        guard !ids.isEmpty else {
+            problem = skipped.isEmpty ? nil : "Nothing was imported.\n" + skipped.joined(separator: "\n")
+            step = .choose
+            return
+        }
+        // Everything imported is saved by now, so the last six months in UZee cover these statements and earlier ones.
+        var payments: [RecurringFinder.Payment] = []
         let since = session.today.addingMonths(-6)
         for transaction in session.transactions where transaction.localDate >= since && transaction.deletedAt == nil
-            && (transaction.kind == .expense || transaction.kind == .income) && !ids.contains(transaction.id) {
+            && (transaction.kind == .expense || transaction.kind == .income) {
             guard let payee = transaction.payeeName, !payee.isEmpty else { continue }
             let amount = transaction.amount.isNegative ? ((try? transaction.amount.negated()) ?? transaction.amount) : transaction.amount
             payments.append(RecurringFinder.Payment(date: transaction.localDate, payee: payee, amount: amount,
@@ -507,7 +573,6 @@ struct ImportStatementView: View {
         recurringFound = RecurringFinder.find(payments, existingNames: session.recurring.items.map(\.name), today: session.today)
         // Seen two months or more: ticked. Seen once: offered, but you tick it yourself.
         recurringChosen = Set(recurringFound.filter { $0.months >= 2 }.map(\.id))
-        importedIDs = ids
         step = recurringFound.isEmpty ? .done(ids.count) : .recurring(ids.count)
     }
 
@@ -620,17 +685,27 @@ struct ImportStatementView: View {
         VStack(spacing: UZSpacing.l) {
             Image(systemName: "checkmark.circle.fill").font(.system(size: 52)).foregroundStyle(UZColor.positive)
             Text("Imported \(count) transactions").font(.title3.weight(.semibold))
-            Text("Into \(account?.name ?? "your account").")
+            Text(statementsImported > 1 ? "From \(statementsImported) statements." : "Into \(account?.name ?? "your account").")
                 .font(.subheadline).foregroundStyle(UZColor.label2).multilineTextAlignment(.center)
+            if !skipped.isEmpty {
+                VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                    Text("Not imported").font(.footnote.weight(.semibold))
+                    ForEach(skipped, id: \.self) { Text($0).font(.footnote).foregroundStyle(UZColor.label2) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("import.skipped")
+            }
             Button("See in Activity") {
                 session.selectedTab = .activity
                 dismiss()
             }
             .buttonStyle(.borderedProminent)
             .accessibilityIdentifier("import.seeActivity")
-            Button("Import another statement") {
+            Button("Import more statements") {
                 rows = []
                 fileURL = nil
+                fileCount = 0
+                skipped = []
                 step = .choose
             }
             .accessibilityIdentifier("import.another")

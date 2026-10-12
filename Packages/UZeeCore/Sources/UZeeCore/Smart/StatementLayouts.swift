@@ -8,6 +8,7 @@ public enum StatementSource: String, Sendable, CaseIterable {
     case sadapay = "SadaPay"
     case nayapay = "NayaPay"
     case wise = "Wise"
+    case easypaisa = "Easypaisa"
 }
 
 /// Bank-specific parts of statement reading: recognising the source, the two layouts that don't put a
@@ -23,10 +24,11 @@ enum StatementLayouts {
         // The account's own IBAN names the bank; descriptions below can mention other banks' IBANs.
         if let index = lines.prefix(15).firstIndex(where: { $0.lowercased().contains("iban") }) {
             let iban = lines[index...].prefix(2).joined(separator: " ").lowercased()
-            let banks: [(String, StatementSource)] = [("sada", .sadapay), ("naya", .nayapay), ("mezn", .meezan), ("habb", .hbl), ("mucb", .mcb)]
+            let banks: [(String, StatementSource)] = [("sada", .sadapay), ("naya", .nayapay), ("mezn", .meezan), ("habb", .hbl), ("mucb", .mcb), ("tmfb", .easypaisa)]
             for (code, bank) in banks where matches(iban, #"pk\d{2}\s?"# + code) { return bank }
         }
         if header.contains("nayapay") { return .nayapay }
+        if header.contains("easypaisa") { return .easypaisa }
         if top.contains("hbl mobile") { return .hbl }
         if top.contains("mcb live") { return .mcb }
         if top.contains("sadapay") { return .sadapay }
@@ -40,6 +42,8 @@ enum StatementLayouts {
         let header = lines.prefix(30).joined(separator: " ")
         let upper = header.uppercased()
         for code in currencyCodes where upper.contains("\(code) STATEMENT") { return code }
+        // "Currency   Pakistani Rupees" (Easypaisa).
+        if upper.contains("PAKISTANI RUPEE") || upper.contains("PAKISTAN RUPEE") { return "PKR" }
         guard let range = upper.range(of: "CURRENCY") else { return nil }
         let after = String(upper[range.upperBound...].prefix(200))
         let words = after.split(whereSeparator: { !$0.isLetter }).map(String.init)
@@ -124,9 +128,16 @@ enum StatementLayouts {
         }
         var drafts: [StatementParser.Draft] = []
         var pending: Pending?
+        var closing: Decimal?
         for raw in lines {
             let line = raw.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty else { continue }
+            // "USD on 31 December 2025 [GMT+05:00]   149.70 USD": the balance at the end of the period.
+            if closing == nil, matches(line, #"^[A-Z]{3} on \d{1,2} [A-Za-z]+ \d{4}"#),
+               let value = TextScan.amounts(in: line).last(where: \.looksLikeMoney) {
+                closing = value.isNegative ? -value.value : value.value
+                continue
+            }
             if isWiseDateLine(line) {
                 if let entry = pending, let date = TextScan.dates(in: line).first?.date {
                     drafts.append(StatementParser.Draft(id: 0, date: date, description: entry.description, magnitude: entry.magnitude,
@@ -150,7 +161,7 @@ enum StatementLayouts {
             }
         }
         let (rows, _) = StatementParser.resolveSigns(drafts, opening: nil)
-        return StatementReading(rows: rows, openingBalance: nil, closingBalance: nil, signSource: .columns, linesRead: lines.count)
+        return StatementReading(rows: rows, openingBalance: nil, closingBalance: closing, signSource: .columns, linesRead: lines.count)
     }
 
     // MARK: Page furniture
@@ -160,6 +171,10 @@ enum StatementLayouts {
             || lower.hasPrefix("iban") || lower.hasPrefix("note:") || lower.contains("account transactions from")
             || lower.contains("system generated") || lower.hasPrefix("ref:") || lower == "transaction"
             || lower.hasPrefix("account statement") || lower.hasPrefix("account activity")
+            // Contact lines and period banners in page headers and footers (Easypaisa, NayaPay).
+            || lower.contains("www.") || lower.contains("phone:") || lower.contains("email:") || lower.contains("carried forward")
+            || matches(lower, #"^\(0\d{2,3}\)"#) || matches(lower, #"^from:.*\bto:"#)
+            || matches(lower, #"^\d{1,2} [a-z]{3,9},? \d{4}\s*[-–]\s*\d{1,2} [a-z]{3,9},? \d{4}$"#)
     }
 
     /// A column header row such as "Date  Description  Debit/Credit".
@@ -193,6 +208,26 @@ enum StatementLayouts {
                                "funds transfer from", "funds transfer to", "transfer from", "transfer to", "paid to", "payment to",
                                "received from", "from", "frm", "fr", "to"]
 
+    /// Bank and wallet names that follow a person's name ("to Ali Khan JazzCash/Mobilink MFB-0001").
+    private static let walletNames: Set<String> = ["jazzcash", "easypaisa", "sadapay", "nayapay", "hbl", "ubl", "mcb", "meezan", "abl",
+                                                    "bafl", "alfalah", "bop", "scb", "faysal", "askari", "js", "mobilink", "upaisa", "mez"]
+
+    /// Easypaisa: "Money Transfer - ALI KHAN - *******0001", "Bundles - Zong - 0300…", "Raast Payment - PK00HABB…":
+    /// the first part after the kind that reads as a name; otherwise the kind itself.
+    static func dashedPayee(_ description: String) -> String? {
+        let segments = description.components(separatedBy: " - ").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard segments.count >= 2, let kind = segments.first, !kind.contains(where: \.isNumber) || kind.lowercased().hasPrefix("rs"),
+              kind.split(separator: " ").count <= 4 else { return nil }
+        if kind.lowercased().contains("campaign") { return finishName(segments.joined(separator: " ").split(separator: " ").map(String.init)) }
+        for segment in segments.dropFirst() {
+            let digits = segment.filter(\.isNumber).count
+            if segment.contains("*") || digits >= 3 || matches(segment.lowercased(), #"^pk\d{2}"#) { continue }
+            let words = segment.split(separator: " ").map(String.init).filter { !$0.hasPrefix("(") }
+            if let name = finishName(words) { return name }
+        }
+        return finishName(kind.split(separator: " ").map(String.init))
+    }
+
     private static let countryCodes: Set<String> = ["pk", "us", "ie", "gb", "sg", "nl", "ae", "uk", "irl", "sgp", "usa", "gbr", "nld", "are"]
 
     /// A payee for a known layout, or nil to use the generic rules.
@@ -201,6 +236,15 @@ enum StatementLayouts {
         if lower.hasPrefix("wise charges") { return "Wise fees" }
         if lower.hasPrefix("converted ") { return "Currency conversion" }
         if lower.contains("originator") { return mcbPayee(description) }
+        if let dashed = dashedPayee(description) { return dashed }
+        // HBL: "Funds Transfer … FRM MEZ … PK00MEZN0000000000000001 ALI RAZA": the sender's name follows their IBAN.
+        if lower.contains(" frm ") || lower.contains(" fr ") {
+            let words = description.split(separator: " ").map(String.init)
+            if let iban = words.lastIndex(where: { matches($0.lowercased(), #"^pk\d{2}[a-z]{4}\d"#) }), iban + 1 < words.count,
+               let name = finishName(Array(words[(iban + 1)...])) {
+                return name
+            }
+        }
         if lower.contains("debit card/pos") || lower.hasPrefix("pos ") {
             // HBL: "Debit Card/POS 1234… PKR 2600.00 111111 0106 1234567 FOOD PANDA KARACHI": the merchant is at the end.
             let words = description.split(separator: " ").map(String.init)
@@ -214,9 +258,18 @@ enum StatementLayouts {
             guard parts.count <= lowered.count else { continue }
             for start in 0...(lowered.count - parts.count) where Array(lowered[start..<(start + parts.count)]) == parts {
                 var name: [String] = []
-                for word in words.dropFirst(start + parts.count) {
+                for raw in words.dropFirst(start + parts.count) {
+                    // "SHOPNAME*#1000000001": the name before the card reference.
+                    let word = raw.contains("*") ? String(raw.prefix { $0 != "*" }) : raw
                     let clean = word.lowercased().trimmingCharacters(in: .punctuationCharacters)
-                    if word.contains(where: \.isNumber) || word.hasPrefix("(") || nameStops.contains(clean) || clean.hasPrefix("xxxx") { break }
+                    if word.isEmpty || word.contains(where: \.isNumber) || word.hasPrefix("(") || nameStops.contains(clean) || clean.hasPrefix("xxxx")
+                        || word.contains("/") || walletNames.contains(clean) {
+                        if !word.isEmpty, !word.contains(where: \.isNumber), raw.contains("*"), name.isEmpty { name.append(word) }
+                        // "APPLE.COM/BILL": the part before the slash.
+                        if name.isEmpty, word.contains("/"), let first = word.split(separator: "/").first, first.count > 2,
+                           !first.contains(where: \.isNumber) { name.append(String(first)) }
+                        break
+                    }
                     if word == "-" { break }
                     name.append(word)
                     if name.count == 4 { break }

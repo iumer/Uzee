@@ -19,6 +19,7 @@
 | Version (build) | Date | Milestone | Highlights | Tests run / pass / fail | Installed on |
 |---|---|---|---|---|---|
 | 0.13.3 (26) | 2026-10-12 | Splitwise-style splitting | New Add an expense sheet (With you and…, Paid by … and split …), split from Add uses the same steps, person page like Splitwise | CI pending | – |
+| 0.13.10 (33) | 2026-10-13 | Statement import | Owner's 12 statements checked one by one: Easypaisa read (before/after balances, brackets on money in, page headers), NayaPay descriptions and balances (PDF stores text out of order; lines rebuilt from word positions), opening/closing balances under their labels (HBL, Meezan, NayaPay), Wise closing balance, cleaner payees; import several files at once | UZeeCore 180 / 180 / 0 (Mac); simulator: multi-file import of 4 and 5 files | Owner's iPhone 17 |
 | 0.13.9 (32) | 2026-10-12 | Rupee sign | Ask UZee shows and says Rs/PKR, never ₹ or INR (dictation and Apple Intelligence) | CI pending | – |
 | 0.13.8 (31) | 2026-10-13 | Voice check | 51-sentence voice check: rules first (51/51, unseen 25/25), Apple Intelligence only for what the rules don't understand (alone it got 20/50); no made-up accounts or people; categories from shop names; afford questions; reminder titles | UZeeCore 175 / 175 / 0; UZeeSystem 5 / 5 / 0 (Mac) | Owner's iPhone 17 |
 | 0.13.7 (30) | 2026-10-12 | Typing fixes | Amounts no longer lose the last digit when typed fast (no live commas), empty limit boxes easy to tap, UZee and + hide while the keyboard is up, more room under the last card | CI pending | – |

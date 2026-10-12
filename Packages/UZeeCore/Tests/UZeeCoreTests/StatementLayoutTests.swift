@@ -84,7 +84,7 @@ struct StatementLayoutTests {
         #expect(reading.source == .meezan)
         #expect(reading.currencyCode == "PKR")
         #expect(reading.rows.map(\.amount) == [dec("42500"), dec("-43"), dec("-43000")])
-        #expect(StatementParser.payee(from: reading.rows[0].description) == "Ali Raza HBL")
+        #expect(StatementParser.payee(from: reading.rows[0].description) == "Ali Raza")
     }
 
     @Test("NayaPay PDF: −Rs./+Rs. amounts, zero card holds skipped, wrapped details")
@@ -279,5 +279,94 @@ struct StatementLayoutTests {
         #expect(plus?.value == 1_000 && plus?.hasPlusSign == true && plus?.isNegative == false)
         #expect(TextScan.amounts(in: "+ PKR42,500.00").first?.hasPlusSign == true)
         #expect(TextScan.amounts(in: "- PKR43.00").first?.isNegative == true)
+    }
+}
+
+// Owner's statement check, 2026-10-13. Made-up rows in the same layouts as the real statements.
+@Suite("Statement check 2026-10-13")
+struct StatementCheckTests {
+    @Test("Easypaisa: balance before, change, balance after; brackets on money in too; header lines repeated per page")
+    func easypaisa() {
+        let header = [
+            "Account Holder Name   TEST USER",
+            "Account Number   03000000000",
+            "IBAN   PK00TMFB0000000000000001   easypaisa Bank Limited",
+            "Currency   Pakistani Rupees   1 Test Lane",
+        ]
+        let lines = header + [
+            "From: Oct 1, 2026 | To: Oct 13, 2026   Phone: (021) 000 000000",
+            "Date   Transaction Detail   Opening Balance   Incoming   Outgoing   Closing Balance",
+            "Oct 13, 2026   Closing Balance B/F   -   -   -   1,400.00",
+            "Oct 12, 2026   Raast Payment - PK00HABB************0001   2,000.00   -   (600.00)   1,400.00",
+            "02:45 AM",
+            "Transaction ID | Amount | Tax | Fees | Discount | Total",
+            "10000000001   600.00   0.00   0.00   0.00   600.00",
+            "Oct 11, 2026   Money Transfer - ALI KHAN - *******0001   500.00   (1,500.00)   -   2,000.00",
+            "Transaction ID | Amount | Tax | Fees | Discount | Total",
+        ] + header + [
+            "Oct 10, 2026   Bundles - Zong - 03000000000   800.00   -   (300.00)   500.00",
+            "Oct 1, 2026   Balance B/F   800.00   -   -",
+        ]
+        let reading = StatementParser.read(lines: lines)
+        #expect(reading.source == .easypaisa)
+        #expect(reading.currencyCode == "PKR")
+        #expect(reading.rows.map(\.amount) == [dec("-600"), dec("1500"), dec("-300")])
+        #expect(reading.closingBalance == dec("1400"))
+        #expect(reading.openingBalance == dec("800"))
+        #expect(reading.rows.allSatisfy { !$0.description.contains("Account Holder") && !$0.description.contains("Phone") })
+        #expect(StatementParser.payee(from: reading.rows[1].description) == "Ali Khan")
+        #expect(StatementParser.payee(from: reading.rows[2].description) == "Zong")
+        #expect(StatementParser.payee(from: reading.rows[0].description) == "Raast Payment")
+    }
+
+    @Test("Opening and closing balances on the line under their labels")
+    func headerBalances() {
+        let lines = [
+            "Account Number   CNIC Number   Account Currency   Opening Balance   Closing Balance",
+            "00000000000001   0000000000000   PKR   0.00   1,500.00",
+            "Date   Value Date   Description   Debit   Credit   Balance",
+            "10-10-2026   10-10-2026   Funds Transfer SM000000000000A TO   1,000.00   1,500.00",
+            "             ALI KHAN IBAN XXXX-0001 Thru Raast",
+            "06-10-2026   06-10-2026   Funds Transfer SM000000000000B FR   2,500.00   2,500.00",
+            "             SARA KHAN IBAN XXXX-0002 Thru Raast",
+        ]
+        let reading = StatementParser.read(lines: lines)
+        #expect(reading.openingBalance == 0)
+        #expect(reading.closingBalance == dec("1500"))
+        // The oldest row is checked against the opening balance: 0 → 2,500 is money in.
+        #expect(reading.rows.map(\.amount) == [dec("-1000"), dec("2500")])
+    }
+
+    @Test("NayaPay header: three labels, three figures")
+    func nayapayHeader() {
+        let lines = [
+            "Opening Balance   Total Spent   Closing Balance",
+            "PK00NAYA0000000000000001   Rs. 1,000.00   Rs. 300.00   Rs. 700.00",
+            "01 Sep 2026   Online   Paid to GODADDY*#1000000001 godaddy.com NL -Rs. 300   Rs. 700.00",
+            "01 Sep 2026 - 30 Sep 2026",
+            "(021) 000-000-000   www.nayapay.com",
+        ]
+        let reading = StatementParser.read(lines: lines)
+        #expect(reading.openingBalance == dec("1000"))
+        #expect(reading.closingBalance == dec("700"))
+        #expect(reading.rows.count == 1)
+        #expect(!reading.rows[0].description.contains("www") && !reading.rows[0].description.contains("30 Sep"))
+        #expect(StatementParser.payee(from: "Online Paid to APPLE.COM/BILL ITUNES.COM IE") == "Apple.com")
+        #expect(StatementParser.payee(from: "Raast Out Outgoing fund transfer to Ali Khan JazzCash/Mobilink MFB-0001") == "Ali Khan")
+    }
+
+    @Test("Wise: the balance at the end of the period")
+    func wiseClosing() {
+        let lines = [
+            "Wise Payments Ltd.",
+            "USD statement",
+            "USD on 31 December 2025 [GMT+05:00]   149.70 USD",
+            "Description   Incoming   Outgoing   Amount",
+            "Received money from Test Payer with reference 1   149.70   149.70",
+            "26 December 2025 | Transaction: TRANSFER-1000000001",
+        ]
+        let reading = StatementParser.read(lines: lines)
+        #expect(reading.closingBalance == dec("149.7"))
+        #expect(reading.rows.count == 1)
     }
 }
