@@ -9,6 +9,7 @@ struct SharedExpenseSheet: View {
     @State private var draft: SplitDraft
     @State private var what = ""
     @State private var amountText = ""
+    @State private var pickingCategory = false
     @State private var categoryID: UUID?
     @State private var suggestedCategoryID: UUID?
     @State private var remembered: [String: UUID]?
@@ -59,6 +60,8 @@ struct SharedExpenseSheet: View {
                             categoryButton
                             TextField("What was it for?", text: $what)
                                 .font(.title3)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .textInputAutocapitalization(.sentences)
                                 .focused($focus, equals: .what)
                                 .submitLabel(.next)
@@ -126,13 +129,16 @@ struct SharedExpenseSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", action: save)
                         .fontWeight(.semibold)
-                        .disabled(!hasPeople)
+                        .disabled(!hasPeople || total.minorUnits <= 0)
                         .accessibilityIdentifier("shared.save")
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") { focus = nil }.fontWeight(.semibold)
                 }
+            }
+            .navigationDestination(isPresented: $pickingCategory) {
+                CategoryPicker(categories: ledger.categories, type: .expense, selection: $categoryID)
             }
             .onChange(of: hasPeople) { _, has in if has, what.isEmpty { focus = .what } }
             .onChange(of: draft) { problem = nil }
@@ -144,9 +150,8 @@ struct SharedExpenseSheet: View {
     }
 
     private var categoryButton: some View {
-        NavigationLink {
-            CategoryPicker(categories: ledger.categories, type: .expense, selection: $categoryID)
-        } label: {
+        // A button, not a NavigationLink: in a Form row a link adds a stray ">" and pushes the text field right.
+        Button { pickingCategory = true } label: {
             let style = ledger.category(categoryID).map { CategoryStyle($0.group) }
             Image(systemName: style?.symbolName ?? "list.bullet")
                 .font(.body.weight(.semibold))
