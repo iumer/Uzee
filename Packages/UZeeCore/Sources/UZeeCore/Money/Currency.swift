@@ -31,7 +31,7 @@ public struct Currency: Hashable, Sendable {
     }
 
     /// Word-like symbols ("Rs", "AED") are followed by a space; "$", "€", "£" are not.
-    var symbolNeedsSpace: Bool { symbol.unicodeScalars.allSatisfy { $0.properties.isAlphabetic } }
+    public var symbolNeedsSpace: Bool { symbol.unicodeScalars.allSatisfy { $0.properties.isAlphabetic } }
 
     public static let pkr = Currency(code: "PKR", minorUnits: 2, displayFractionDigits: 0, symbol: "Rs",
                                      spokenSingular: "rupee", spokenPlural: "rupees",
