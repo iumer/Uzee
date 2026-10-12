@@ -79,10 +79,7 @@ struct SharedExpenseSheet: View {
                                 .keyboardType(.decimalPad)
                                 .monospacedDigit()
                                 .focused($focus, equals: .amount)
-                                .onChange(of: amountText) { _, typed in
-                                    let grouped = AmountTyping.grouped(typed)
-                                    if grouped != typed { amountText = grouped }
-                                }
+                                // No live commas: rewriting the text while typing fast dropped the last digit (BUG-017).
                                 .accessibilityIdentifier("shared.amount")
                         }
                     }

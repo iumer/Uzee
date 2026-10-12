@@ -7,6 +7,8 @@ struct BudgetLimitsView: View {
     @Bindable var session: AppSession
     @State private var totalText = ""
     @State private var limits: [UUID: Int64] = [:]
+    /// What's in each limit box, as typed. Kept apart from `limits` so the box is never rewritten mid-typing.
+    @State private var limitTexts: [UUID: String] = [:]
     @State private var warnPercent = 80
     @State private var kind: BudgetPeriodKind = .calendarMonth
     @State private var loaded = false
@@ -60,7 +62,7 @@ struct BudgetLimitsView: View {
                     Text("Categories · your share")
                     Spacer()
                     Button("Use all suggestions") {
-                        for category in groups { limits[category.id] = rounded(suggestion(category.id)) }
+                        for category in groups { setLimit(category.id, rounded(suggestion(category.id))) }
                     }
                     .font(.footnote.weight(.semibold))
                     .textCase(nil)
@@ -125,12 +127,14 @@ struct BudgetLimitsView: View {
                             .font(.headline).monospacedDigit()
                             .keyboardType(.numberPad)
                             .accessibilityLabel("\(category.name) limit amount")
+                            .frame(minWidth: 110, minHeight: 32, alignment: .leading)
+                            .contentShape(.rect)
                             .accessibilityIdentifier("limits.amount.\(category.name)")
                     }
                 }
                 Spacer()
-                Stepper("", onIncrement: { limits[category.id] = value + Self.step },
-                        onDecrement: { limits[category.id] = max(0, value - Self.step) })
+                Stepper("", onIncrement: { setLimit(category.id, value + Self.step) },
+                        onDecrement: { setLimit(category.id, max(0, value - Self.step)) })
                     .labelsHidden()
                     .accessibilityLabel("\(category.name) limit")
                     .accessibilityValue(money(value))
@@ -140,7 +144,7 @@ struct BudgetLimitsView: View {
                 Text("Last period \(money(suggestion(category.id)))").font(.footnote).foregroundStyle(UZColor.label2)
                 Spacer()
                 if suggested != value && suggested > 0 {
-                    Button("Use \(money(suggested))") { limits[category.id] = suggested }
+                    Button("Use \(money(suggested))") { setLimit(category.id, suggested) }
                         .font(.footnote.weight(.semibold))
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -174,14 +178,20 @@ struct BudgetLimitsView: View {
         return minor / Money.scale(session.ledger.base.minorUnits)
     }
 
-    /// The limit as typed digits, grouped "12,000"; empty means no limit.
+    /// The limit box: shows what was typed (never rewritten while typing, BUG-017); empty means no limit.
     private func limitText(_ id: UUID) -> Binding<String> {
         Binding(get: {
-            let value = limits[id] ?? 0
-            return value > 0 ? value.formatted(.number.grouping(.automatic)) : ""
+            limitTexts[id] ?? ((limits[id] ?? 0) > 0 ? String(limits[id] ?? 0) : "")
         }, set: { typed in
+            limitTexts[id] = typed
             limits[id] = min(Int64(String(typed.filter(\.isNumber).prefix(12))) ?? 0, 999_999_999_999)
         })
+    }
+
+    /// − / + and "Use …" change the number, so the box shows the new value.
+    private func setLimit(_ id: UUID, _ value: Int64) {
+        limits[id] = value
+        limitTexts[id] = nil
     }
 
     private func rounded(_ value: Int64) -> Int64 {

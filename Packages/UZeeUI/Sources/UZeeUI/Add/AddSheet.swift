@@ -195,10 +195,8 @@ struct AddSheet: View {
                 .fixedSize()
                 .accessibilityLabel(kind == .transfer ? "Amount sent" : "Amount")
                 .accessibilityIdentifier("add.amount")
-                .onChange(of: amountText) { _, typed in
-                    let grouped = AmountTyping.grouped(typed)
-                    if grouped != typed { amountText = grouped }
-                }
+                // No live commas: rewriting the text while typing fast dropped the last digit (BUG-017).
+                .onChange(of: amountFocused) { _, focused in if !focused { amountText = AmountTyping.grouped(amountText) } }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, UZSpacing.m)

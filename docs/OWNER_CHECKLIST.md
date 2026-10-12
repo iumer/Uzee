@@ -73,6 +73,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-014 | 2026-10-12 | Audit (3 checkers): floating buttons over Namaz, erase dialog, failed saves silent in sheets, Recently Deleted link, preset currency, reconcile minus, budget overflow, duplicate person, and more | See commit | AuditWalkTests (Mac) | 0.12.2 | Fixed, recheck |
 | BUG-015 | 2026-10-12 | After saving a budget, Budget still asked to set one | Budget screen didn't redraw (budgets aren't observed) | Phone; budgetRevision bump | 0.13.2 | Fixed, check on phone |
 | BUG-016 | 2026-10-12 | Budget with limits but no total showed "Rs 48,000 over the total" and still "No budget yet"; voice read "PKR ₹40,000 check into my HBL account" as HBL to HBL | Empty total saved as 0; ₹ not read; the model's same-account transfer kept | VoiceTests.chequeDeposit; Phone | 0.13.4 | Fixed, check on phone |
+| BUG-017 | 2026-10-12 | Typing 40000 fast saved 4,000 (limits, split amount); empty limit box hard to tap; UZee/+ over fields with keyboard up and over Coming up amounts | Fields rewrote their own text with commas on each keystroke; tiny box; floating buttons ignored keyboard | Mac check; Phone | 0.13.7 | Fixed, check on phone |
 
 ## Waiting on the owner
 

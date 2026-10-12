@@ -60,10 +60,7 @@ struct EventFormSheet: View {
                     TextField("Amount (optional)", text: $amount)
                         .keyboardType(.decimalPad)
                         .monospacedDigit()
-                        .onChange(of: amount) { _, text in
-                            let grouped = AmountTyping.grouped(text)
-                            if grouped != text { amount = grouped }
-                        }
+                        // No live commas: rewriting the text while typing fast dropped the last digit (BUG-017).
                         .accessibilityIdentifier("event.amount")
                     TextField("Note", text: $note, axis: .vertical)
                 } footer: {

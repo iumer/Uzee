@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UZeeCore
 
@@ -20,6 +21,8 @@ public struct RootView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// UZee's "try me" bubble, now and then.
     @State private var hint: String?
+    /// The floating buttons step aside while the keyboard is up, so they never cover the field being typed in.
+    @State private var isKeyboardUp = false
 
     public init(session: AppSession) {
         self.session = session
@@ -40,9 +43,11 @@ public struct RootView: View {
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.never)
         .onAppear { Appearance.apply() }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in isKeyboardUp = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in isKeyboardUp = false }
         // iPhone: the big "+" sits in the middle of the bottom bar, over the Add item (owner, 2026-10-12).
         .overlay(alignment: .bottom) {
-            if sizeClass == .compact {
+            if sizeClass == .compact, !isKeyboardUp {
                 AddButton(isLarge: true) { session.addTapped() }
                     // Stay put when the keyboard opens instead of riding up over the fields.
                     .ignoresSafeArea(.keyboard)
@@ -60,6 +65,8 @@ public struct RootView: View {
             .padding(.trailing, UZSpacing.xxl)
             .padding(.bottom, sizeClass == .compact ? 72 : UZSpacing.xxl)
             .ignoresSafeArea(.keyboard)
+            .opacity(isKeyboardUp ? 0 : 1)
+            .allowsHitTesting(!isKeyboardUp)
         }
         .task { await showHints() }
         .sheet(isPresented: $session.isAddPresented) {
@@ -279,7 +286,8 @@ struct TabRoot: View {
                 }
         }
         // Room under the last row on every screen, so the floating UZee never covers an amount.
-        .contentMargins(.bottom, 90, for: .scrollContent)
+        // Room under the last card so it can always scroll clear of the floating UZee (BUG-017).
+        .contentMargins(.bottom, 130, for: .scrollContent)
     }
 
     @ViewBuilder private var screen: some View {
