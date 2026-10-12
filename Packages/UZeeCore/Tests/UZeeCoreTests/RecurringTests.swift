@@ -149,4 +149,14 @@ struct RecurringTests {
         #expect(RecurringType.kameti.transactionKind == .kametiContribution)
         #expect(RecurringType.salary.transactionKind == .income && RecurringType.installment.isPlan)
     }
+
+    @Test("REC-020 payday picked in setup anchors on the next date with that day")
+    func nextMonthlyPayday() {
+        #expect(RecurrenceRule.nextMonthly(day: 25, onOrAfter: day(2026, 10, 12)) == day(2026, 10, 25))
+        #expect(RecurrenceRule.nextMonthly(day: 12, onOrAfter: day(2026, 10, 12)) == day(2026, 10, 12))
+        #expect(RecurrenceRule.nextMonthly(day: 1, onOrAfter: day(2026, 10, 12)) == day(2026, 11, 1))
+        // Skips November (30 days) so the rule keeps the 31st.
+        #expect(RecurrenceRule.nextMonthly(day: 31, onOrAfter: day(2026, 11, 2)) == day(2026, 12, 31))
+        #expect(RecurrenceRule.nextMonthly(day: 30, onOrAfter: day(2027, 2, 1)) == day(2027, 3, 30))
+    }
 }

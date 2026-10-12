@@ -65,6 +65,21 @@ public struct RecurrenceRule: Hashable, Sendable {
         return result
     }
 
+    /// The first date on or after `date` that falls on `day` of a month (1…31), skipping months too short
+    /// for it, so a monthly rule anchored there keeps that day ("salary on the 31st" anchors on a 31st).
+    public static func nextMonthly(day: Int, onOrAfter date: LocalDate) -> LocalDate {
+        let day = min(max(day, 1), 31)
+        var month = date.firstOfMonth
+        for _ in 0..<13 {
+            if day <= LocalDate.daysIn(year: month.year, month: month.month) {
+                let candidate = LocalDate(year: month.year, month: month.month, day: day)
+                if candidate >= date { return candidate }
+            }
+            month = month.addingMonths(1)
+        }
+        return date
+    }
+
     /// "Every month", "Every 3 months", "Every week", "Every year".
     public var text: String {
         let names: [RecurrenceUnit: (String, String)] = [.day: ("day", "days"), .week: ("week", "weeks"), .month: ("month", "months"), .year: ("year", "years")]

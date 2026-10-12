@@ -9,26 +9,33 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 
 ## Requests
 
-| ID | Asked | What must be true | How it's checked | 0.11.2 | 0.11.3 |
-|---|---|---|---|---|---|
-| OWN-001 | 2026-10-07 | Pick a bank and type its balance in first-launch setup | Phone | ✓ | – |
-| OWN-002 | 2026-10-07 | Saving an expense saves straight away (no extra confirm screen) | Auto: SMK007 | ✓ | – |
-| OWN-003 | 2026-10-08 | "I owe my mom 250000" said to UZee records a debt | Auto: VoiceTests (Core) | ✓ | – |
-| OWN-004 | 2026-10-08 | Owe/owed amounts are green (they owe you) and red (you owe); "They paid you 50k of 150k" lowers the balance | Auto: LOAN-009 (Data), OWN004 smoke; Phone for colours | ✓ | – |
-| OWN-005 | 2026-10-08 | Home mic is the singing UZee smiley | Phone | ✓ | – |
-| OWN-006 | 2026-10-08 | Ask UZee opens for talking with no text box; a keyboard button switches to typing | Auto: OWN006 smoke | ✓ | – |
-| OWN-007 | 2026-10-08 | Opening Ask UZee shows UZee asleep, then waking up to listen | Phone | ~ | – |
-| OWN-008 | 2026-10-08 | USD→PKR comes live from Wise; past-dated transfers use Wise's rate that day; offline uses the saved rate and says so | Auto: WiseRatesTests (Core), WiseRateFetcherTests (Mac, online); Phone | ✗ past dates | ✓ (dated 279.31, live 277.01) |
-| OWN-009 | 2026-10-08 | Settings › UZee's voice lists natural voices first, with a speed slider | Auto: OWN009 smoke; Phone for sound | ✓ | – |
-| OWN-010 | 2026-10-08 | Lock screen has "Use iPhone passcode" | Phone | – | – |
-| OWN-011 | 2026-10-08 | Settings › Erase everything | Auto: OWN011 smoke | ✓ | – |
-| OWN-012 | 2026-10-08 | Voice picker for Siri-style answers | Phone | – | – |
-| OWN-013 | 2026-10-08 | Saved voice chats (New chat / Past chats) | Phone | – | – |
-| OWN-014 | 2026-10-08 | Receipt scan reads the total right on most printed slips | Auto: InternetReceiptTests (Mac, 30 SROIE receipts, ≥ 80%) | ✗ 22/30 | ✗ 20/30, regression, fixed in 0.11.4 |
-| OWN-015 | 2026-10-08 | System / Light / Dark theme | Phone | ✓ | – |
-| OWN-016 | 2026-10-08 | App is named "UZee" on the Home Screen (not "UZee Dev") | Phone | ✓ | – |
-| OWN-017 | 2026-10-09 | Namaz times work offline; if location fails you can pick your city | Auto: PrayerTests (Core); Phone | – | – |
-| OWN-018 | 2026-10-07 | Statement PDFs from MCB, HBL, Meezan, SadaPay, NayaPay and Wise import | Auto: StatementLayoutTests (Core, synthetic rows) | ✓ | – |
+| ID | Asked | What must be true | How it's checked | 0.11.2 | 0.11.3 | 0.12.0 |
+|---|---|---|---|---|---|---|
+| OWN-001 | 2026-10-07 | Pick a bank and type its balance in first-launch setup | Phone | ✓ | – | – |
+| OWN-002 | 2026-10-07 | Saving an expense saves straight away (no extra confirm screen) | Auto: SMK007 | ✓ | – | – |
+| OWN-003 | 2026-10-08 | "I owe my mom 250000" said to UZee records a debt | Auto: VoiceTests (Core) | ✓ | – | – |
+| OWN-004 | 2026-10-08 | Owe/owed amounts are green (they owe you) and red (you owe); "They paid you 50k of 150k" lowers the balance | Auto: LOAN-009 (Data), OWN004 smoke; Phone for colours | ✓ | – | – |
+| OWN-005 | 2026-10-08 | Home mic is the singing UZee smiley | Phone | ✓ | – | – |
+| OWN-006 | 2026-10-08 | Ask UZee opens for talking with no text box; a keyboard button switches to typing | Auto: OWN006 smoke | ✓ | – | – |
+| OWN-007 | 2026-10-08 | Opening Ask UZee shows UZee asleep, then waking up to listen | Phone | ~ | – | – |
+| OWN-008 | 2026-10-08 | USD→PKR comes live from Wise; past-dated transfers use Wise's rate that day; offline uses the saved rate and says so | Auto: WiseRatesTests (Core), WiseRateFetcherTests (Mac, online); Phone | ✗ past dates | ✓ (dated 279.31, live 277.01) | – |
+| OWN-009 | 2026-10-08 | Settings › UZee's voice lists natural voices first, with a speed slider | Auto: OWN009 smoke; Phone for sound | ✓ | – | – |
+| OWN-010 | 2026-10-08 | Lock screen has "Use iPhone passcode" | Phone | – | – | – |
+| OWN-011 | 2026-10-08 | Settings › Erase everything | Auto: OWN011 smoke | ✓ | – | – |
+| OWN-012 | 2026-10-08 | Voice picker for Siri-style answers | Phone | – | – | – |
+| OWN-013 | 2026-10-08 | Saved voice chats (New chat / Past chats) | Phone | – | – | – |
+| OWN-014 | 2026-10-08 | Receipt scan reads the total right on most printed slips | Auto: InternetReceiptTests (Mac, 30 SROIE receipts, ≥ 80%) | ✗ 22/30 | ✗ 20/30, regression, fixed in 0.11.4 | – |
+| OWN-015 | 2026-10-08 | System / Light / Dark theme | Phone | ✓ | – | – |
+| OWN-016 | 2026-10-08 | App is named "UZee" on the Home Screen (not "UZee Dev") | Phone | ✓ | – | – |
+| OWN-017 | 2026-10-09 | Namaz times work offline; if location fails you can pick your city | Auto: PrayerTests (Core); Phone | – | – | – |
+| OWN-018 | 2026-10-07 | Statement PDFs from MCB, HBL, Meezan, SadaPay, NayaPay and Wise import | Auto: StatementLayoutTests (Core, synthetic rows) | ✓ | – | – |
+| OWN-019 | 2026-10-12 | Notifications say "UZee", locked or not | Phone (iOS caches the old name; restart the phone once) | – | – | – |
+| OWN-020 | 2026-10-12 | Setup asks where you keep money by kind (Cash, Bank accounts, Wallets, Online & multi-currency), with Add for as many of each as you like, any currency, and no country's bank list | Phone (setup is skipped in tests) | – | – | – |
+| OWN-021 | 2026-10-12 | Setup asks how you earn (Salary, Business, Freelance, Something else); only Salary asks for a payday; the others are asked about a set monthly payment instead | Phone | – | – | – |
+| OWN-022 | 2026-10-12 | Payday is picked on a small calendar grid (1–31, plus Not fixed for salary), not a long menu | Auto: REC-020 (Core) for the date; Phone for the grid | – | – | – |
+| OWN-023 | 2026-10-12 | The singing UZee sits above + on every tab | Auto: OWN023 smoke | – | – | – |
+| OWN-024 | 2026-10-12 | Statement import lists recurring payments (same payee, about the same day each month) and asks to add each to the calendar with a reminder | Auto: RecurringFinderTests (Core, synthetic rows); Phone | – | – | – |
+| OWN-025 | 2026-10-12 | Settings moves off Home (only after the owner approves where) | Waiting on the owner | – | – | – |
 
 ## Bugs
 
@@ -47,5 +54,6 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 
 ## Waiting on the owner
 
+- Where Settings goes (OWN-025): approve on the card in the thread.
 - Simpler Add expense form (mockup boards A and B): build after OK.
 - Simpler app (new Home, one top bar on every tab, budget "can I buy this?", Apple Intelligence on/off): mockups first, build after OK.

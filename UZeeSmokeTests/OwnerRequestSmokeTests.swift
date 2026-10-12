@@ -33,7 +33,7 @@ final class OwnerRequestSmokeTests: XCTestCase {
     /// OWN-006: Ask UZee opens for talking, with no text box until you choose to type.
     func testOWN006_voiceOpensWithoutTextBox() {
         backToHome()
-        tap("home.voice")
+        tap("tab.voice")
         XCTAssertTrue(element("voice.keyboard").waitForExistence(timeout: 30), "Keyboard switch missing")
         XCTAssertFalse(element("voice.input").exists, "The text box shows before choosing to type")
         tap("voice.keyboard")
@@ -62,5 +62,18 @@ final class OwnerRequestSmokeTests: XCTestCase {
         if !balance.waitForExistence(timeout: 5) { element("person.Usama").coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)).tap() }
         XCTAssertTrue(balance.waitForExistence(timeout: 30), "Usama did not open")
         XCTAssertTrue(element("person.repay").waitForExistence(timeout: 30), "They paid you missing")
+    }
+
+    /// OWN-023: the singing UZee sits above "+" on every tab and opens Ask UZee.
+    func testOWN023_uzeeOnEveryTab() {
+        backToHome()
+        for name in ["Activity", "Budget", "Calendar", "People", "Home"] {
+            let tab = app.tabBars.buttons[name]
+            if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons[name].firstMatch.tap() }
+            XCTAssertTrue(element("tab.voice").waitForExistence(timeout: 30), "UZee missing on \(name)")
+            XCTAssertTrue(element("tab.add").exists, "+ missing on \(name)")
+        }
+        tap("tab.voice")
+        XCTAssertTrue(element("voice.close").waitForExistence(timeout: 30), "Ask UZee didn't open")
     }
 }

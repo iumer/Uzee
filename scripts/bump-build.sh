@@ -5,7 +5,7 @@
 # Then add the entry to docs/BUILD_HISTORY.md.
 set -euo pipefail
 f="$(dirname "$0")/../Config/Version.xcconfig"
-build=$(grep CURRENT_PROJECT_VERSION "$f" | sed 's/.*= *//')
+build=$(grep "^CURRENT_PROJECT_VERSION" "$f" | sed 's/.*= *//')
 next=$((build + 1))
 sed -i.bak "s/CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = $next/" "$f"
 if [ $# -ge 1 ]; then sed -i.bak "s/MARKETING_VERSION = .*/MARKETING_VERSION = $1/" "$f"; fi

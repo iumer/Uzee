@@ -48,6 +48,9 @@ struct ImportStatementView: View {
     @State private var currencyRecognised = false
     @State private var accountProblem: String?
     @State private var confirming = false
+    /// Monthly repeats spotted in this statement, offered for the calendar after importing (OWN-024).
+    @State private var recurringFound: [RecurringFinder.Found] = []
+    @State private var recurringAdded: Set<String> = []
 
     private var ledger: LedgerSnapshot { session.ledger }
     private var account: Account? { ledger.account(accountID) }
@@ -482,7 +485,22 @@ struct ImportStatementView: View {
             for id in ids { try? session.client.discard(id) }
             session.reload()
         }
+        let payments = rows.map { RecurringFinder.Payment(date: $0.date, payee: $0.payee.isEmpty ? $0.description : $0.payee,
+                                                          amount: $0.amount, isMoneyIn: $0.isMoneyIn, categoryID: $0.categoryID) }
+        recurringFound = RecurringFinder.find(payments, existingNames: session.recurring.items.map(\.name), today: session.today)
+        recurringAdded = []
         step = .done(ids.count)
+    }
+
+    /// Adds a found repeat as a bill, subscription or income from its next date; bill reminders follow from it.
+    private func addRecurring(_ found: RecurringFinder.Found) {
+        let item = RecurringItem(name: found.name, type: found.type, amount: found.amount, isEstimated: found.varies,
+                                 accountID: account?.id, categoryID: found.categoryID,
+                                 rule: RecurrenceRule(anchor: found.nextDate), trackedFrom: found.nextDate, startedOn: found.firstDate,
+                                 colorHex: found.isMoneyIn ? "#34C759" : "#5E5CE6")
+        guard session.perform("Couldn't add it. Try again.", { try session.recurringClient.save(item, nil) }) else { return }
+        recurringAdded.insert(found.id)
+        session.rescheduleReminders()
     }
 
     private func fallbackCategory(_ type: CategoryType) -> UUID? {
@@ -495,6 +513,60 @@ struct ImportStatementView: View {
     // MARK: Done
 
     private func doneStep(_ count: Int) -> some View {
+        ScrollView {
+            VStack(spacing: UZSpacing.xxxl) {
+                doneSummary(count)
+                if !recurringFound.isEmpty { recurringList }
+            }
+            .padding(UZSpacing.xxl)
+            .frame(maxWidth: .infinity)
+        }
+        .defaultScrollAnchor(recurringFound.isEmpty ? .center : .top)
+        .accessibilityIdentifier("import.done")
+    }
+
+    /// "Recurring payments found": each can go on the calendar with a reminder.
+    private var recurringList: some View {
+        VStack(alignment: .leading, spacing: UZSpacing.l) {
+            VStack(alignment: .leading, spacing: UZSpacing.xs) {
+                Label("Recurring payments found", systemImage: "arrow.triangle.2.circlepath").font(.headline)
+                Text("These came around the same day every month. Add them to your calendar with a reminder before each one?")
+                    .font(.subheadline).foregroundStyle(UZColor.label2)
+            }
+            VStack(spacing: 0) {
+                ForEach(recurringFound) { found in
+                    let added = recurringAdded.contains(found.id)
+                    HStack(spacing: UZSpacing.l) {
+                        VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                            Text(found.name).font(.body.weight(.medium)).lineLimit(1)
+                            Text("\(found.varies ? "About " : "")\(MoneyFormatter.string(found.amount)) · \(found.type.name) · monthly on the \(OnboardingView.ordinal(found.day))")
+                                .font(.caption).foregroundStyle(UZColor.label2).lineLimit(2)
+                            Text("Next \(DateText.short(found.nextDate)) · seen \(found.months) months").font(.caption).foregroundStyle(UZColor.label2)
+                        }
+                        Spacer()
+                        Button(added ? "Added" : "Add") { addRecurring(found) }
+                            .buttonStyle(.bordered).tint(added ? UZColor.positive : UZColor.tint)
+                            .disabled(added)
+                            .accessibilityIdentifier("import.recurring.add")
+                    }
+                    .padding(.vertical, UZSpacing.l).padding(.horizontal, UZSpacing.xxl)
+                    if found.id != recurringFound.last?.id { Divider().padding(.leading, UZSpacing.xxl) }
+                }
+            }
+            .background(UZColor.card, in: .rect(cornerRadius: UZRadius.card))
+            if recurringFound.count > 1, recurringAdded.count < recurringFound.count {
+                Button("Add all \(recurringFound.count - recurringAdded.count)") {
+                    for found in recurringFound where !recurringAdded.contains(found.id) { addRecurring(found) }
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("import.recurring.addAll")
+            }
+        }
+        .accessibilityIdentifier("import.recurring")
+    }
+
+    private func doneSummary(_ count: Int) -> some View {
         VStack(spacing: UZSpacing.l) {
             Image(systemName: "checkmark.circle.fill").font(.system(size: 52)).foregroundStyle(UZColor.positive)
             Text("Imported \(count) transactions").font(.title3.weight(.semibold))
@@ -513,9 +585,6 @@ struct ImportStatementView: View {
             }
             .accessibilityIdentifier("import.another")
         }
-        .padding(UZSpacing.xxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityIdentifier("import.done")
     }
 }
 

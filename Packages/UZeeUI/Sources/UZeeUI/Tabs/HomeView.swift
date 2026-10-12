@@ -51,14 +51,6 @@ struct HomeView: View {
         .sheet(item: $paying) { MarkPaidSheet(session: session, occurrence: $0) }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    session.isVoicePresented = true
-                } label: {
-                    SingingMic(size: 30)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Ask UZee")
-                .accessibilityIdentifier("home.voice")
                 NavigationLink(value: Route.settings) {
                     Image(systemName: "gearshape")
                 }

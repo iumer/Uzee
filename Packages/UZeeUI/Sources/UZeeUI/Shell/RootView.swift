@@ -37,7 +37,11 @@ public struct RootView: View {
         // Only on each tab's first screen; detail screens and Settings keep their full width.
         .overlay(alignment: .bottomTrailing) {
             if session.path(for: session.selectedTab).wrappedValue.isEmpty {
-                AddButton { session.isAddPresented = true }
+                // UZee sits above "+" on every tab, so asking by voice is always one tap away.
+                VStack(spacing: UZSpacing.m) {
+                    VoiceButton { session.isVoicePresented = true }
+                    AddButton { session.isAddPresented = true }
+                }
                     .padding(.trailing, UZSpacing.xxl)
                     .padding(.bottom, 72)
                     .transition(.scale.combined(with: .opacity))
@@ -136,6 +140,22 @@ struct AddButton: View {
     }
 }
 
+/// The singing UZee above "+": opens Ask UZee from any tab.
+struct VoiceButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            SingingMic(size: 38)
+                .frame(width: 52, height: 52)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ask UZee")
+        .accessibilityIdentifier("tab.voice")
+    }
+}
+
 /// One tab: its NavigationStack, its root screen, the sample banner and shared destinations.
 struct TabRoot: View {
     let tab: AppTab
@@ -144,8 +164,8 @@ struct TabRoot: View {
     var body: some View {
         NavigationStack(path: session.path(for: tab)) {
             screen
-                // Room under the last row so the floating "+" never covers an amount.
-                .contentMargins(.bottom, 64, for: .scrollContent)
+                // Room under the last row so the floating UZee and "+" never cover an amount.
+                .contentMargins(.bottom, 128, for: .scrollContent)
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if session.isSampleMode {
                         SampleBanner { session.removeSampleData() }

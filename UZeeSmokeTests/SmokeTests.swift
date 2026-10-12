@@ -118,7 +118,7 @@ final class SmokeTests: XCTestCase {
 
     /// UI-012 Home toolbar: mic opens Ask UZee, gear opens Settings
     func testUI012_homeToolbar() {
-        element("home.voice").tap()
+        element("tab.voice").tap()
         let close = element("voice.close")
         XCTAssertTrue(close.waitForExistence(timeout: 30))
         close.tap()
