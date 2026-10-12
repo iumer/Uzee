@@ -90,9 +90,17 @@ struct BudgetLimitsView: View {
                 Text("\(DatePresets.text(from: currentPeriod.start, through: currentPeriod.end)). New periods copy these limits; nothing rolls over.")
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Budget limits")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+                .fontWeight(.semibold)
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { save(total: total) }
                     .fontWeight(.semibold)
@@ -108,9 +116,17 @@ struct BudgetLimitsView: View {
         return VStack(alignment: .leading, spacing: UZSpacing.s) {
             HStack(spacing: UZSpacing.l) {
                 CategoryTile(category.group, size: 30)
+                // Type the limit, or nudge it with − / + (owner, 2026-10-12: tapping + a thousand at a time was slow).
                 VStack(alignment: .leading, spacing: 0) {
                     Text(category.name)
-                    Text(money(value)).font(.headline).monospacedDigit()
+                    HStack(spacing: UZSpacing.xxs) {
+                        Text(session.ledger.base.symbol).font(.headline).foregroundStyle(UZColor.label2)
+                        TextField("0", text: limitText(category.id))
+                            .font(.headline).monospacedDigit()
+                            .keyboardType(.numberPad)
+                            .accessibilityLabel("\(category.name) limit amount")
+                            .accessibilityIdentifier("limits.amount.\(category.name)")
+                    }
                 }
                 Spacer()
                 Stepper("", onIncrement: { limits[category.id] = value + Self.step },
@@ -156,6 +172,16 @@ struct BudgetLimitsView: View {
                                               base: session.ledger.base, rates: session.ledger.rates)
         let minor = spent.filter { ids.contains($0.key) }.values.reduce(Int64(0)) { $0 + $1.minorUnits }
         return minor / Money.scale(session.ledger.base.minorUnits)
+    }
+
+    /// The limit as typed digits, grouped "12,000"; empty means no limit.
+    private func limitText(_ id: UUID) -> Binding<String> {
+        Binding(get: {
+            let value = limits[id] ?? 0
+            return value > 0 ? value.formatted(.number.grouping(.automatic)) : ""
+        }, set: { typed in
+            limits[id] = min(Int64(String(typed.filter(\.isNumber).prefix(12))) ?? 0, 999_999_999_999)
+        })
     }
 
     private func rounded(_ value: Int64) -> Int64 {

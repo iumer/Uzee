@@ -2,7 +2,8 @@ import SwiftUI
 import UZeeCore
 
 /// People (SCR-20): one balance per person from loans and shared groups (SPL-01/07, LOAN-04).
-/// Groups sit behind the top button; "+" adds a person, existing balances or a group.
+/// Groups sit behind the top button; the person button adds a person, existing balances or a group,
+/// and the bottom "+" adds an expense with someone.
 struct PeopleView: View {
     @Bindable var session: AppSession
     @State private var sheet: PeopleSheet?
@@ -12,15 +13,6 @@ struct PeopleView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: UZSpacing.xl) {
                 summaryCard(model)
-                Button {
-                    session.openAdd(.shared(group: nil, person: nil))
-                } label: {
-                    Label("Add an expense", systemImage: "person.2.badge.plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .accessibilityIdentifier("people.addShared")
                 let people = model.rows
                 if people.isEmpty {
                     UZCard {
@@ -43,7 +35,7 @@ struct PeopleView: View {
                         }
                     }
                 }
-                Text("Each person shows one balance from loans and shared groups. Only your share of a split counts as your spending.")
+                Text("Tap + to add an expense with someone. Each person shows one balance from loans and shared groups; only your share of a split counts as your spending.")
                     .font(.footnote)
                     .foregroundStyle(UZColor.label2)
                 if let footnote = model.footnote {
@@ -74,9 +66,10 @@ struct PeopleView: View {
                     Button("New group", systemImage: "person.3") { sheet = .newGroup }
                         .accessibilityIdentifier("people.newGroup")
                 } label: {
-                    Image(systemName: "plus")
+                    // A person icon, not a second "+": the bottom + already adds an expense here.
+                    Image(systemName: "person.badge.plus")
                 }
-                .accessibilityLabel("Add")
+                .accessibilityLabel("Add person or group")
                 .accessibilityIdentifier("people.add")
             }
         }

@@ -35,7 +35,7 @@ struct HomeView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("home.empty")
                 } else {
-                    haveCard
+                    moneyTile
                     HomeCards(session: session, model: RecurringModel(session: session), paying: $paying)
                     if session.prayer.hasPlace { PrayerHomeCard(session: session) }
                 }
@@ -52,12 +52,20 @@ struct HomeView: View {
     /// Where the money sits: one slice per account, biggest first (owner, 2026-10-12).
     private var accountsRing: some View {
         let shares = accountShares
-        return Chart(Array(shares.enumerated()), id: \.offset) { item in
-            SectorMark(angle: .value("Balance", item.element.value), innerRadius: .ratio(0.62), angularInset: 1.5)
-                .foregroundStyle(HomeCards.palette[item.offset % HomeCards.palette.count])
+        let count = session.ledger.activeAccounts.count
+        return ZStack {
+            Chart(Array(shares.enumerated()), id: \.offset) { item in
+                SectorMark(angle: .value("Balance", item.element.value), innerRadius: .ratio(0.7), angularInset: 1.5)
+                    .cornerRadius(2)
+                    .foregroundStyle(HomeCards.palette[item.offset % HomeCards.palette.count])
+            }
+            .chartLegend(.hidden)
+            VStack(spacing: 0) {
+                Text("\(count)").font(.headline).monospacedDigit()
+                Text(count == 1 ? "account" : "accounts").font(.caption2).foregroundStyle(UZColor.label2)
+            }
         }
-        .chartLegend(.hidden)
-        .frame(width: 76, height: 76)
+        .frame(width: HomeCards.ringSize, height: HomeCards.ringSize)
         .accessibilityLabel(shares.prefix(4).map(\.name).joined(separator: ", "))
     }
 
@@ -72,27 +80,36 @@ struct HomeView: View {
         .sorted { $0.value > $1.value }
     }
 
-    /// "You have Rs 484,800 · In 9 accounts"; opens the account list.
-    private var haveCard: some View {
-        let count = session.ledger.activeAccounts.count
-        return NavigationLink(value: Route.accounts) {
-            UZCard {
-                HStack(spacing: UZSpacing.l) {
-                    VStack(alignment: .leading, spacing: UZSpacing.xs) {
-                        Text("You have").font(.subheadline).foregroundStyle(UZColor.label2)
-                        AmountText(session.ledger.available, font: .system(.title, weight: .bold))
-                            .minimumScaleFactor(0.6).lineLimit(1)
-                            .accessibilityIdentifier("home.available")
-                        Text(count == 1 ? "In 1 account" : "In \(count) accounts").font(.footnote).foregroundStyle(UZColor.label2)
-                        if let footnote = session.ledger.footnote {
-                            Text(footnote).font(.caption).foregroundStyle(UZColor.label2)
-                                .accessibilityIdentifier("home.footnote")
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    accountsRing
+    /// One tile with two circles side by side: what you have and what you spent this month
+    /// (owner, 2026-10-12: two separate tiles didn't look neat). Each half opens its own screen.
+    private var moneyTile: some View {
+        UZCard {
+            HStack(alignment: .top, spacing: UZSpacing.l) {
+                haveHalf
+                Divider()
+                SpentHalf(session: session)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.moneyTile")
+    }
+
+    /// "You have Rs 484,800" with a ring by account; opens the account list.
+    private var haveHalf: some View {
+        NavigationLink(value: Route.accounts) {
+            VStack(spacing: UZSpacing.s) {
+                Text("You have").font(.subheadline).foregroundStyle(UZColor.label2)
+                accountsRing
+                AmountText(session.ledger.available, font: .system(.title3, weight: .bold))
+                    .minimumScaleFactor(0.5).lineLimit(1)
+                    .accessibilityIdentifier("home.available")
+                if let footnote = session.ledger.footnote {
+                    Text(footnote).font(.caption2).foregroundStyle(UZColor.label2).multilineTextAlignment(.center)
+                        .accessibilityIdentifier("home.footnote")
                 }
             }
+            .frame(maxWidth: .infinity)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.accounts")

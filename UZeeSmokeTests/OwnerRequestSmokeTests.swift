@@ -106,7 +106,8 @@ final class OwnerRequestSmokeTests: XCTestCase {
         backToHome()
         let tab = app.tabBars.buttons["People"]
         if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons["People"].firstMatch.tap() }
-        tap("people.addShared")
+        // The bottom + adds an expense with someone on People (no separate button any more).
+        tap("tab.add")
         tap("with.person.Usama")
         tap("shared.what")
         app.typeText("Dinner")
@@ -117,5 +118,20 @@ final class OwnerRequestSmokeTests: XCTestCase {
         XCTAssertTrue(effects.label.contains("Usama owes you") && effects.label.contains("600"), "Effects were \(effects.label)")
         tap("shared.save")
         XCTAssertTrue(element("shared.sheet").waitForNonExistence(timeout: 30), "Add an expense still open")
+    }
+
+    /// Owner, 2026-10-12: one Home tile with both circles; budget limits can be typed.
+    func testOWN039_homeTileAndTypedLimits() {
+        backToHome()
+        XCTAssertTrue(element("home.moneyTile").waitForExistence(timeout: 30), "Home money tile missing")
+        let have = element("home.accounts"), spent = element("home.budget")
+        XCTAssertTrue(have.exists && spent.exists, "Both halves should be on Home")
+        XCTAssertEqual(have.frame.midY, spent.frame.midY, accuracy: 60, "You have and Spent should sit side by side")
+        spent.tap()
+        let edit = element("budget.edit"), set = app.buttons["Set budget"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 30) || set.exists, "Budget didn't open from Home")
+        if edit.exists { edit.tap() } else { set.tap() }
+        XCTAssertTrue(app.textFields.matching(NSPredicate(format: "identifier BEGINSWITH 'limits.amount.'")).firstMatch
+            .waitForExistence(timeout: 30), "Limits can't be typed")
     }
 }

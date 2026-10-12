@@ -284,6 +284,16 @@ public final class AppSession {
     }
 
     /// Opens the Add sheet for something specific.
+    /// The "+": on People it adds a shared expense, like Splitwise; everywhere else the usual Add screen
+    /// (owner, 2026-10-12: People had three add buttons).
+    public func addTapped() {
+        if selectedTab == .people, (paths[.people] ?? []).isEmpty {
+            openAdd(.shared(group: nil, person: nil))
+        } else {
+            isAddPresented = true
+        }
+    }
+
     public func openAdd(_ request: AddRequest) {
         addRequest = request
         isAddPresented = true
@@ -485,7 +495,7 @@ public final class AppSession {
             get: { self.selectedTab },
             set: { newValue in
                 if newValue == .add {
-                    self.isAddPresented = true
+                    self.addTapped()
                 } else {
                     self.selectedTab = newValue
                 }

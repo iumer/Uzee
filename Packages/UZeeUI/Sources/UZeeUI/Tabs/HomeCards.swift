@@ -11,7 +11,6 @@ struct HomeCards: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: UZSpacing.l) {
-            spentCard
             whereItWent
             comingUp
             peopleRow
@@ -21,64 +20,9 @@ struct HomeCards: View {
     private var base: Currency { session.ledger.base }
     private var today: LocalDate { model.today }
 
-    // MARK: Spent this month
-
-    private var spentCard: some View {
-        let budget = BudgetModel(session: session)
-        let summary = budget.summary(for: budget.current)
-        let spent = summary?.spent
-            ?? ReportCalculator.monthToDate(session.transactions, today: today, base: base, rates: session.ledger.rates).now
-        let monthName = today.startDate(in: .current).formatted(.dateTime.month(.wide))
-        let daysLeft = today.days(to: budget.current.end) + 1
-        return Button {
-            session.open(.budget)
-        } label: {
-            UZCard {
-                HStack(spacing: UZSpacing.l) {
-                    VStack(alignment: .leading, spacing: UZSpacing.s) {
-                        Text("Spent in \(monthName)").font(.subheadline).foregroundStyle(UZColor.label2)
-                        HStack(alignment: .firstTextBaseline, spacing: UZSpacing.s) {
-                            Text(MoneyFormatter.string(spent)).font(.system(.title, weight: .bold)).monospacedDigit()
-                                .minimumScaleFactor(0.7).lineLimit(1)
-                            if let summary {
-                                Text("of \(MoneyFormatter.string(summary.total))").font(.subheadline).foregroundStyle(UZColor.label2)
-                                    .lineLimit(1)
-                            }
-                        }
-                        if let summary {
-                            if summary.isOver {
-                                Text("Over budget by \(MoneyFormatter.string((try? summary.left.negated()) ?? summary.left))")
-                                    .font(.footnote.weight(.semibold)).foregroundStyle(UZColor.negative)
-                            } else {
-                                Text("\(MoneyFormatter.string(summary.left)) left for \(daysLeft) \(daysLeft == 1 ? "day" : "days")")
-                                    .font(.footnote).foregroundStyle(UZColor.label2)
-                            }
-                        } else {
-                            Text("No budget yet · tap to set one").font(.footnote).foregroundStyle(UZColor.label2)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if let summary {
-                        let total = Double(summary.total.minorUnits)
-                        ProgressRingView(remaining: total > 0 ? 1 - Double(summary.spent.minorUnits) / total : 1,
-                                         label: "\(BudgetCalculator.percentText(summary.usedBasisPoints)) of the budget used") {
-                            VStack(spacing: 0) {
-                                Text(BudgetCalculator.percentText(summary.usedBasisPoints)).font(.subheadline.bold()).monospacedDigit()
-                                Text("used").font(.caption2).foregroundStyle(UZColor.label2)
-                            }
-                        }
-                        .frame(width: 76, height: 76)
-                    }
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("home.budget")
-    }
-
     // MARK: Where it went
 
+    static let ringSize: CGFloat = 96
     static let palette: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .yellow, .indigo, .mint, .gray]
 
     /// The big circle: this month's spending by category (owner, 2026-10-12). Opens Reports.
@@ -209,5 +153,61 @@ struct HomeCards: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("home.people")
         }
+    }
+}
+
+/// Home tile, right half: spent this month with a ring of how much of the budget is used; opens Plan › Budget.
+struct SpentHalf: View {
+    @Bindable var session: AppSession
+
+    var body: some View {
+        let budget = BudgetModel(session: session)
+        let today = budget.today
+        let summary = budget.summary(for: budget.current)
+        let spent = summary?.spent
+            ?? ReportCalculator.monthToDate(session.transactions, today: today, base: session.ledger.base, rates: session.ledger.rates).now
+        let monthName = today.startDate(in: .current).formatted(.dateTime.month(.wide))
+        let daysLeft = today.days(to: budget.current.end) + 1
+        Button {
+            session.open(.budget)
+        } label: {
+            VStack(spacing: UZSpacing.s) {
+                Text("Spent in \(monthName)").font(.subheadline).foregroundStyle(UZColor.label2).lineLimit(1)
+                if let summary {
+                    let total = Double(summary.total.minorUnits)
+                    ProgressRingView(remaining: total > 0 ? 1 - Double(summary.spent.minorUnits) / total : 1,
+                                     label: "\(BudgetCalculator.percentText(summary.usedBasisPoints)) of the budget used") {
+                        VStack(spacing: 0) {
+                            Text(BudgetCalculator.percentText(summary.usedBasisPoints)).font(.headline).monospacedDigit()
+                            Text("used").font(.caption2).foregroundStyle(UZColor.label2)
+                        }
+                    }
+                    .frame(width: HomeCards.ringSize, height: HomeCards.ringSize)
+                } else {
+                    ZStack {
+                        Circle().stroke(UZColor.label3.opacity(0.3), lineWidth: 10)
+                        Text("Set\nbudget").font(.caption.weight(.semibold)).foregroundStyle(UZColor.tint).multilineTextAlignment(.center)
+                    }
+                    .padding(5)
+                    .frame(width: HomeCards.ringSize, height: HomeCards.ringSize)
+                }
+                Text(MoneyFormatter.string(spent)).font(.system(.title3, weight: .bold)).monospacedDigit()
+                    .minimumScaleFactor(0.5).lineLimit(1)
+                if let summary {
+                    if summary.isOver {
+                        Text("Over by \(MoneyFormatter.string((try? summary.left.negated()) ?? summary.left))")
+                            .font(.caption.weight(.semibold)).foregroundStyle(UZColor.negative).lineLimit(1).minimumScaleFactor(0.7)
+                    } else {
+                        Text("\(MoneyFormatter.string(summary.left)) left · \(daysLeft) \(daysLeft == 1 ? "day" : "days")")
+                            .font(.caption).foregroundStyle(UZColor.label2).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("home.budget")
     }
 }

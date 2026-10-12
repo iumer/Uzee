@@ -43,7 +43,7 @@ public struct RootView: View {
         // iPhone: the big "+" sits in the middle of the bottom bar, over the Add item (owner, 2026-10-12).
         .overlay(alignment: .bottom) {
             if sizeClass == .compact {
-                AddButton(isLarge: true) { session.isAddPresented = true }
+                AddButton(isLarge: true) { session.addTapped() }
                     // Stay put when the keyboard opens instead of riding up over the fields.
                     .ignoresSafeArea(.keyboard)
             }
@@ -54,7 +54,7 @@ public struct RootView: View {
             VStack(alignment: .trailing, spacing: UZSpacing.m) {
                 VoiceButton(hint: hint) { hint = nil; session.isVoicePresented = true }
                 if sizeClass != .compact {
-                    AddButton { session.isAddPresented = true }
+                    AddButton { session.addTapped() }
                 }
             }
             .padding(.trailing, UZSpacing.xxl)

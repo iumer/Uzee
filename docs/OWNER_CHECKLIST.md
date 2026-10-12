@@ -49,6 +49,9 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-036 | 2026-10-12 | Home: rings on You have (by account) and Spent (budget used), plus a big category circle | Phone | – | – | – |
 | OWN-037 | 2026-10-12 | "I submitted a cash cheque in my HBL account" by voice records money into HBL | Auto: VoiceTests chequeDeposit | – | – | – |
 | OWN-038 | 2026-10-12 | Splitting works like Splitwise: With you and… (search, add new), what, amount, "Paid by you and split equally" (each part tappable), who owes what, Save; person page shows one balance, Settle up, Add expense and every item as "you lent / you borrowed" | Auto: OWN038 smoke; Phone | – | – | – |
+| OWN-039 | 2026-10-12 | Home: one tile with two circles (what I have, what I spent this month) instead of two tiles | Auto: OWN039 smoke; Phone | – | – | – |
+| OWN-040 | 2026-10-12 | Budget limits: type an amount, not only +/- in 1k steps | Auto: OWN039 smoke; Phone | – | – | – |
+| OWN-041 | 2026-10-12 | People: one + only (bottom + adds an expense with someone); top button is a person icon for add person/group | Auto: OWN038 smoke; Phone | – | – | – |
 
 ## Bugs
 
