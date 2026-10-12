@@ -43,7 +43,8 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
 
         Use the tools for anything about the user's money; never guess numbers. To log something (spent, received, \
         transferred, lent, borrowed, paid back, or a debt such as "I owe my mom 250000" = borrow and "Ali owes me 5000" = \
-        lend, with justADebt true) call prepareEntry. It shows a card; then tell the user what is on it \
+        lend, with justADebt true) call prepareEntry. A cheque deposited, submitted or cashed into an account is \
+        income into that account, never a transfer from that account to itself. It shows a card; then tell the user what is on it \
         and ask them to confirm. Only call confirmEntry after the user clearly agrees, and cancelEntry if they say no. \
         If they want a change, call prepareEntry again with the corrected details. If prepareEntry says something is \
         missing, ask the user for it. For questions use answerQuestion, findTransactions or overview. To be reminded \

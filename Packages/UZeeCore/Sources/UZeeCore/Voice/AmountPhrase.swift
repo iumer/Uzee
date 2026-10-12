@@ -64,6 +64,8 @@ public enum AmountPhrase {
             var word = String(raw).trimmingCharacters(in: CharacterSet(charactersIn: "?!,;:\"'()"))
             if word.hasSuffix(".") && word != "rs." { word.removeLast() }
             if word.hasPrefix("$") { words.append("$"); word.removeFirst() }
+            // Dictation sometimes writes rupees as "₹40,000" (owner screenshot); in UZee that is still PKR.
+            if word.hasPrefix("₹") { words.append("rs"); word.removeFirst() }
             if word.hasPrefix("rs."), word.count > 3 { words.append("rs"); word.removeFirst(3) }
             else if word.hasPrefix("rs"), word.count > 2, word.dropFirst(2).first?.isNumber == true { words.append("rs"); word.removeFirst(2) }
             guard !word.isEmpty else { continue }

@@ -26,7 +26,7 @@ struct BudgetLimitsView: View {
                     Text("Total budget")
                     Spacer()
                     Text(base.symbol).foregroundStyle(UZColor.label2)
-                    TextField("235000", text: $totalText)
+                    TextField("Limits added up", text: $totalText)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
@@ -34,9 +34,11 @@ struct BudgetLimitsView: View {
                         .accessibilityIdentifier("limits.total")
                 }
                 HStack {
-                    Text(unassigned == 0 ? "Every rupee assigned"
+                    // No total typed: the limits add up to the total, never "over the total" (owner screenshot, 2026-10-12).
+                    let fromLimits = total == 0 && sum > 0
+                    Text(fromLimits ? "Total will be \(money(sum))" : unassigned == 0 ? "Every rupee assigned"
                          : unassigned > 0 ? "\(money(unassigned)) unassigned" : "\(money(-unassigned)) over the total")
-                        .foregroundStyle(unassigned < 0 ? UZColor.negative : unassigned == 0 ? UZColor.positive : UZColor.label)
+                        .foregroundStyle(fromLimits || unassigned == 0 ? UZColor.positive : unassigned < 0 ? UZColor.negative : UZColor.label)
                         .fontWeight(.semibold)
                     Spacer()
                     Text("limits \(money(sum))").font(.footnote).foregroundStyle(UZColor.label2)
@@ -182,7 +184,9 @@ struct BudgetLimitsView: View {
         let previousKind = (try? session.budgets.settings().kind) ?? .calendarMonth
         let ok = session.perform("Couldn't save the budget. Try again.") {
             try session.budgets.setSettings(kind, warnPercent)
-            let plan = BudgetPlan(periodStart: currentPeriod.start, total: Money(major: total, base),
+            // No total typed but limits set: the total is the limits added up (owner screenshot, 2026-10-12).
+            let effective = total > 0 ? total : limits.values.filter { $0 > 0 }.reduce(0, +)
+            let plan = BudgetPlan(periodStart: currentPeriod.start, total: Money(major: effective, base),
                                   limits: limits.filter { $0.value > 0 }.mapValues { Money(major: $0, base) })
             try session.budgets.save(plan)
         }

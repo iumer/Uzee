@@ -73,6 +73,7 @@ enum ModelParser {
     Money is in Pakistani rupees unless the user says dollars. "Lend" means the user gave money that will be returned; \
     "borrow" means the user received money they must return; "repaidToMe" means someone returned money to the user; \
     "repaidByMe" means the user returned money. Questions ask about balances, bills, budgets, spending or what people owe. \
+    A cheque deposited, submitted or cashed into an account is income into that account, not a transfer. \
     Leave a field empty when the sentence doesn't say it. Never invent amounts or names.
     """
 
@@ -124,7 +125,7 @@ enum ModelParser {
                                         period: VoicePeriod(rawValue: generated.period) ?? .thisMonth)
             if command.question == nil { return nil }
         }
-        return command
+        return command.fixingSameAccountTransfer()
     }
 
     static func question(_ kind: String, person: String?, category: String?, account: String?, period: VoicePeriod) -> VoiceQuestion? {

@@ -19,6 +19,7 @@
 | Version (build) | Date | Milestone | Highlights | Tests run / pass / fail | Installed on |
 |---|---|---|---|---|---|
 | 0.13.3 (26) | 2026-10-12 | Splitwise-style splitting | New Add an expense sheet (With you and…, Paid by … and split …), split from Add uses the same steps, person page like Splitwise | CI pending | – |
+| 0.13.4 (27) | 2026-10-12 | Owner review 2 | Budget with no total uses the limits added up (no more "over the total"), voice reads "PKR ₹40,000 check into my HBL account" as income into HBL (never HBL to HBL), Add screen split line says who owes whom | CI pending | – |
 | 0.13.2 (25) | 2026-10-12 | Owner fixes | Budget redraws after save, cheque deposits by voice, Home rings and category circle, profile top right, UZee bottom right with hints | CI pending | – |
 | 0.13.1 (24) | 2026-10-12 | Round 3 fixes | Plan title shows, no dot under + | CI pending | – |
 | 0.13.0 (23) | 2026-10-12 | Round 3 design (owner pick M, N, O, P, Q) | "+" in the middle of a 5-item bottom bar, Plan tab (Budget + Calendar), simpler Home, new Add screen with More page, UZee top right | Built on the Mac, not run in CI | Owner's iPhone 17 |

@@ -792,7 +792,11 @@ struct SplitEffects: View {
         let theyOwe: Bool
     }
 
-    private var lines: [Line] {
+    private var lines: [Line] { Self.lines(session: session, draft: draft, total: total, isIncome: isIncome) }
+
+    /// "Usama owes you Rs 600" lines, also shown under Split on the Add screen.
+    static func lines(session: AppSession, draft: SplitDraft, total: Money, isIncome: Bool) -> [Line] {
+        let me = session.people.selfID
         guard let split = try? draft.build(total: total, transactionID: UUID()) else { return [] }
         var net: [UUID: Int64] = [:]
         for debt in SplitCalculator.debts(split, isIncome: isIncome) {

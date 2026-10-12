@@ -63,6 +63,17 @@ public struct VoiceCommand: Equatable, Sendable {
         self.date = date
         self.question = question
     }
+
+    /// A "transfer" from an account into the same account is money coming in: "I submitted a 40,000 cheque into
+    /// my HBL account" (owner, 2026-10-12). The on-device model sometimes reads it as HBL to HBL.
+    public func fixingSameAccountTransfer() -> VoiceCommand {
+        guard action == .transfer, let account, let toAccount,
+              VoiceRuleParser.normalise(account) == VoiceRuleParser.normalise(toAccount) else { return self }
+        var fixed = self
+        fixed.action = .income
+        fixed.toAccount = nil
+        return fixed
+    }
 }
 
 /// The user's own names, so "Meezan", "Ammi" or "Groceries" are recognised (VOX-06).
@@ -142,6 +153,7 @@ public enum VoiceRuleParser {
             let ordered = orderTransfer(accounts, in: t)
             command.account = ordered.from
             command.toAccount = ordered.to
+            command = command.fixingSameAccountTransfer()
         case .lend, .borrow, .repaidToMe, .repaidByMe:
             command.person = person
             command.account = accounts.first?.name

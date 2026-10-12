@@ -72,6 +72,16 @@ struct VoiceRuleParserTests {
         let deposit = parse("Deposited a cheque of 20k into Meezan")
         #expect(deposit.action == .income)
         #expect(deposit.account == "Meezan")
+        // Owner's exact dictation, with the rupee sign iOS wrote.
+        let dictated = parse("I submitted PKR ₹40,000 check into my HBL account")
+        #expect(dictated.action == .income)
+        #expect(dictated.amount?.value == 40_000)
+        #expect(dictated.amount?.currency == .pkr)
+        #expect(dictated.account == "HBL")
+        #expect(dictated.toAccount == nil)
+        let sameAccount = VoiceCommand(action: .transfer, account: "HBL", toAccount: "hbl").fixingSameAccountTransfer()
+        #expect(sameAccount.action == .income)
+        #expect(sameAccount.toAccount == nil)
     }
 
     @Test("Unknown names are kept for the card")

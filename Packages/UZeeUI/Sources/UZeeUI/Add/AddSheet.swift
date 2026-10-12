@@ -472,14 +472,16 @@ struct AddSheet: View {
         [payee.isEmpty ? nil : payee, ledger.categoryPath(categoryID)].compactMap { $0 }.joined(separator: " · ")
     }
 
-    /// "Office · your share Rs 1,600" or "Not split".
+    /// "Rais owes you Rs 250,000" or "Not split".
     private var splitSummary: String {
         guard let splitDraft else { return "Not split" }
         let me = session.people.selfID
         let with = session.people.group(splitDraft.groupID)?.name
             ?? splitDraft.members.filter { $0 != me }.compactMap { session.people.person($0)?.name }.joined(separator: ", ")
-        guard let share = (try? splitDraft.shares(total: currentTotal))?.first(where: { $0.personID == me })?.share else { return with }
-        return "\(with) · your share \(MoneyFormatter.string(share))"
+        // Say who owes whom, like Splitwise, not "your share" (owner found that confusing, 2026-10-12).
+        let effects = SplitEffects.lines(session: session, draft: splitDraft, total: currentTotal, isIncome: kind == .income)
+        guard !effects.isEmpty else { return with }
+        return effects.map(\.text).joined(separator: " · ")
     }
 
     private func suggestCategory(for payee: String) {
