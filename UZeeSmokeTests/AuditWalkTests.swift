@@ -8,7 +8,6 @@ final class AuditWalkTests: XCTestCase {
 
     override func setUp() {
         continueAfterFailure = true
-        executionTimeAllowance = 600
         app = XCUIApplication()
         app.launchArguments = ["-uzee-in-memory"]
         app.launch()
@@ -26,21 +25,43 @@ final class AuditWalkTests: XCTestCase {
         if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons[name].firstMatch.tap() }
     }
 
+    /// The amount text lowest on screen, from one snapshot of the screen (querying element by element is too
+    /// slow for the 3-minute test limit).
+    private func lowestAmount() -> (label: String, frame: CGRect)? {
+        guard let root = try? app.snapshot() else { return nil }
+        let window = root.frame
+        var best: (label: String, frame: CGRect)?
+        func walk(_ node: XCUIElementSnapshot) {
+            if node.elementType == .staticText, node.label.contains("Rs") || node.label.contains("$"),
+               window.contains(CGPoint(x: node.frame.midX, y: node.frame.midY)),
+               node.frame.maxY > (best?.frame.maxY ?? -1) {
+                best = (node.label, node.frame)
+            }
+            node.children.forEach(walk)
+        }
+        walk(root)
+        return best
+    }
+
     func testAuditWalk_everyTab() {
         for name in ["Home", "Activity", "Budget", "Calendar", "People"] {
             open(name)
             XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 30), "\(name) didn't open")
-            // Scroll to the end; the last amounts must be clear of the floating buttons.
-            let scroller = app.scrollViews.firstMatch.exists ? app.scrollViews.firstMatch : app.collectionViews.firstMatch
-            for _ in 0..<8 where scroller.exists { scroller.swipeUp() }
+            // Scroll until the screen stops moving: that is the real end of the list.
+            var last = ""
+            for _ in 0..<25 {
+                app.swipeUp(velocity: .fast)
+                let low = lowestAmount()
+                let now = low.map { "\($0.label)@\(Int($0.frame.maxY))" } ?? ""
+                if now == last { break }
+                last = now
+            }
             let voice = app.find("tab.voice"), add = app.find("tab.add")
             XCTAssertTrue(voice.exists && add.exists, "Floating UZee or + missing on \(name)")
             let floating = voice.frame.union(add.frame).insetBy(dx: -4, dy: -4)
-            // Only amounts, and only the first few dozen: walking every element is too slow for a UI test.
-            let query = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Rs' OR label CONTAINS '$'"))
-            let amounts = query.allElementsBoundByIndex.prefix(40).filter { $0.exists && $0.isHittable }
-            for amount in amounts where amount.frame.intersects(floating) {
-                XCTFail("On \(name), \"\(amount.label)\" is under the floating UZee/+ buttons after scrolling to the end")
+            // At the end, the last amount must sit clear of the floating buttons.
+            if let low = lowestAmount(), low.frame.intersects(floating) {
+                XCTFail("On \(name), \"\(low.label)\" is under the floating UZee/+ buttons at the end of the list")
             }
         }
     }
