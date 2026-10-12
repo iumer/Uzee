@@ -28,7 +28,7 @@ final class AuditWalkTests: XCTestCase {
 
     /// Prints the screen's visible texts and buttons, one line each.
     private func describe(_ screen: String) {
-        let texts = app.staticTexts.allElementsBoundByIndex.prefix(80).filter { $0.exists && !$0.label.isEmpty }.map(\.label)
+        let texts = app.staticTexts.allElementsBoundByIndex.prefix(80).filter { $0.exists && !$0.label.isEmpty }.map { $0.label }
         let buttons = app.buttons.allElementsBoundByIndex.prefix(60).filter { $0.exists }.map { "[\($0.label.isEmpty ? $0.identifier : $0.label)]" }
         print("AUDIT \(screen) TEXT: " + texts.joined(separator: " | "))
         print("AUDIT \(screen) BUTTONS: " + buttons.joined(separator: " "))
