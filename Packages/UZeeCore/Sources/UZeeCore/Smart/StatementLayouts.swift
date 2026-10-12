@@ -132,7 +132,7 @@ enum StatementLayouts {
         for raw in lines {
             let line = raw.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty else { continue }
-            // "USD on 31 December 2025 [GMT+05:00]   149.70 USD": the balance at the end of the period.
+            // "USD on 31 December 2025 [GMT+05:00]   183.25 USD": the balance at the end of the period.
             if closing == nil, matches(line, #"^[A-Z]{3} on \d{1,2} [A-Za-z]+ \d{4}"#),
                let value = TextScan.amounts(in: line).last(where: \.looksLikeMoney) {
                 closing = value.isNegative ? -value.value : value.value

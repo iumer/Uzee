@@ -70,14 +70,14 @@ struct StatementLayoutTests {
             "Currency         From Date         To Date",
             "Pakistan Rupee(PKR)   08 Oct 2025   08 Oct 2026",
             "Opening Balance    Closing Balance",
-            "PKR737.01          PKR194.01",
+            "PKR612.40          PKR69.40",
             "Booking Date   Description   Credit   Debit   Available Balance",
-            "08 Oct 2025   Money Received from   + PKR42,500.00      PKR43,237.01",
+            "08 Oct 2025   Money Received from   + PKR42,500.00      PKR43,112.40",
             "               ALI RAZA HBL",
             "           XXXX0000000001 STAN(100001)",
-            "08 Oct 2025   Charges Taxes Plus      - PKR43.00   PKR43,194.01",
+            "08 Oct 2025   Charges Taxes Plus      - PKR43.00   PKR43,069.40",
             "               FED STAN(100002)",
-            "08 Oct 2025   Money Transferred to    - PKR43,000.00    PKR194.01",
+            "08 Oct 2025   Money Transferred to    - PKR43,000.00    PKR69.40",
             "               ALI RAZA HBL"
         ]
         let reading = StatementParser.read(lines: lines)
@@ -94,19 +94,19 @@ struct StatementLayoutTests {
             "01 Jul 2025 - 30 Jun 2026",
             "NayaPay ID    01 Jul 2025    Total Income    30 Jun 2026",
             "Opening Balance   Total Spent   Closing Balance",
-            "Rs. 128.15   Rs. 283.83   Rs. 844.32",
+            "Rs. 210.50   Rs. 245.60   Rs. 964.90",
             "TIME   TYPE   DESCRIPTION   AMOUNT   BALANCE",
-            "31 Jul 2025   Card   TEST SHOP LOS ANGELES US   -Rs. 0   Rs. 128.15",
+            "31 Jul 2025   Card   TEST SHOP LOS ANGELES US   -Rs. 0   Rs. 210.50",
             "05:53 PM      Authorization    Service Charges Rs. 0",
-            "04 Sep 2025   Raast In   Incoming fund transfer from Ali Raza   +Rs. 1,000   Rs. 1,128.15",
+            "04 Sep 2025   Raast In   Incoming fund transfer from Ali Raza   +Rs. 1,000   Rs. 1,210.50",
             "03:22 PM                 SadaPay-0001",
             "                         Transaction ID",
-            "04 Sep 2025   Online   Paid to Google One London GB   -Rs. 283.83   Rs. 844.32",
+            "04 Sep 2025   Online   Paid to Google One London GB   -Rs. 245.60   Rs. 964.90",
             "03:22 PM               Visa xxxx0000"
         ]
         let reading = StatementParser.read(lines: lines)
         #expect(reading.source == .nayapay)
-        #expect(reading.rows.map(\.amount) == [dec("1000"), dec("-283.83")])
+        #expect(reading.rows.map(\.amount) == [dec("1000"), dec("-245.60")])
         #expect(!reading.rows[0].description.contains("03:22"))
         #expect(reading.rows.map { StatementParser.payee(from: $0.description) } == ["Ali Raza", "Google One London"])
     }
@@ -158,9 +158,9 @@ struct StatementLayoutTests {
             "Wise Payments Ltd.",
             "USD statement",
             "1 January 2025 [GMT+05:00] - 31 December 2025 [GMT+05:00]",
-            "USD on 31 December 2025 [GMT+05:00]                     149.70 USD",
+            "USD on 31 December 2025 [GMT+05:00]                     183.25 USD",
             "Description                                   Incoming        Outgoing        Amount",
-            "Received money from Ali Raza with reference          149.70                         149.70",
+            "Received money from Ali Raza with reference          183.25                         183.25",
             "26 December 2025 | Transaction: TRANSFER-1000000001",
             "Sent money to Test User (fee: 12.07 USD)                          -2,041.93          0.00",
             "21 December 2025 | Transaction: TRANSFER-1000000002",
@@ -172,7 +172,7 @@ struct StatementLayoutTests {
         let reading = StatementParser.read(lines: lines)
         #expect(reading.source == .wise)
         #expect(reading.currencyCode == "USD")
-        #expect(reading.rows.map(\.amount) == [dec("149.70"), dec("-2041.93"), dec("-12.07"), dec("2054")])
+        #expect(reading.rows.map(\.amount) == [dec("183.25"), dec("-2041.93"), dec("-12.07"), dec("2054")])
         #expect(reading.rows.map(\.date) == [day(2025, 12, 26), day(2025, 12, 21), day(2025, 12, 21), day(2025, 12, 19)])
         #expect(reading.rows.map { StatementParser.payee(from: $0.description) } == ["Ali Raza", "Test User", "Wise fees", "Currency conversion"])
     }
@@ -214,22 +214,22 @@ struct StatementLayoutTests {
         ,
         Account Statement for:,from 01 Jul 2025 to 30 Jun 2026
 
-        Opening Balance,128.15,Closing Balance,844.32,,Total Spent,"283.83",Total Income,"1,000.00"
+        Opening Balance,210.50,Closing Balance,964.90,,Total Spent,"245.60",Total Income,"1,000.00"
 
         TIMESTAMP,TYPE,DESCRIPTION,AMOUNT,BALANCE
-        31 Jul 2025 05:53 PM,Card Authorization,TEST SHOP LOS ANGELES US|null,-0,128.15
+        31 Jul 2025 05:53 PM,Card Authorization,TEST SHOP LOS ANGELES US|null,-0,210.50
         04 Sep 2025 03:22 PM,Raast In,"Incoming fund transfer from Ali Raza
-        SadaPay-0001|Transaction ID TESTPKKA000000000000000000000001","+1,000","1,128.15"
-        04 Sep 2025 03:22 PM,Online,Paid to Google One London GB|Visa xxxx0000,-283.83,844.32
+        SadaPay-0001|Transaction ID TESTPKKA000000000000000000000001","+1,000","1,210.50"
+        04 Sep 2025 03:22 PM,Online,Paid to Google One London GB|Visa xxxx0000,-245.60,964.90
         """
         let reading = StatementParser.read(csv: text)
         #expect(reading?.source == .nayapay)
-        #expect(reading?.rows.map(\.amount) == [dec("1000"), dec("-283.83")])
+        #expect(reading?.rows.map(\.amount) == [dec("1000"), dec("-245.60")])
         #expect(reading?.rows.map(\.date) == [day(2025, 9, 4), day(2025, 9, 4)])
         #expect(reading?.rows.first?.description == "Incoming fund transfer from Ali Raza | SadaPay-0001")
         #expect(reading?.rows.map { StatementParser.payee(from: $0.description) } == ["Ali Raza", "Google One London"])
-        #expect(reading?.openingBalance == dec("128.15"))
-        #expect(reading?.closingBalance == dec("844.32"))
+        #expect(reading?.openingBalance == dec("210.50"))
+        #expect(reading?.closingBalance == dec("964.90"))
     }
 
     @Test("MCB CSV header: opening and closing balance with a currency")
@@ -250,16 +250,16 @@ struct StatementLayoutTests {
         let lines = [
             "Account Statement", "01 Jul 2025 - 30 Jun 2026", "NayaPay ID", "test@nayapay",
             "IBAN", "PK00NAYA0000000000000000",
-            "Opening Balance", "Rs. 128.15",
+            "Opening Balance", "Rs. 210.50",
             "TYPE", "DESCRIPTION", "AMOUNT", "BALANCE",
-            "31 Jul 2025", "05:53 PM", "Card", "Authorization", "TEST SHOP LOS ANGELES US", "Service Charges Rs. 0", "-Rs. 0", "Rs. 128.15",
-            "04 Sep 2025", "03:22 PM", "Raast In", "Incoming fund transfer from Ali Raza", "Service Charges Rs. 0", "+Rs. 1,000", "Rs. 1,128.15",
-            "04 Sep 2025", "03:40 PM", "Online", "Paid to Google One London GB", "Service Charges Rs. 0", "-Rs. 283.83", "Rs. 844.32",
+            "31 Jul 2025", "05:53 PM", "Card", "Authorization", "TEST SHOP LOS ANGELES US", "Service Charges Rs. 0", "-Rs. 0", "Rs. 210.50",
+            "04 Sep 2025", "03:22 PM", "Raast In", "Incoming fund transfer from Ali Raza", "Service Charges Rs. 0", "+Rs. 1,000", "Rs. 1,210.50",
+            "04 Sep 2025", "03:40 PM", "Online", "Paid to Google One London GB", "Service Charges Rs. 0", "-Rs. 245.60", "Rs. 964.90",
         ]
         let reading = StatementParser.read(lines: lines)
         #expect(reading.source == .nayapay)
-        #expect(reading.rows.map(\.amount) == [dec("1000"), dec("-283.83")])
-        #expect(reading.rows.map(\.balance) == [dec("1128.15"), dec("844.32")])
+        #expect(reading.rows.map(\.amount) == [dec("1000"), dec("-245.60")])
+        #expect(reading.rows.map(\.balance) == [dec("1210.50"), dec("964.90")])
         #expect(reading.rows.map { StatementParser.payee(from: $0.description) } == ["Ali Raza", "Google One London"])
     }
 
@@ -271,10 +271,10 @@ struct StatementLayoutTests {
         #expect(StatementParser.read(versions: [clean, garbled]).rows.count == 2)
     }
 
-    @Test("Signs written before a currency: −Rs. 283.83, +Rs. 1,000, + PKR42,500.00")
+    @Test("Signs written before a currency: −Rs. 245.60, +Rs. 1,000, + PKR42,500.00")
     func signsBeforeCurrency() {
-        let minus = TextScan.amounts(in: "-Rs. 283.83").first
-        #expect(minus?.value == dec("283.83") && minus?.isNegative == true)
+        let minus = TextScan.amounts(in: "-Rs. 245.60").first
+        #expect(minus?.value == dec("245.60") && minus?.isNegative == true)
         let plus = TextScan.amounts(in: "+Rs. 1,000").first
         #expect(plus?.value == 1_000 && plus?.hasPlusSign == true && plus?.isNegative == false)
         #expect(TextScan.amounts(in: "+ PKR42,500.00").first?.hasPlusSign == true)
@@ -360,13 +360,13 @@ struct StatementCheckTests {
         let lines = [
             "Wise Payments Ltd.",
             "USD statement",
-            "USD on 31 December 2025 [GMT+05:00]   149.70 USD",
+            "USD on 31 December 2025 [GMT+05:00]   183.25 USD",
             "Description   Incoming   Outgoing   Amount",
-            "Received money from Test Payer with reference 1   149.70   149.70",
+            "Received money from Test Payer with reference 1   183.25   183.25",
             "26 December 2025 | Transaction: TRANSFER-1000000001",
         ]
         let reading = StatementParser.read(lines: lines)
-        #expect(reading.closingBalance == dec("149.7"))
+        #expect(reading.closingBalance == dec("183.25"))
         #expect(reading.rows.count == 1)
     }
 }
