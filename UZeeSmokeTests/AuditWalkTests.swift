@@ -43,7 +43,7 @@ final class AuditWalkTests: XCTestCase {
         return best
     }
 
-    func testAuditWalk_everyTab() {
+    @MainActor func testAuditWalk_everyTab() {
         for name in ["Home", "Activity", "Budget", "Calendar", "People"] {
             open(name)
             XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 30), "\(name) didn't open")
