@@ -180,3 +180,22 @@ extension LocalDate {
         return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
     }
 }
+
+/// Shows `session.errorMessage` from inside a sheet. The root's alert can't appear while a sheet covers it, so a
+/// failed Save in a sheet would otherwise look like nothing happened.
+struct SessionErrorAlert: ViewModifier {
+    @Bindable var session: AppSession
+
+    func body(content: Content) -> some View {
+        content.alert("Something went wrong", isPresented: Binding(get: { session.errorMessage != nil },
+                                                                    set: { if !$0 { session.errorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(session.errorMessage ?? "")
+        }
+    }
+}
+
+extension View {
+    func sessionErrors(_ session: AppSession) -> some View { modifier(SessionErrorAlert(session: session)) }
+}

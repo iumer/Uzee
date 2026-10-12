@@ -16,7 +16,8 @@ struct BudgetLimitsView: View {
 
     var body: some View {
         let base = session.ledger.base
-        let total = Int64(totalText.filter(\.isNumber)) ?? 0
+        // Capped at 12 digits so an over-long number can never overflow into a crash.
+        let total = min(Int64(String(totalText.filter(\.isNumber).prefix(12))) ?? 0, 999_999_999_999)
         let sum = limits.values.reduce(0, +)
         let unassigned = total - sum
         Form {

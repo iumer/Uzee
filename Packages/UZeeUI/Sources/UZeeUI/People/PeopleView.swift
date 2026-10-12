@@ -57,7 +57,8 @@ struct PeopleView: View {
         .navigationTitle("People")
         .accessibilityIdentifier("screen.people")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            // Top left is the profile icon on every tab, so Groups sits on the right.
+            ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: Route.groups) {
                     Label("Groups", systemImage: "person.3")
                         .labelStyle(.titleAndIcon)

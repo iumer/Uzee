@@ -51,4 +51,5 @@ public enum Route: Hashable, Sendable {
     case bills
     case recurring(UUID)
     case reports
+    case prayer
 }

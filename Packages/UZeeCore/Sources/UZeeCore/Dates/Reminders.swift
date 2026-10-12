@@ -111,18 +111,23 @@ public enum ReminderPlanner {
             }
         }
 
-        for item in recurring.items where item.isActive && !item.type.isIncome {
+        for item in recurring.items where item.isActive {
+            // Income (salary, retainer) is reminded on the day it should arrive, to mark it received.
+            let isIncome = item.type.isIncome
             // includeOverdue: a bill snoozed from last week to tomorrow still gets its reminder.
             let occurrences = OccurrenceGenerator.occurrences(item, records: recurring.records(for: item.id), from: today,
                                                              through: through, today: today, includeOverdue: true)
             for occurrence in occurrences where !occurrence.isResolved {
-                guard let (fire, minute) = when(due: occurrence.dueDate, daysBefore: settings.daysBefore, minute: settings.minuteOfDay)
+                guard let (fire, minute) = when(due: occurrence.dueDate, daysBefore: isIncome ? 0 : settings.daysBefore,
+                                                minute: settings.minuteOfDay)
                 else { continue }
                 let amount = settings.hideAmounts ? "" : "\(format(occurrence.amount)) · "
                 planned.append(PlannedReminder(
                     id: "\(PlannedReminder.idPrefix)bill.\(item.id.uuidString).\(occurrence.scheduledDate)", kind: .bill,
-                    fireDate: fire, minuteOfDay: minute, title: "\(item.name) due \(phrase(occurrence.dueDate, from: fire))",
-                    body: "\(amount)Mark it paid or snooze it from here.", itemID: item.id, scheduledDate: occurrence.scheduledDate))
+                    fireDate: fire, minuteOfDay: minute,
+                    title: isIncome ? "\(item.name) expected today" : "\(item.name) due \(phrase(occurrence.dueDate, from: fire))",
+                    body: isIncome ? "\(amount)Mark it received when it arrives." : "\(amount)Mark it paid or snooze it from here.",
+                    itemID: item.id, scheduledDate: occurrence.scheduledDate))
             }
         }
 

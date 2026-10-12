@@ -67,13 +67,23 @@ final class OwnerRequestSmokeTests: XCTestCase {
     /// OWN-023 and OWN-025: the singing UZee sits above "+" and the profile icon (Settings) is top right on every tab.
     func testOWN023_uzeeOnEveryTab() {
         backToHome()
+        var profileFrame: CGRect?
         for name in ["Activity", "Budget", "Calendar", "People", "Home"] {
             let tab = app.tabBars.buttons[name]
             if tab.waitForExistence(timeout: 2) { tab.tap() } else { app.buttons[name].firstMatch.tap() }
             XCTAssertTrue(element("tab.voice").waitForExistence(timeout: 30), "UZee missing on \(name)")
             XCTAssertTrue(element("tab.add").exists, "+ missing on \(name)")
             let settings = name == "Home" ? "tab.settings" : "tab.settings.\(name.lowercased())"
-            XCTAssertTrue(element(settings).waitForExistence(timeout: 10), "Profile (Settings) missing on \(name)")
+            let profile = element(settings)
+            XCTAssertTrue(profile.waitForExistence(timeout: 10), "Profile (Settings) missing on \(name)")
+            // Same spot, top left, on every tab.
+            XCTAssertLessThan(profile.frame.midX, app.frame.width / 3, "Profile not top left on \(name)")
+            if let first = profileFrame {
+                XCTAssertEqual(profile.frame.midX, first.midX, accuracy: 3, "Profile moved sideways on \(name)")
+                XCTAssertEqual(profile.frame.midY, first.midY, accuracy: 3, "Profile moved up or down on \(name)")
+            } else {
+                profileFrame = profile.frame
+            }
         }
         tap("tab.voice")
         XCTAssertTrue(element("voice.close").waitForExistence(timeout: 30), "Ask UZee didn't open")

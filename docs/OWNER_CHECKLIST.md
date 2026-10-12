@@ -35,7 +35,10 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-022 | 2026-10-12 | Payday is picked on a small calendar grid (1–31, plus Not fixed for salary), not a long menu | Auto: REC-020 (Core) for the date; Phone for the grid | – | – | – |
 | OWN-023 | 2026-10-12 | The singing UZee sits above + on every tab | Auto: OWN023 smoke | – | – | – |
 | OWN-024 | 2026-10-12 | Statement import lists recurring payments (same payee, about the same day each month) and asks to add each to the calendar with a reminder | Auto: RecurringFinderTests (Core, synthetic rows); Phone | – | – | – |
-| OWN-025 | 2026-10-12 | Settings opens from a profile icon at the top right of every tab (owner approved) | Auto: OWN023 smoke | – | – | – |
+| OWN-025 | 2026-10-12 | Settings opens from a profile icon at the top left of every tab, same spot everywhere (owner approved) | Auto: OWN023 smoke | – | – | – |
+| OWN-026 | 2026-10-12 | A transaction can be made to repeat every month (with reminders) from its detail screen; "Add again today" is the one-off copy | Phone | – | – | – |
+| OWN-027 | 2026-10-12 | After an import that finds repeating payments, UZee stops and asks to add them with reminders; Undo import is on the done screen | Auto: RecurringFinderTests; Phone | – | – | – |
+| OWN-028 | 2026-10-12 | Salary and other income get a reminder on the day they should arrive | Auto: RemindersTests income | – | – | – |
 
 ## Bugs
 
@@ -51,6 +54,10 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-008 | 2026-10-09 | Voice Close needed two taps | dismiss() alone sometimes ignored | Phone / sim | 0.11.3 | Fixed, recheck |
 | BUG-009 | 2026-10-09 | Receipts read the total before cash rounding | Largest "total" won over the rounded one | Auto: SmartTests rounded total; InternetReceiptTests | 0.11.3 | Regressed in 0.11.3 (rounding line made the lowest figure win); fixed in 0.11.4 |
 | BUG-010 | 2026-10-09 | App still said "UZee Dev"; nothing new installed for a day | Mac was offline and CI was red (money lint) unnoticed | Check install + CI before saying "installed" | 0.11.2 | Verified |
+| BUG-011 | 2026-10-12 | Profile icon moved sideways between tabs | Tabs put their own buttons on the left too | Auto: OWN023 smoke checks the same spot on every tab | 0.12.2 | Fixed, check on phone |
+| BUG-012 | 2026-10-12 | Import found subscriptions but never asked to add reminders | Finder only saw one month; the offer sat below the fold | Auto: RecurringFinderTests | 0.12.2 | Fixed, check on phone |
+| BUG-013 | 2026-10-12 | "Repeat this" looked broken (it only copied the payment to today) | Wrong expectation from the label | Phone | 0.12.2 | Fixed, check on phone |
+| BUG-014 | 2026-10-12 | Audit (3 checkers): floating buttons over Namaz, erase dialog, failed saves silent in sheets, Recently Deleted link, preset currency, reconcile minus, budget overflow, duplicate person, and more | See commit | AuditWalkTests (Mac) | 0.12.2 | Fixed, recheck |
 
 ## Waiting on the owner
 

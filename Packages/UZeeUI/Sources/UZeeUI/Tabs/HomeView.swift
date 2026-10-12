@@ -124,9 +124,8 @@ struct PrayerHomeCard: View {
     @Bindable var session: AppSession
 
     var body: some View {
-        NavigationLink {
-            PrayerView(session: session)
-        } label: {
+        // A value link, so the Home path knows a screen is open and the floating UZee and "+" step aside.
+        NavigationLink(value: Route.prayer) {
             TimelineView(.everyMinute) { context in
                 let now = context.date
                 let windows = session.prayer.windows(LocalDate(now, in: .current), timeZone: .current)

@@ -35,6 +35,15 @@ struct RemindersTests {
         #expect(ReminderPlanner.plan(recurring: snapshot, events: [], loans: [], settings: off, today: today, minuteNow: 0, format: format).isEmpty)
     }
 
+    @Test("OWN-024 income is reminded on the day it should arrive, to mark it received")
+    func incomeReminder() {
+        let salary = RecurringItem(name: "Salary", type: .salary, amount: rs(200_000), rule: RecurrenceRule(unit: .month, anchor: LocalDate(year: 2026, month: 10, day: 25)))
+        let plan = ReminderPlanner.plan(recurring: RecurringSnapshot(items: [salary], records: []), events: [], loans: [], settings: .standard,
+                                        today: today, minuteNow: 9 * 60, format: format)
+        #expect(plan.first?.fireDate == LocalDate(year: 2026, month: 10, day: 25))
+        #expect(plan.first?.title == "Salary expected today")
+    }
+
     @Test("CAL-005 a missed lead time falls back to the due morning; a missed due time gets nothing")
     func noNagging() {
         let tomorrow = netflix(anchor: today.addingDays(1))

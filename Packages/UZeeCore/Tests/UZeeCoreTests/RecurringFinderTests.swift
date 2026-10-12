@@ -64,4 +64,16 @@ struct RecurringFinderTests {
         #expect(RecurringFinder.dayDistance(5, 9) == 4)
         #expect(RecurringFinder.key("NETFLIX.COM 8812") == "netflix com")
     }
+
+    @Test("A known subscription seen once recently is offered; a payment already in UZee counts once")
+    func onceAndDuplicates() {
+        let once = RecurringFinder.find([out(day(2026, 10, 3), "SPOTIFY P2B8", 349)], today: today)
+        #expect(once.first?.type == .subscription)
+        #expect(once.first?.months == 1)
+        #expect(once.first?.nextDate == day(2026, 11, 3))
+        #expect(RecurringFinder.find([out(day(2026, 3, 3), "SPOTIFY P2B8", 349)], today: today).isEmpty)
+        // Imported on the 5th, already typed in on the 6th: one payment, so two months still make a monthly bill.
+        let rows = [out(day(2026, 8, 5), "Gym Club", 5_000), out(day(2026, 9, 5), "Gym Club", 5_000), out(day(2026, 9, 6), "Gym Club", 5_000)]
+        #expect(RecurringFinder.find(rows, today: today).first?.months == 2)
+    }
 }

@@ -82,7 +82,8 @@ struct BudgetView: View {
         .background(UZColor.bg)
         .navigationTitle("Budget")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { periodMenu(model: model, selected: period) }
+            // Top left is the profile icon on every tab, so the period menu sits on the right.
+            ToolbarItem(placement: .primaryAction) { periodMenu(model: model, selected: period) }
             ToolbarItem(placement: .primaryAction) {
                 NavigationLink(value: Route.budgetLimits) { Text("Edit") }
                     .accessibilityIdentifier("budget.edit")

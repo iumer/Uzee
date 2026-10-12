@@ -98,7 +98,7 @@ struct AddSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
+                    Button("Cancel") {
                         amountFocused = false
                         dismiss()
                         session.isAddPresented = false
@@ -292,7 +292,7 @@ struct AddSheet: View {
                 }
             }
             .accessibilityIdentifier("add.category")
-            TextField(kind == .income ? "From (payer)" : "Paid to (payee)", text: $payee)
+            TextField(kind == .income ? "From (payer)" : kind == .refund ? "Refund from" : "Paid to (payee)", text: $payee)
                 .textInputAutocapitalization(.words)
                 .accessibilityIdentifier("add.payee")
                 .onChange(of: payee) { _, newPayee in suggestCategory(for: newPayee) }

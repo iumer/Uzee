@@ -21,7 +21,7 @@ struct ExchangeRateView: View {
                 }))
                 .accessibilityIdentifier("rate.wise")
                 if usesWise {
-                    LabeledContent("$1", value: "Rs " + ExchangeRate.display(session.ledger.rate(for: .usd)))
+                    LabeledContent("$1", value: "\(session.ledger.base.symbol) " + ExchangeRate.display(session.ledger.rate(for: .usd)))
                         .monospacedDigit()
                     Button {
                         update()

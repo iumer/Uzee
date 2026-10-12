@@ -189,7 +189,7 @@ struct AccountFormSheet: View {
                                     Button(preset.name) {
                                         name = preset.name
                                         kind = preset.kind
-                                        if preset.kind == .multiCurrency { currency = .usd }
+                                        currency = preset.kind == .multiCurrency && session.ledger.base == .pkr ? .usd : session.ledger.base
                                     }
                                     .buttonStyle(.bordered)
                                     .tint(name == preset.name ? UZColor.tint : .secondary)
@@ -201,15 +201,14 @@ struct AccountFormSheet: View {
                     }
                 }
                 Section {
-                    TextField("Name, e.g. HBL", text: $name)
+                    TextField("Name, e.g. your bank", text: $name)
                         .textInputAutocapitalization(.words)
                         .accessibilityIdentifier("accountForm.name")
                     Picker("Type", selection: $kind) {
                         ForEach(AccountKind.allCases, id: \.self) { Text($0.name).tag($0) }
                     }
                     Picker("Currency", selection: $currency) {
-                        Text("PKR (Rs)").tag(Currency.pkr)
-                        Text("USD ($)").tag(Currency.usd)
+                        ForEach(Currency.known, id: \.code) { Text("\($0.code) (\($0.symbol))").tag($0) }
                     }
                     .disabled(currencyLocked)
                     .accessibilityIdentifier("accountForm.currency")
@@ -352,7 +351,13 @@ struct ReconcileSheet: View {
 
     private func save() {
         let target: Money
-        do { target = try AmountParser.parse(real, currency: account.currency) } catch {
+        // A card or loan can be below zero: allow a leading minus.
+        let trimmed = real.trimmingCharacters(in: .whitespaces)
+        let isNegative = trimmed.hasPrefix("-") || trimmed.hasPrefix("−")
+        do {
+            let parsed = try AmountParser.parse(isNegative ? String(trimmed.dropFirst()) : trimmed, currency: account.currency)
+            target = isNegative ? ((try? parsed.negated()) ?? parsed) : parsed
+        } catch {
             problem = ProblemText.message(error)
             return
         }

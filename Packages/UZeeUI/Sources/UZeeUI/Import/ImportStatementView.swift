@@ -27,6 +27,8 @@ struct ImportStatementView: View {
         case choose
         case reading
         case review
+        /// Repeating payments found: ask to add them to the calendar with reminders (OWN-024).
+        case recurring(Int)
         case done(Int)
     }
 
@@ -50,7 +52,10 @@ struct ImportStatementView: View {
     @State private var confirming = false
     /// Monthly repeats spotted in this statement, offered for the calendar after importing (OWN-024).
     @State private var recurringFound: [RecurringFinder.Found] = []
-    @State private var recurringAdded: Set<String> = []
+    /// Which found payments are ticked to add (all, to start with).
+    @State private var recurringChosen: Set<String> = []
+    /// What the last import added, for Undo on the done screen (the toast can hide behind this sheet).
+    @State private var importedIDs: [UUID] = []
 
     private var ledger: LedgerSnapshot { session.ledger }
     private var account: Account? { ledger.account(accountID) }
@@ -62,6 +67,7 @@ struct ImportStatementView: View {
                 case .choose: chooseStep
                 case .reading: readingStep
                 case .review: reviewStep
+                case .recurring(let count): recurringStep(count)
                 case .done(let count): doneStep(count)
                 }
             }
@@ -485,22 +491,46 @@ struct ImportStatementView: View {
             for id in ids { try? session.client.discard(id) }
             session.reload()
         }
-        let payments = rows.map { RecurringFinder.Payment(date: $0.date, payee: $0.payee.isEmpty ? $0.description : $0.payee,
-                                                          amount: $0.amount, isMoneyIn: $0.isMoneyIn, categoryID: $0.categoryID) }
+        // This statement plus what's already in UZee from the last six months, so repeats across imports are found too.
+        var payments = rows.map { RecurringFinder.Payment(date: $0.date, payee: $0.payee.isEmpty ? $0.description : $0.payee,
+                                                          amount: $0.amount, isMoneyIn: $0.isMoneyIn, categoryID: $0.categoryID,
+                                                          accountID: accountID) }
+        let since = session.today.addingMonths(-6)
+        for transaction in session.transactions where transaction.localDate >= since && transaction.deletedAt == nil
+            && (transaction.kind == .expense || transaction.kind == .income) && !ids.contains(transaction.id) {
+            guard let payee = transaction.payeeName, !payee.isEmpty else { continue }
+            let amount = transaction.amount.isNegative ? ((try? transaction.amount.negated()) ?? transaction.amount) : transaction.amount
+            payments.append(RecurringFinder.Payment(date: transaction.localDate, payee: payee, amount: amount,
+                                                    isMoneyIn: transaction.kind == .income, categoryID: transaction.categoryID,
+                                                    accountID: transaction.legs.first?.accountID))
+        }
         recurringFound = RecurringFinder.find(payments, existingNames: session.recurring.items.map(\.name), today: session.today)
-        recurringAdded = []
-        step = .done(ids.count)
+        // Seen two months or more: ticked. Seen once: offered, but you tick it yourself.
+        recurringChosen = Set(recurringFound.filter { $0.months >= 2 }.map(\.id))
+        importedIDs = ids
+        step = recurringFound.isEmpty ? .done(ids.count) : .recurring(ids.count)
     }
 
-    /// Adds a found repeat as a bill, subscription or income from its next date; bill reminders follow from it.
-    private func addRecurring(_ found: RecurringFinder.Found) {
-        let item = RecurringItem(name: found.name, type: found.type, amount: found.amount, isEstimated: found.varies,
-                                 accountID: account?.id, categoryID: found.categoryID,
-                                 rule: RecurrenceRule(anchor: found.nextDate), trackedFrom: found.nextDate, startedOn: found.firstDate,
-                                 colorHex: found.isMoneyIn ? "#34C759" : "#5E5CE6")
-        guard session.perform("Couldn't add it. Try again.", { try session.recurringClient.save(item, nil) }) else { return }
-        recurringAdded.insert(found.id)
-        session.rescheduleReminders()
+    /// Adds the ticked repeats as bills, subscriptions or income from their next date. Reminders come from them,
+    /// so they show on the calendar and notify before each one.
+    private func addChosen(then count: Int) {
+        let chosen = recurringFound.filter { recurringChosen.contains($0.id) }
+        let items = chosen.map { found in
+            RecurringItem(name: found.name, type: found.type, amount: found.amount, isEstimated: found.varies,
+                          accountID: found.accountID ?? account?.id, categoryID: found.categoryID,
+                          rule: RecurrenceRule(anchor: found.nextDate), trackedFrom: found.nextDate, startedOn: found.firstDate,
+                          colorHex: found.isMoneyIn ? "#34C759" : "#5E5CE6")
+        }
+        guard !items.isEmpty,
+              session.perform("Couldn't add them. Try again.", { for item in items { try session.recurringClient.save(item, nil) } })
+        else { return }
+        session.toasts.show(items.count == 1 ? "Added \(items[0].name) to your calendar" : "Added \(items.count) to your calendar")
+        Task {
+            let allowed = await session.calendar.requestNotifications()
+            session.rescheduleReminders()
+            if !allowed { session.toasts.show("Reminders are off for UZee. Turn on notifications in iPhone Settings › UZee.") }
+        }
+        step = .done(count)
     }
 
     private func fallbackCategory(_ type: CategoryType) -> UUID? {
@@ -513,64 +543,84 @@ struct ImportStatementView: View {
     // MARK: Done
 
     private func doneStep(_ count: Int) -> some View {
-        ScrollView {
-            VStack(spacing: UZSpacing.xxxl) {
-                doneSummary(count)
-                if !recurringFound.isEmpty { recurringList }
-            }
+        doneSummary(count)
             .padding(UZSpacing.xxl)
-            .frame(maxWidth: .infinity)
-        }
-        .defaultScrollAnchor(recurringFound.isEmpty ? .center : .top)
-        .accessibilityIdentifier("import.done")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("import.done")
     }
 
-    /// "Recurring payments found": each can go on the calendar with a reminder.
-    private var recurringList: some View {
-        VStack(alignment: .leading, spacing: UZSpacing.l) {
-            VStack(alignment: .leading, spacing: UZSpacing.xs) {
-                Label("Recurring payments found", systemImage: "arrow.triangle.2.circlepath").font(.headline)
-                Text("These came around the same day every month. Add them to your calendar with a reminder before each one?")
-                    .font(.subheadline).foregroundStyle(UZColor.label2)
+    /// "Recurring payments found": tick which to add, then one button adds them with reminders.
+    private func recurringStep(_ count: Int) -> some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: UZSpacing.s) {
+                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill").font(.system(size: 40)).foregroundStyle(UZColor.tint)
+                    Text(recurringFound.count == 1 ? "Found a recurring payment" : "Found \(recurringFound.count) recurring payments")
+                        .font(.title3.weight(.semibold))
+                    Text("Imported \(count) transactions. These look like they come every month. Add them to your calendar and get a reminder before each one?")
+                        .font(.subheadline).foregroundStyle(UZColor.label2)
+                }
+                .listRowBackground(Color.clear)
             }
-            VStack(spacing: 0) {
+            Section {
                 ForEach(recurringFound) { found in
-                    let added = recurringAdded.contains(found.id)
-                    HStack(spacing: UZSpacing.l) {
-                        VStack(alignment: .leading, spacing: UZSpacing.xxs) {
-                            Text(found.name).font(.body.weight(.medium)).lineLimit(1)
-                            Text("\(found.varies ? "About " : "")\(MoneyFormatter.string(found.amount)) · \(found.type.name) · monthly on the \(OnboardingView.ordinal(found.day))")
-                                .font(.caption).foregroundStyle(UZColor.label2).lineLimit(2)
-                            Text("Next \(DateText.short(found.nextDate)) · seen \(found.months) months").font(.caption).foregroundStyle(UZColor.label2)
-                        }
-                        Spacer()
-                        Button(added ? "Added" : "Add") { addRecurring(found) }
-                            .buttonStyle(.bordered).tint(added ? UZColor.positive : UZColor.tint)
-                            .disabled(added)
-                            .accessibilityIdentifier("import.recurring.add")
-                    }
-                    .padding(.vertical, UZSpacing.l).padding(.horizontal, UZSpacing.xxl)
-                    if found.id != recurringFound.last?.id { Divider().padding(.leading, UZSpacing.xxl) }
+                    recurringRow(found)
                 }
-            }
-            .background(UZColor.card, in: .rect(cornerRadius: UZRadius.card))
-            if recurringFound.count > 1, recurringAdded.count < recurringFound.count {
-                Button("Add all \(recurringFound.count - recurringAdded.count)") {
-                    for found in recurringFound where !recurringAdded.contains(found.id) { addRecurring(found) }
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
-                .accessibilityIdentifier("import.recurring.addAll")
+            } footer: {
+                Text("You can change the amount, day or reminder later in Calendar › Bills & subscriptions.")
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: UZSpacing.m) {
+                Button { addChosen(then: count) } label: {
+                    Text(recurringChosen.isEmpty ? "Tick the ones to add" : "Add \(recurringChosen.count) with reminders")
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, UZSpacing.s)
+                }
+                .buttonStyle(.glassProminent)
+                .disabled(recurringChosen.isEmpty)
+                .accessibilityIdentifier("import.recurring.add")
+                Button("Not now") { step = .done(count) }
+                    .accessibilityIdentifier("import.recurring.skip")
+            }
+            .padding(.horizontal, UZSpacing.xxl).padding(.bottom, UZSpacing.m)
+        }
         .accessibilityIdentifier("import.recurring")
+    }
+
+    private func recurringRow(_ found: RecurringFinder.Found) -> some View {
+        let isOn = recurringChosen.contains(found.id)
+        return Button {
+            if isOn { recurringChosen.remove(found.id) } else { recurringChosen.insert(found.id) }
+        } label: {
+            HStack(spacing: UZSpacing.l) {
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .font(.title3).foregroundStyle(isOn ? UZColor.tint : UZColor.label3)
+                VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                    HStack {
+                        Text(found.name).font(.body.weight(.medium)).foregroundStyle(UZColor.label).lineLimit(1)
+                        Spacer()
+                        Text((found.varies ? "≈ " : "") + MoneyFormatter.string(found.amount))
+                            .font(.body.weight(.medium)).monospacedDigit()
+                            .foregroundStyle(found.isMoneyIn ? UZColor.positive : UZColor.label)
+                    }
+                    Text("\(found.type.name) · every month on the \(OnboardingView.ordinal(found.day)) · next \(DateText.short(found.nextDate))")
+                        .font(.caption).foregroundStyle(UZColor.label2)
+                    Text(found.months == 1 ? "Seen once; looks like a subscription" : "Seen \(found.months) months in a row")
+                        .font(.caption).foregroundStyle(UZColor.label2)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityIdentifier("import.recurring.row")
     }
 
     private func doneSummary(_ count: Int) -> some View {
         VStack(spacing: UZSpacing.l) {
             Image(systemName: "checkmark.circle.fill").font(.system(size: 52)).foregroundStyle(UZColor.positive)
             Text("Imported \(count) transactions").font(.title3.weight(.semibold))
-            Text("Into \(account?.name ?? "your account"). Undo is in the message at the bottom for a few seconds.")
+            Text("Into \(account?.name ?? "your account").")
                 .font(.subheadline).foregroundStyle(UZColor.label2).multilineTextAlignment(.center)
             Button("See in Activity") {
                 session.selectedTab = .activity
@@ -584,6 +634,17 @@ struct ImportStatementView: View {
                 step = .choose
             }
             .accessibilityIdentifier("import.another")
+            if !importedIDs.isEmpty {
+                Button("Undo this import", role: .destructive) {
+                    let ids = importedIDs
+                    if session.perform("Couldn't undo. Try again.", { for id in ids { try session.client.discard(id) } }) {
+                        importedIDs = []
+                        session.toasts.show("Import undone")
+                        dismiss()
+                    }
+                }
+                .accessibilityIdentifier("import.undo")
+            }
         }
     }
 }

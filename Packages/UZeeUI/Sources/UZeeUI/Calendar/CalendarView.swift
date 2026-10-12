@@ -88,7 +88,8 @@ struct CalendarTabView: View {
         .background(UZColor.bg)
         .navigationTitle("Calendar")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            // Top left is the profile icon on every tab, so Today sits on the right.
+            ToolbarItem(placement: .primaryAction) {
                 Button("Today") {
                     withAnimation(.snappy) { month = nil; selected = nil }
                 }

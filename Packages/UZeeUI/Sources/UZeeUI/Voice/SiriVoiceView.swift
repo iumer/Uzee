@@ -15,7 +15,7 @@ struct SiriVoiceView: View {
                 Text("Answers come from the data on this iPhone. Nothing is saved without your Save.")
             }
             Section {
-                Label("Home › mic button", systemImage: "mic")
+                Label("The singing UZee above + on any tab", systemImage: "mic")
                 Label("Action Button: Settings › Action Button › Shortcut › UZee", systemImage: "button.horizontal.top.press")
                 Label("Shortcuts app: Ask UZee and Add to UZee", systemImage: "square.2.layers.3d")
             } header: {

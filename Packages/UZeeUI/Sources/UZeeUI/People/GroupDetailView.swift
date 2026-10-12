@@ -66,7 +66,7 @@ struct GroupDetailView: View {
     private func balanceCard(_ group: SplitGroup, model: PeopleModel) -> some View {
         let balance = session.balances.group(group.id)
         let others = group.memberIDs.filter { $0 != model.me }
-        let nets = Dictionary(uniqueKeysWithValues: group.memberIDs.map { ($0, model.toBase(balance.nets[$0] ?? MoneyBag())) })
+        let nets = Dictionary(group.memberIDs.map { ($0, model.toBase(balance.nets[$0] ?? MoneyBag())) }, uniquingKeysWith: { first, _ in first })
         let suggestions = group.simplifyDebts && group.memberIDs.count >= 3
             ? DebtSimplifier.simplify(nets: nets, order: group.memberIDs) : []
         return VStack(alignment: .leading, spacing: UZSpacing.m) {

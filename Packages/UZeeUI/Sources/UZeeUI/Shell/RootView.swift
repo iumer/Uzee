@@ -44,18 +44,20 @@ public struct RootView: View {
                 }
                     .padding(.trailing, UZSpacing.xxl)
                     .padding(.bottom, 72)
+                    // Stay put when the keyboard opens instead of riding up over the fields.
+                    .ignoresSafeArea(.keyboard)
                     .transition(.scale.combined(with: .opacity))
             }
         }
         .animation(.easeOut(duration: 0.2), value: session.path(for: session.selectedTab).wrappedValue.isEmpty)
         .sheet(isPresented: $session.isAddPresented) {
-            AddSheet(session: session)
+            AddSheet(session: session).sessionErrors(session)
         }
         .sheet(isPresented: $session.isVoicePresented) {
-            VoiceSheet(session: session)
+            VoiceSheet(session: session).sessionErrors(session)
         }
         .sheet(isPresented: $session.isImportPresented) {
-            ImportStatementView(session: session)
+            ImportStatementView(session: session).sessionErrors(session)
         }
         .alert("Something went wrong", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
@@ -166,9 +168,9 @@ struct TabRoot: View {
             screen
                 // Room under the last row so the floating UZee and "+" never cover an amount.
                 .contentMargins(.bottom, 128, for: .scrollContent)
-                // Settings sits behind the profile icon, top right on every tab (OWN-025).
+                // Settings sits behind the profile icon, always top left on every tab (OWN-025); no tab puts anything else there.
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItem(placement: .topBarLeading) {
                         NavigationLink(value: Route.settings) {
                             Image(systemName: "person.crop.circle").font(.title3)
                         }
@@ -202,6 +204,7 @@ struct TabRoot: View {
                     case .bills: BillsHubView(session: session, tab: tab)
                     case .recurring(let id): RecurringDetailView(session: session, itemID: id)
                     case .reports: ReportsView(session: session)
+                    case .prayer: PrayerView(session: session)
                     }
                 }
         }

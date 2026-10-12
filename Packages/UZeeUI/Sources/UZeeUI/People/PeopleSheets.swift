@@ -11,6 +11,7 @@ struct PersonFormSheet: View {
     @State private var phone = ""
     @State private var problem: String?
     @State private var showsExisting = false
+    @State private var peopleBefore = 0
 
     var body: some View {
         NavigationStack {
@@ -27,7 +28,7 @@ struct PersonFormSheet: View {
                 }
                 if editing == nil {
                     Section {
-                        Button("Add existing balances instead") { showsExisting = true }
+                        Button("Add existing balances instead") { peopleBefore = session.people.others.count; showsExisting = true }
                     }
                 }
                 if let problem {
@@ -50,7 +51,10 @@ struct PersonFormSheet: View {
                     phone = editing.phone ?? ""
                 }
             }
-            .sheet(isPresented: $showsExisting) { ExistingBalancesSheet(session: session, firstName: name) }
+            // Saving there adds the person, so this form closes too instead of letting them be added twice.
+            .sheet(isPresented: $showsExisting, onDismiss: {
+                if session.people.others.count > peopleBefore { dismiss() }
+            }) { ExistingBalancesSheet(session: session, firstName: name) }
         }
         .presentationDetents([.medium, .large])
     }
@@ -224,6 +228,7 @@ struct GroupFormSheet: View {
                             .textInputAutocapitalization(.words)
                             .accessibilityIdentifier("groupForm.newPerson")
                         Button("Add") { addPerson() }
+                            .buttonStyle(.borderless)
                             .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 } header: {

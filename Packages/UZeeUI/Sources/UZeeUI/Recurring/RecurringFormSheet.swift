@@ -7,6 +7,8 @@ import UZeeCore
 struct RecurringFormSheet: View {
     @Bindable var session: AppSession
     let item: RecurringItem?
+    /// Starting values for a new item (from a transaction's "Repeat monthly"); `item` stays nil so it saves as new.
+    var draft: RecurringItem? = nil
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
@@ -35,6 +37,10 @@ struct RecurringFormSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                // At the top, so a Save that can't go ahead says why where you can see it.
+                if let problem {
+                    Section { Label(problem, systemImage: "exclamationmark.circle.fill").foregroundStyle(UZColor.negative) }
+                }
                 Section {
                     TextField("Name", text: $name)
                         .accessibilityIdentifier("recurringForm.name")
@@ -59,13 +65,11 @@ struct RecurringFormSheet: View {
                         ForEach(RecurringType.allCases, id: \.self) { Text($0.name).tag($0) }
                     }
                     .accessibilityIdentifier("recurringForm.type")
-                    Picker("Repeats", selection: $unit) {
-                        Text("Weekly").tag(RecurrenceUnit.week)
-                        Text("Monthly").tag(RecurrenceUnit.month)
-                        Text("Yearly").tag(RecurrenceUnit.year)
-                        Text("Daily").tag(RecurrenceUnit.day)
+                    // One clear choice ("Every 3 months") instead of a unit picker plus a separate number.
+                    Picker("Repeats", selection: repeatChoice) {
+                        ForEach(repeatOptions, id: \.key) { option in Text(option.label).tag(option.key) }
                     }
-                    Stepper("Every \(interval) \(unitName(interval))", value: $interval, in: 1...12)
+                    .accessibilityIdentifier("recurringForm.repeats")
                     DatePicker(type.isPlan ? "First payment" : "Next due", selection: $firstDue, displayedComponents: .date)
                     if type.isPlan {
                         Stepper("\(count) payments in total", value: $count, in: 1...360)
@@ -114,11 +118,11 @@ struct RecurringFormSheet: View {
                     }
                     TextField("Notes", text: $notes, axis: .vertical)
                 }
-                if let problem {
-                    Section { Label(problem, systemImage: "exclamationmark.circle.fill").foregroundStyle(UZColor.negative) }
-                }
             }
             .navigationTitle(item == nil ? "New recurring" : "Edit")
+            .sessionErrors(session)
+            // Plans (installments, kameti) are monthly.
+            .onChange(of: type) { _, newType in if newType.isPlan { unit = .month; interval = 1 } }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -136,6 +140,34 @@ struct RecurringFormSheet: View {
         return seen
     }
 
+    private struct RepeatOption { let unit: RecurrenceUnit; let interval: Int; var key: String { "\(unit.rawValue)-\(interval)" }; var label: String }
+
+    private var repeatOptions: [RepeatOption] {
+        var options = [RepeatOption(unit: .month, interval: 1, label: "Every month")]
+        if !type.isPlan {
+            options = [RepeatOption(unit: .week, interval: 1, label: "Every week"),
+                       RepeatOption(unit: .week, interval: 2, label: "Every 2 weeks"),
+                       RepeatOption(unit: .month, interval: 1, label: "Every month"),
+                       RepeatOption(unit: .month, interval: 2, label: "Every 2 months"),
+                       RepeatOption(unit: .month, interval: 3, label: "Every 3 months"),
+                       RepeatOption(unit: .month, interval: 6, label: "Every 6 months"),
+                       RepeatOption(unit: .year, interval: 1, label: "Every year")]
+        }
+        // An older item with another schedule keeps it as a choice.
+        if !options.contains(where: { $0.unit == unit && $0.interval == interval }) {
+            options.append(RepeatOption(unit: unit, interval: interval, label: "Every \(interval == 1 ? "" : "\(interval) ")\(unitName(interval))"))
+        }
+        return options
+    }
+
+    private var repeatChoice: Binding<String> {
+        Binding(get: { "\(unit.rawValue)-\(interval)" }, set: { key in
+            guard let option = repeatOptions.first(where: { $0.key == key }) else { return }
+            unit = option.unit
+            interval = option.interval
+        })
+    }
+
     private func unitName(_ n: Int) -> String {
         let word: String
         switch unit {
@@ -151,7 +183,7 @@ struct RecurringFormSheet: View {
         guard !didLoad else { return }
         didLoad = true
         currency = session.ledger.base
-        guard let item else { return }
+        guard let item = item ?? draft else { return }
         name = item.name
         amountText = MarkPaidSheet.plain(item.amount)
         currency = item.amount.currency
@@ -171,7 +203,7 @@ struct RecurringFormSheet: View {
             endDate = end.startDate(in: .current)
         }
         // Edit shows the next due date for regular items, the first payment for plans.
-        let next = RecurringModel(session: session).next(item)?.scheduledDate
+        let next = self.item == nil ? nil : RecurringModel(session: session).next(item)?.scheduledDate
         firstDue = (item.type.isPlan ? item.rule.anchor : next ?? item.rule.anchor).startDate(in: .current)
     }
 
@@ -185,9 +217,10 @@ struct RecurringFormSheet: View {
         }
         let first = LocalDate(firstDue, in: .current)
         var anchor = first
-        // Editing a regular item keeps its anchor day unless the date moved off the schedule.
+        // Editing a regular item keeps its anchor when the next due date wasn't changed; a new date (even a later
+        // one on the same schedule) starts the schedule there.
         if let item, !type.isPlan, item.rule.unit == unit, item.rule.interval == interval,
-           item.rule.date(at: item.rule.firstIndex(onOrAfter: first)) == first {
+           RecurringModel(session: session).next(item)?.scheduledDate == first {
             anchor = item.rule.anchor
         }
         let rule = RecurrenceRule(unit: unit, interval: interval, anchor: anchor,

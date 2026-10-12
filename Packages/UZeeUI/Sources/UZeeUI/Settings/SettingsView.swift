@@ -110,7 +110,7 @@ struct SettingsView: View {
             } header: {
                 Text("Sample data")
             } footer: {
-                Text("Sample data shows UZee with the October example. It is kept apart from your own entries and removed in one step.")
+                Text("Sample data fills UZee with an example month so you can try every screen. It is kept apart from your own entries and removed in one step.")
             }
 
             Section {
@@ -120,18 +120,17 @@ struct SettingsView: View {
                     SettingsLabel("Erase everything and start over", symbol: "arrow.counterclockwise", color: Color(uiColor: .systemRed))
                 }
                 .accessibilityIdentifier("settings.erase")
+                .confirmationDialog("Erase everything in UZee?", isPresented: $confirmingErase, titleVisibility: .visible) {
+                    Button("Erase everything", role: .destructive) {
+                        if session.eraseEverything() { session.toasts.show("UZee is fresh. Let's set it up.") }
+                    }
+                    .accessibilityIdentifier("settings.eraseConfirm")
+                } message: {
+                    Text("All your accounts, transactions, people, bills and receipts will be removed from UZee.")
+                }
             } footer: {
                 Text("Removes every account, transaction, person, bill and receipt so you can import and add fresh. A copy is kept on this iPhone in case you change your mind; make a backup first if you want one elsewhere.")
             }
-            .confirmationDialog("Erase everything in UZee?", isPresented: $confirmingErase, titleVisibility: .visible) {
-                Button("Erase everything", role: .destructive) {
-                    if session.eraseEverything() { session.toasts.show("UZee is fresh. Let's set it up.") }
-                }
-                .accessibilityIdentifier("settings.eraseConfirm")
-            } message: {
-                Text("All your accounts, transactions, people, bills and receipts will be removed from UZee.")
-            }
-
             Section("About") {
                 LabeledContent {
                     Text(session.info.displayVersion).monospacedDigit()

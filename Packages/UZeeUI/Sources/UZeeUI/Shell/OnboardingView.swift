@@ -123,7 +123,7 @@ struct OnboardingView: View {
             .toolbar {
                 if step != .welcome {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Back") { step = Step(rawValue: step.rawValue - 1) ?? .welcome }
+                        Button("Back") { problem = nil; step = Step(rawValue: step.rawValue - 1) ?? .welcome }
                     }
                 }
             }
@@ -205,10 +205,21 @@ struct OnboardingView: View {
 
     private func accountRow(_ pick: Binding<Pick>, group: Group) -> some View {
         VStack(alignment: .leading, spacing: UZSpacing.s) {
-            TextField(group.placeholder, text: pick.name)
-                .font(.body.weight(.medium))
-                .textInputAutocapitalization(.words)
-                .accessibilityIdentifier("onboarding.name.\(group.kind.rawValue)")
+            HStack {
+                TextField(group.placeholder, text: pick.name)
+                    .font(.body.weight(.medium))
+                    .textInputAutocapitalization(.words)
+                    .accessibilityIdentifier("onboarding.name.\(group.kind.rawValue)")
+                Button {
+                    let id = pick.wrappedValue.id
+                    withAnimation(.snappy) { picks.removeAll { $0.id == id } }
+                } label: {
+                    Image(systemName: "minus.circle.fill").font(.title3).foregroundStyle(UZColor.label3)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove")
+                .accessibilityIdentifier("onboarding.remove.\(group.kind.rawValue)")
+            }
             HStack {
                 Menu {
                     Picker("Currency", selection: pick.currency) {
@@ -318,7 +329,7 @@ struct OnboardingView: View {
                     }
                     if hasRegular { paydaySection(title: "Which day?") }
                 }
-                if incomeType == .salaried || hasRegular {
+                if (incomeType == .salaried || hasRegular) && payDay > 0 {
                     Section {
                         HStack {
                             Picker("", selection: $payCurrency) {
@@ -377,7 +388,9 @@ struct OnboardingView: View {
         let today = session.today
         let names = finalNames()
         var opening: [(Pick, String, Money)] = []
-        for pick in picks {
+        // A row left completely empty (no name, no balance) was added by mistake; skip it rather than save "Bank".
+        for pick in picks where !(pick.kind != .cash && pick.name.trimmingCharacters(in: .whitespaces).isEmpty
+                                  && pick.balance.trimmingCharacters(in: .whitespaces).isEmpty) {
             let name = names[pick.id] ?? pick.name
             let text = pick.balance.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
             guard !text.isEmpty else { opening.append((pick, name, .zero(pick.currency))); continue }

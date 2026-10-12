@@ -37,7 +37,7 @@ struct HomeCards: View {
             } label: {
                 UZCard(padding: UZSpacing.l) {
                     VStack(alignment: .leading, spacing: UZSpacing.xs) {
-                        Text("Budget left").font(.footnote.weight(.semibold)).foregroundStyle(UZColor.label2)
+                        Text(summary?.isOver == true ? "Over budget by" : "Budget left").font(.footnote.weight(.semibold)).foregroundStyle(UZColor.label2)
                         if let summary {
                             Text(MoneyFormatter.string(summary.isOver ? ((try? summary.left.negated()) ?? summary.left) : summary.left))
                                 .font(.title3.bold()).monospacedDigit()

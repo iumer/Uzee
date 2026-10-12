@@ -11,8 +11,10 @@ public enum RecurringFinder {
         public var amount: Money
         public var isMoneyIn: Bool
         public var categoryID: UUID?
+        public var accountID: UUID?
 
-        public init(date: LocalDate, payee: String, amount: Money, isMoneyIn: Bool, categoryID: UUID? = nil) {
+        public init(date: LocalDate, payee: String, amount: Money, isMoneyIn: Bool, categoryID: UUID? = nil, accountID: UUID? = nil) {
+            self.accountID = accountID
             self.date = date
             self.payee = payee
             self.amount = amount
@@ -38,6 +40,8 @@ public enum RecurringFinder {
         public var nextDate: LocalDate
         public var isMoneyIn: Bool
         public var categoryID: UUID?
+        /// The account the latest payment came from.
+        public var accountID: UUID?
     }
 
     /// Payments a day apart at most this much (around the month end too) still count as "the same day".
@@ -56,7 +60,21 @@ public enum RecurringFinder {
             let payeeKey = key(group.first?.payee ?? "")
             guard !payeeKey.isEmpty, !existing.contains(payeeKey),
                   let currency = group.first?.amount.currency, group.allSatisfy({ $0.amount.currency == currency }) else { continue }
-            let sorted = group.sorted { $0.date < $1.date }
+            // The same payment seen twice (already in UZee and in this statement, a day or two apart) counts once.
+            var sorted: [Payment] = []
+            for payment in group.sorted(by: { $0.date < $1.date }) {
+                if let kept = sorted.last, kept.amount == payment.amount, kept.date.days(to: payment.date) <= 3 { continue }
+                sorted.append(payment)
+            }
+            // A known subscription (Netflix, Spotify…) seen once recently is still worth offering.
+            if sorted.count == 1, let only = sorted.first, !only.isMoneyIn,
+               isKnownSubscription(only.payee), only.date.days(to: today) <= 45 {
+                let next = RecurrenceRule.nextMonthly(day: only.date.day, onOrAfter: max(today, only.date.addingDays(1)))
+                found.append(Found(id: id, name: displayName(only.payee), type: .subscription, amount: only.amount, varies: false,
+                                   day: only.date.day, months: 1, firstDate: only.date, lastDate: only.date, nextDate: next,
+                                   isMoneyIn: false, categoryID: only.categoryID, accountID: only.accountID))
+                continue
+            }
             // One payment per month: two in the same month isn't a monthly bill.
             let months = sorted.map { $0.date.year * 12 + $0.date.month }
             guard Set(months).count == months.count, months.count >= 2 else { continue }
@@ -78,7 +96,7 @@ public enum RecurringFinder {
             found.append(Found(id: id, name: displayName(last.payee), type: suggestedType(last.payee, isMoneyIn: last.isMoneyIn),
                                amount: last.amount, varies: low != high, day: day, months: months.count,
                                firstDate: sorted.first!.date, lastDate: last.date, nextDate: next,
-                               isMoneyIn: last.isMoneyIn, categoryID: last.categoryID))
+                               isMoneyIn: last.isMoneyIn, categoryID: last.categoryID, accountID: last.accountID))
         }
         return found.sorted {
             $0.amount.minorUnits != $1.amount.minorUnits ? $0.amount.minorUnits > $1.amount.minorUnits : $0.name < $1.name
@@ -106,7 +124,7 @@ public enum RecurringFinder {
     }
 
     /// "NETFLIX.COM 8812" → "Netflix.com".
-    static func displayName(_ payee: String) -> String {
+    public static func displayName(_ payee: String) -> String {
         let words = payee.split(whereSeparator: \.isWhitespace).filter { word in !word.contains { $0.isNumber } }
         let text = (words.isEmpty ? payee.split(whereSeparator: \.isWhitespace) : words).prefix(4).joined(separator: " ")
         let isShouting = text == text.uppercased()
@@ -120,9 +138,25 @@ public enum RecurringFinder {
                                "water", "ptcl", "internet", "broadband", "nayatel", "stormfiber", "fiber", "wifi",
                                "zong", "telenor", "ufone"]
 
-    static func suggestedType(_ payee: String, isMoneyIn: Bool) -> RecurringType {
-        let text = key(payee) + " " + payee.lowercased()
-        func has(_ words: [String]) -> Bool { words.contains { text.contains($0) } }
+    /// Services that only ever bill monthly, so one sighting is enough to offer them (not shops like Amazon or Apple).
+    static let knownSubscriptions = ["netflix", "spotify", "youtube premium", "icloud", "openai", "chatgpt", "adobe", "disney",
+                                     "canva", "dropbox", "notion", "github", "shahid", "anghami", "linkedin", "duolingo", "patreon",
+                                     "anthropic", "hbo", "hulu", "google one", "apple music", "apple tv", "amazon prime",
+                                     "prime video", "tamasha", "starzplay"]
+
+    static func words(_ payee: String) -> String {
+        " " + payee.lowercased().split { !$0.isLetter }.joined(separator: " ") + " "
+    }
+
+    static func isKnownSubscription(_ payee: String) -> Bool {
+        let text = words(payee)
+        return knownSubscriptions.contains { text.contains(" \($0)") }
+    }
+
+    public static func suggestedType(_ payee: String, isMoneyIn: Bool) -> RecurringType {
+        // Words from their start, so "parent" isn't rent.
+        let text = words(payee)
+        func has(_ list: [String]) -> Bool { list.contains { text.contains(" \($0)") } }
         if isMoneyIn { return has(["salary", "payroll", "wages"]) ? .salary : .income }
         if has(["rent"]) { return .rent }
         if has(["insurance", "takaful", "jubilee", "efu", "adamjee"]) { return .insurance }

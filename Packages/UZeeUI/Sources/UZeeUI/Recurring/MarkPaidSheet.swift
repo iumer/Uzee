@@ -93,6 +93,7 @@ struct MarkPaidSheet: View {
                 }
             }
             .navigationTitle(item?.type.isIncome == true ? "Mark received" : "Mark paid")
+            .sessionErrors(session)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }

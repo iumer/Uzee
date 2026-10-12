@@ -6,6 +6,8 @@ struct TransactionDetailView: View {
     @Bindable var session: AppSession
     let transactionID: UUID
     @State private var confirmDelete = false
+    /// "Repeat every month": a new bill, subscription or income prefilled from this payment, with reminders.
+    @State private var repeating: RecurringItem?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -65,7 +67,11 @@ struct TransactionDetailView: View {
                 if AddSheet.kinds.contains(transaction.kind) {
                     Button("Edit") { session.openAdd(.edit(transaction)) }
                         .accessibilityIdentifier("detail.edit")
-                    Button("Repeat this") { session.openAdd(.repeatOf(transaction)) }
+                    if transaction.kind == .expense || transaction.kind == .income {
+                        Button("Repeat every month…") { repeating = monthly(transaction) }
+                            .accessibilityIdentifier("detail.monthly")
+                    }
+                    Button("Add again today") { session.openAdd(.repeatOf(transaction)) }
                         .accessibilityIdentifier("detail.repeat")
                 }
                 Button("Delete", role: .destructive) { confirmDelete = true }
@@ -73,6 +79,7 @@ struct TransactionDetailView: View {
             }
         }
         .navigationTitle(transaction.payeeName ?? transaction.kind.name)
+        .sheet(item: $repeating) { RecurringFormSheet(session: session, item: nil, draft: $0) }
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Delete this transaction?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
@@ -116,5 +123,18 @@ struct TransactionDetailView: View {
         case .transferOut: "From"
         case .transferIn: "To"
         }
+    }
+
+    private func monthly(_ transaction: MoneyTransaction) -> RecurringItem {
+        let isIncome = transaction.kind == .income
+        let payee = transaction.payeeName ?? transaction.kind.name
+        let amount = transaction.amount.isNegative ? ((try? transaction.amount.negated()) ?? transaction.amount) : transaction.amount
+        let next = RecurrenceRule.nextMonthly(day: transaction.localDate.day, onOrAfter: session.today.addingDays(1))
+        return RecurringItem(name: RecurringFinder.displayName(payee), type: RecurringFinder.suggestedType(payee, isMoneyIn: isIncome),
+                             amount: amount, accountID: transaction.legs.first?.accountID, categoryID: transaction.categoryID,
+                             // A split bill stays split with the same group, so only your share counts toward the budget.
+                             groupID: transaction.groupID,
+                             rule: RecurrenceRule(anchor: next), trackedFrom: next, startedOn: transaction.localDate,
+                             colorHex: isIncome ? "#34C759" : "#5E5CE6")
     }
 }

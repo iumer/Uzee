@@ -92,6 +92,7 @@ struct EventFormSheet: View {
                 }
             }
             .navigationTitle(editing == nil ? "New reminder" : "Edit reminder")
+            .sessionErrors(session)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

@@ -251,7 +251,7 @@ struct SplitEditorView: View {
         case .youPaidTheyOwe:
             working.payer = me
             working.method = .shares
-            working.inputs = Dictionary(uniqueKeysWithValues: working.members.map { ($0, $0 == me ? 0 : 1) })
+            working.inputs = Dictionary(working.members.map { ($0, $0 == me ? 0 : 1) }, uniquingKeysWith: { first, _ in first })
         case .theyPaidEqual:
             working.payer = other
             working.method = .equal
@@ -259,7 +259,7 @@ struct SplitEditorView: View {
         case .theyPaidYouOwe:
             working.payer = other
             working.method = .shares
-            working.inputs = Dictionary(uniqueKeysWithValues: working.members.map { ($0, $0 == me ? 1 : 0) })
+            working.inputs = Dictionary(working.members.map { ($0, $0 == me ? 1 : 0) }, uniquingKeysWith: { first, _ in first })
         }
         fillTexts()
     }

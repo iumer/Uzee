@@ -229,7 +229,7 @@ struct TagPickerView: View {
             Section {
                 HStack {
                     TextField("New tag", text: $name).onSubmit(create).accessibilityIdentifier("tagPicker.name")
-                    Button("Add", action: create).disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Add", action: create).buttonStyle(.borderless).disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                         .accessibilityIdentifier("tagPicker.add")
                 }
                 if let problem { Text(problem).foregroundStyle(UZColor.negative) }

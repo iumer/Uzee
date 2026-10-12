@@ -26,7 +26,8 @@ struct DayGrid: View {
                 ForEach(1...31, id: \.self) { day in
                     Button { select(day) } label: {
                         Text("\(day)").font(.callout.weight(selection == day ? .semibold : .regular)).monospacedDigit()
-                            .frame(width: 38, height: 38)
+                            .frame(maxWidth: .infinity, minHeight: 38)
+                            .aspectRatio(1, contentMode: .fit)
                             .foregroundStyle(selection == day ? Color.white : UZColor.label)
                             .background(selection == day ? UZColor.tint : Color.clear, in: .circle)
                             .contentShape(.circle)

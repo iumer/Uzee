@@ -120,7 +120,10 @@ struct ActivityView: View {
                 Button("Clear filters", role: .destructive) { clearFilters() }
             }
             Divider()
-            NavigationLink(value: Route.recentlyDeleted) {
+            // A plain button: a NavigationLink inside a Menu often doesn't navigate.
+            Button {
+                session.path(for: .activity).wrappedValue.append(.recentlyDeleted)
+            } label: {
                 Label("Recently Deleted", systemImage: "trash")
             }
         } label: {
