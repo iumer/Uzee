@@ -159,7 +159,8 @@ final class AppContainer {
             wiseRate: { currency, base, day in
                 guard let day else { return await WiseRateFetcher.shared.live(currency, in: base) }
                 return await WiseRateFetcher.shared.rate(currency, in: base, on: day, today: LocalDate(Date(), in: .current))
-            })
+            },
+            setSpeechHints: { SpeechListener.shared.hints = $0 })
     }
 
     private static func sampleDataActions(_ database: AppDatabase) -> AppSession.SampleDataActions {

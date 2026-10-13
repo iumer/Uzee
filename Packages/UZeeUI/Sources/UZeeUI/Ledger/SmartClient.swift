@@ -20,6 +20,8 @@ public struct SmartClient: Sendable {
     public var requestSpeechAccess: @Sendable () async -> Bool
     public var startListening: @Sendable (@escaping @Sendable (String, Bool) -> Void) throws -> Void
     public var stopListening: @Sendable () -> Void
+    /// Names the recogniser should expect (accounts, people, categories).
+    public var setSpeechHints: @Sendable ([String]) -> Void
     public var cancelListening: @Sendable () -> Void
     /// True when the microphone and speech recognition are already allowed (so listening won't show a prompt).
     public var canListen: @Sendable () -> Bool
@@ -73,7 +75,9 @@ public struct SmartClient: Sendable {
                 voices: @escaping @Sendable () -> [VoiceChoice] = { [] },
                 previewVoice: @escaping @Sendable (String) -> Void = { _ in },
                 listeningLevel: @escaping @Sendable () -> Float = { 0 },
-                wiseRate: @escaping @Sendable (Currency, Currency, LocalDate?) async -> Decimal? = { _, _, _ in nil }) {
+                wiseRate: @escaping @Sendable (Currency, Currency, LocalDate?) async -> Decimal? = { _, _, _ in nil },
+                setSpeechHints: @escaping @Sendable ([String]) -> Void = { _ in }) {
+        self.setSpeechHints = setSpeechHints
         self.readReceipt = readReceipt
         self.readStatement = readStatement
         self.understand = understand

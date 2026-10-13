@@ -345,12 +345,29 @@ public enum VoiceRuleParser {
 
     // MARK: Accounts
 
+    /// How speech recognition writes bank and wallet names it doesn't know ("HBL" heard as "HP", owner 2026-10-14).
+    static let heardAs: [String: [String]] = [
+        "hbl": ["hp", "h b l", "hbo", "hdl", "hpl", "hb l", "h bl"],
+        "meezan": ["mizan", "mezan", "meezaan", "mezzan", "meezan bank"],
+        "meezan bank": ["mizan bank", "mezan bank", "meezan"],
+        "nayapay": ["naya pay", "nya pay", "nayyapay", "naya"],
+        "sadapay": ["sada pay", "sadda pay", "saddapay"],
+        "easypaisa": ["easy paisa", "easy pesa", "easypesa", "ez paisa"],
+        "jazzcash": ["jazz cash", "jaz cash"],
+        "wise": ["wise account", "transferwise"],
+        "mcb": ["m c b"], "ubl": ["u b l"],
+    ]
+
     static func findAccounts(_ t: String, vocabulary: VoiceVocabulary) -> [(name: String, position: Int)] {
         var found: [(name: String, position: Int)] = []
         // Longest names first so "HBL card" wins over "HBL".
         for name in vocabulary.accounts.sorted(by: { $0.count > $1.count }) {
-            let key = " " + normalise(name) + " "
-            guard key.count > 2, let range = t.range(of: key) else { continue }
+            // "Meezan Bank" is also just "Meezan", or "Mizan" as speech writes it.
+            let full = normalise(name)
+            let first = full.split(separator: " ").first.map(String.init) ?? full
+            let short = first != full && first.count >= 4 ? [first] + (heardAs[first] ?? []) : []
+            let keys = ([full] + (heardAs[full] ?? []) + short).map { " " + $0 + " " }
+            guard let key = keys.first(where: { $0.count > 2 && t.contains($0) }), let range = t.range(of: key) else { continue }
             // "A cash cheque" is a kind of cheque, not the Cash account.
             let after = t[range.upperBound...]
             if ["cheque", "check", "cheq"].contains(where: { after.hasPrefix($0) }) { continue }

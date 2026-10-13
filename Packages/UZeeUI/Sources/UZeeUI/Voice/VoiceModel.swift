@@ -78,6 +78,9 @@ final class VoiceModel {
     private var triedChat = false
     /// Waiting for an answer to a follow-up question (VOX-05).
     private var pending: VoiceCommand?
+    /// "Set HBL to Rs 35,771?" waiting for yes or no; the account last talked about, for "update it".
+    private var pendingBalance: (account: Account, target: Money)?
+    private var lastBalanceAccount: UUID?
     private var need: VoiceDialog.Need?
     /// Counts the user's sentences, so the model can't show a card and save it in the same turn.
     private var turn = 0
@@ -171,6 +174,9 @@ final class VoiceModel {
             return
         }
         liveText = ""
+        session.smart.setSpeechHints(vocabulary.accounts + vocabulary.people + ["HBL", "Meezan", "NayaPay", "SadaPay", "Easypaisa",
+                                                                               "JazzCash", "Wise", "Raast", "lakh", "crore"]
+                                     + vocabulary.categories)
         do {
             try session.smart.startListening { text, isFinal in
                 Task { @MainActor in self.heard(text, isFinal: isFinal) }
@@ -257,6 +263,16 @@ final class VoiceModel {
         turn += 1
         lastSentence = sentence
         lines.append(Line(speaker: .me, text: sentence))
+        if let balance = pendingBalance, let intent = AssistantReply.intent(sentence) {
+            pendingBalance = nil
+            if intent == .confirm { setBalance(balance.account, to: balance.target) } else { say("OK, I left \(balance.account.name) as it is.") }
+            return
+        }
+        if card == nil, pending == nil, let request = BalancePhrase.request(sentence, vocabulary: vocabulary) {
+            pendingBalance = nil
+            offerBalance(request)
+            return
+        }
         // "Yes" or "no" to the card on screen, or "cancel" to a follow-up question, spoken or typed.
         if card != nil || pending != nil, let intent = AssistantReply.intent(sentence) {
             let hadCard = card != nil
@@ -524,6 +540,48 @@ final class VoiceModel {
         if !card.payee.isEmpty { parts.append("payee " + card.payee) }
         parts.append("date " + DateText.short(LocalDate(card.date, in: .current)))
         return parts.joined(separator: ", ")
+    }
+
+    // MARK: Setting a balance
+
+    /// "Balance in my HBL account is 35,771, update it": shows the change and waits for yes (owner, 2026-10-14).
+    private func offerBalance(_ request: BalancePhrase.Request) {
+        let accounts = session.ledger.activeAccounts
+        let named = request.account.flatMap { name in accounts.first { NameKey.make($0.name) == NameKey.make(name) } }
+        guard let account = named ?? lastBalanceAccount.flatMap({ id in accounts.first { $0.id == id } }) else {
+            say("Which account is that? Say it with the name, like \"HBL balance is 35,771\".")
+            return
+        }
+        lastBalanceAccount = account.id
+        guard let target = try? Money.fromMajor(request.amount.value, account.currency) else {
+            say("That amount doesn't fit \(account.name).")
+            return
+        }
+        let current = session.ledger.balance(of: account)
+        guard current.minorUnits != target.minorUnits else {
+            say("\(account.name) already shows \(MoneyFormatter.string(target)). Nothing to change.")
+            return
+        }
+        let difference = Money(minorUnits: (target.minorUnits - current.minorUnits).magnitudeClamped, currency: account.currency)
+        pendingBalance = (account, target)
+        say("\(account.name) shows \(MoneyFormatter.string(current)) in UZee. Set it to \(MoneyFormatter.string(target))? "
+            + "I'll add a balance adjustment of \(target.minorUnits > current.minorUnits ? "+" : "−")\(MoneyFormatter.string(difference)), "
+            + "not spending or income. Say yes to save.")
+    }
+
+    private func setBalance(_ account: Account, to target: Money) {
+        let current = session.ledger.balance(of: account)
+        let difference = target.minorUnits - current.minorUnits
+        guard difference != 0 else { say("\(account.name) is already \(MoneyFormatter.string(target))."); return }
+        let draft = TransactionDraft(kind: .adjustment, amount: Money(minorUnits: difference.magnitudeClamped, currency: account.currency),
+                                     accountID: account.id, adjustmentIncreases: difference > 0,
+                                     note: "Set by UZee to \(MoneyFormatter.string(target))")
+        guard let transaction = try? TransactionValidator.build(draft, accounts: session.ledger.accounts, base: session.ledger.base),
+              session.save(transaction, isNew: true) else {
+            say("Couldn't change \(account.name). Use Reconcile in Accounts instead.")
+            return
+        }
+        say("Done. \(account.name) is now \(MoneyFormatter.string(target)).")
     }
 
     // MARK: Card

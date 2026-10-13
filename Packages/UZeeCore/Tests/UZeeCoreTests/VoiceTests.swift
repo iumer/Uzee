@@ -486,3 +486,35 @@ struct RupeeTextTests {
         #expect(RupeeText.pakistani(text) == expected)
     }
 }
+
+// Owner, 2026-10-14: "Balance in my HP account is rupees35771 so please update my HBL account" became an expense.
+@Suite("Setting an account's balance by voice")
+struct BalancePhraseTests {
+    private let names = VoiceVocabulary(people: ["Ammi"], accounts: ["HBL", "Meezan Bank", "NayaPay", "Cash"], categories: ["Food"])
+
+    @Test("The real balance of an account")
+    func setBalance() {
+        let first = BalancePhrase.request("Balance in my HP account is rupees35771 so please update my HBL account accordingly", vocabulary: names)
+        #expect(first?.account == "HBL")
+        #expect(first?.amount.value == 35_771)
+        let followUp = BalancePhrase.request("Yes, the actual amount in my account is 35771 not 2 25,000 so please update it", vocabulary: names)
+        #expect(followUp?.account == nil)
+        #expect(followUp?.amount.value == 35_771)
+        #expect(BalancePhrase.request("Set my Mizan balance to 1,200", vocabulary: names)?.account == "Meezan Bank")
+        #expect(BalancePhrase.request("my naya pay balance should be 5000", vocabulary: names)?.account == "NayaPay")
+    }
+
+    @Test("Spending, questions and loans are not balance updates")
+    func notBalance() {
+        #expect(BalancePhrase.request("Spent 2500 on groceries from HBL", vocabulary: names) == nil)
+        #expect(BalancePhrase.request("How much is in HBL?", vocabulary: names) == nil)
+        #expect(BalancePhrase.request("What's my HBL balance?", vocabulary: names) == nil)
+        #expect(BalancePhrase.request("I owe Ammi 250000", vocabulary: names) == nil)
+    }
+
+    @Test("Bank names as speech writes them")
+    func misheard() {
+        #expect(VoiceRuleParser.parse("Paid 500 from my HP account", vocabulary: names, today: today).account == "HBL")
+        #expect(VoiceRuleParser.parse("Spent 900 from easy paisa", vocabulary: VoiceVocabulary(accounts: ["Easypaisa"]), today: today).account == "Easypaisa")
+    }
+}

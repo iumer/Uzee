@@ -17,6 +17,14 @@ public final class SpeechListener: @unchecked Sendable {
     private var task: SFSpeechRecognitionTask?
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var currentLevel: Float = 0
+    private var currentHints: [String] = []
+
+    /// Words to listen out for: the user's own accounts, people and categories, so "HBL" isn't heard as "HP"
+    /// (owner, 2026-10-14).
+    public var hints: [String] {
+        get { lock.withLock { currentHints } }
+        set { lock.withLock { currentHints = Array(newValue.prefix(100)) } }
+    }
 
     /// How loud the microphone is, 0 (quiet) … 1 (loud speech), smoothed. 0 when not listening.
     public var level: Float { lock.withLock { currentLevel } }
@@ -51,6 +59,7 @@ public final class SpeechListener: @unchecked Sendable {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.addsPunctuation = true
+        request.contextualStrings = hints
         if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
 
         let input = engine.inputNode
