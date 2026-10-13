@@ -232,6 +232,25 @@ public struct PeopleStore: Sendable {
                 legs: [TransactionLeg(accountID: accountID, amount: iPaid ? Money(minorUnits: -amount.minorUnits, currency: amount.currency) : amount,
                                       role: .main)])
             try LedgerStore.save(transaction, db)
+            // Pays off their open loans first, oldest first, so the loans close with it (BUG-026); what's left
+            // settles shared expenses. Group settle-ups are about the group only.
+            if groupID == nil {
+                var left = amount.minorUnits
+                let now = Timestamp.now()
+                let loans = try Self.fetchLoans(db).filter {
+                    $0.personID == personID && $0.direction == (iPaid ? .borrowed : .lent) && $0.principal.currency == amount.currency
+                        && !LoanCalculator.outstanding($0).isZero
+                }.sorted { $0.startDate < $1.startDate }
+                for loan in loans where left > 0 {
+                    let part = min(left, LoanCalculator.outstanding(loan).minorUnits)
+                    try db.execute(sql: """
+                        INSERT INTO loan_payment (id, created_at, updated_at, is_sample, loan_id, txn_id, amount_minor, paid_on)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, arguments: [UUID().uuidString, now, now, loan.isSample || transaction.isSample, loan.id.uuidString,
+                                         transaction.id.uuidString, part, date.description])
+                    left -= part
+                }
+            }
             return transaction
         }
     }

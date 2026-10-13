@@ -178,8 +178,16 @@ public struct PeopleLedger: Sendable {
                 groups[groupID] = group
             }
         }
+        // The part of a settle-up that paid off loans is already in those loans' payments (BUG-026).
+        var toLoans: [UUID: Int64] = [:]
+        for loan in loans {
+            for payment in loan.payments { if let txn = payment.transactionID { toLoans[txn, default: 0] &+= payment.amount.minorUnits } }
+        }
         for settlement in transactions.compactMap(Settlement.from) {
-            people[settlement.personID, default: PersonBalance(personID: settlement.personID)].shared.add(settlement.amount)
+            let paidLoans = toLoans[settlement.transactionID] ?? 0
+            let rest = settlement.amount.minorUnits < 0 ? settlement.amount.minorUnits + paidLoans : settlement.amount.minorUnits - paidLoans
+            people[settlement.personID, default: PersonBalance(personID: settlement.personID)].shared
+                .add(Money(minorUnits: rest, currency: settlement.amount.currency))
             if let groupID = settlement.groupID {
                 var group = groups[groupID] ?? GroupBalance(groupID: groupID)
                 group.withMe[settlement.personID, default: MoneyBag()].add(settlement.amount)

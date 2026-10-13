@@ -87,6 +87,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-023 | 2026-10-13 | NayaPay statement pre-set to import into Cash | Account picker took the best same-currency account even with no name match | Mac check; Phone | 0.13.13 | Fixed, check on phone |
 | BUG-024 | 2026-10-13 | Settings › Transfers between my accounts: "Make N transfers" couldn't be tapped; taps went to +, Plan or the row behind | Bottom button sat under the floating tab bar on a screen pushed inside a tab | Mac check; Phone | 0.13.13 (37) | Fixed, check on phone |
 | BUG-025 | 2026-10-13 | Spending still ~Rs 679k after transfers: ATM cash withdrawals (~Rs 197k) and money sent to my own accounts not in UZee (e.g. HBL Konnect) counted as spending | Only pairs with both sides imported were caught | TransferMatcherTests; Mac check with owner data; Phone | 0.13.14 | Fixed, check on phone |
+| BUG-026 | 2026-10-13 | After Settle up the person shows "All settled up" but their loans still say Open / Rs 20,000 left | Settle up never recorded payments on the loans | PeopleStoreTests settleClosesLoans; Mac check; Phone | 0.13.15 | Fixed, check on phone |
 
 ## Waiting on the owner
 

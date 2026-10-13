@@ -165,4 +165,32 @@ struct PeopleStoreTests {
         #expect(snapshot.people.map(\.name) == ["You"])
         #expect(snapshot.groups.isEmpty && snapshot.splits.isEmpty && snapshot.loans.isEmpty)
     }
+
+    @Test("BUG-026: settling up with Usama pays off his open loans, oldest first, and he's settled everywhere")
+    func settleClosesLoans() throws {
+        let world = try sample()
+        var (ledger, snapshot) = try balances(world)
+        let usama = person("Usama", snapshot)
+        #expect(ledger.net(of: usama) == rs(25_000))
+        try world.people.settle(personID: usama, groupID: nil, amount: rs(25_000), iPaid: false, accountID: try account("HBL", world), on: day(10, 12))
+        (ledger, snapshot) = try balances(world)
+        #expect(ledger.net(of: usama) == rs(0))
+        #expect(ledger.balance(of: usama).loans.isZero)
+        let open = snapshot.loans.filter { $0.personID == usama && !LoanCalculator.outstanding($0).isZero }
+        #expect(open.isEmpty)
+        #expect(ledger.overall.owedToYou == rs(10_000))
+    }
+
+    @Test("BUG-026: a settle-up bigger than the loans pays them off and the rest settles shared expenses")
+    func settleMoreThanLoans() throws {
+        let world = try empty()
+        let friend = try world.people.createPerson(name: "Test Friend")
+        let cash = try world.ledger.createAccount(name: "Cash", kind: .cash, currency: .pkr, openingBalance: rs(100_000), openingDate: day(9, 1))
+        _ = try world.people.recordLoan(direction: .lent, personID: friend.id, amount: rs(3_000), accountID: cash.id, on: day(10, 1))
+        try world.people.settle(personID: friend.id, groupID: nil, amount: rs(5_000), iPaid: false, accountID: cash.id, on: day(10, 2))
+        let (ledger, snapshot) = try balances(world)
+        #expect(snapshot.loans.allSatisfy { LoanCalculator.outstanding($0).isZero })
+        #expect(ledger.balance(of: friend.id).shared.total(in: .pkr, rates: [:]) == rs(-2_000))
+        #expect(ledger.net(of: friend.id) == rs(-2_000))
+    }
 }
