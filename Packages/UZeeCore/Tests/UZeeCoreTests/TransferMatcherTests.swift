@@ -118,4 +118,38 @@ struct TransferMatcherTests {
         let rows = (1...5).map { entry(nayapay, $0, -Int64($0) * 100, "Sent by TEST USER to Shop \($0)") }
         #expect(TransferMatcher.moves(rows, excluding: [], accountNames: names, ownerWords: ["test", "user"]).isEmpty)
     }
+
+    @Test("F7: money to an account on a day its statement covers never adds to it; it only leaves")
+    func coveredDays() {
+        let owner = ["test", "user"]
+        let hblRow = entry(hbl, 1, -500, "Grocer Mart")
+        let hblLast = entry(hbl, 10, 2_000, "Salary")
+        let out = entry(meezan, 5, -1_300, "Raast P2P Fund transfer to TEST USER PK00HABB0000001234567890")
+        let moves = TransferMatcher.moves([hblRow, hblLast, out], excluding: [], accountNames: names, ownerWords: owner)
+        #expect(moves == [TransferMatcher.Move(entry: out, toAccountID: nil, isSure: true)])
+    }
+
+    @Test("F9: an IBAN code doesn't count when the row names someone else")
+    func ibanWithOtherName() {
+        let out = entry(meezan, 4, -1_000, "Raast P2P Fund transfer to Other Person PK00TMFB0000001234567890")
+        let into = entry(easypaisa, 4, 1_000, "Raast Payment - Test User - PK00HABB0000001234567890")
+        let pairs = TransferMatcher.pairs([out, into], accountNames: names, ownerWords: ["test", "user"])
+        #expect(pairs.count == 1)
+        #expect(pairs.allSatisfy { !$0.isSure })
+    }
+
+    @Test("F10: Wise USD sent to yourself pairs with the rupees landing in Meezan, within 5% at the table rate")
+    func acrossCurrencies() {
+        let wise = UUID()
+        var accounts = names
+        accounts[wise] = "Wise USD"
+        let out = TransferMatcher.Entry(id: UUID(), accountID: wise, date: day(7), amount: Money(major: -500, .usd), text: "Sent money to Test User")
+        let into = entry(meezan, 8, 138_600, "Raast P2P Home Remittance from WISE PAYMENTS LIMITED")
+        let far = entry(meezan, 8, 150_000, "Raast P2P Home Remittance from WISE PAYMENTS LIMITED")
+        let rates: [String: Decimal] = ["USD": 280]
+        let pairs = TransferMatcher.pairs([out, far, into], accountNames: accounts, ownerWords: ["test", "user"], base: .pkr, rates: rates)
+        #expect(pairs.count == 1)
+        #expect(pairs.first?.into == into)
+        #expect(pairs.first?.isSure == true)
+    }
 }

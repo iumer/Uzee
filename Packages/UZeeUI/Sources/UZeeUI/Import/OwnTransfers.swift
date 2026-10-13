@@ -15,9 +15,10 @@ struct OwnMoneyReview {
     var isEmpty: Bool { pairs.isEmpty && cash.isEmpty && moves.isEmpty }
     var count: Int { pairs.count + cash.count + moves.count }
 
-    /// Ticked to start with: pairs and moves that name you or your accounts on both sides, and every ATM withdrawal.
+    /// Ticked to start with: pairs and moves that name you or your accounts on both sides. ATM cash never is:
+    /// most of it has been spent, so you tick only what you still have (F8).
     var sure: Set<UUID> {
-        Set(pairs.filter(\.isSure).map(\.out.id) + cash.map(\.id) + moves.filter(\.isSure).map(\.entry.id))
+        Set(pairs.filter(\.isSure).map(\.out.id) + moves.filter(\.isSure).map(\.entry.id))
     }
 }
 
@@ -34,9 +35,10 @@ extension AppSession {
         }
         let names = Dictionary(uniqueKeysWithValues: ledger.accounts.map { ($0.id, $0.name) })
         let owner = TransferMatcher.likelyOwnerWords(entries, accountNames: names)
-        let pairs = TransferMatcher.pairs(entries, accountNames: names, ownerWords: owner)
+        let pairs = TransferMatcher.pairs(entries, accountNames: names, ownerWords: owner, base: ledger.base, rates: ledger.rates)
         let used = Set(pairs.flatMap { [$0.out.id, $0.into.id] })
-        let cash = TransferMatcher.cashWithdrawals(entries)
+        // Only the last month's ATM cash can still be in your wallet; older cash was spent and stays spending (F8).
+        let cash = TransferMatcher.cashWithdrawals(entries).filter { $0.date >= today.addingDays(-30) }
         let moves = TransferMatcher.moves(entries, excluding: used, accountNames: names, ownerWords: owner)
         return OwnMoneyReview(pairs: pairs, cash: cash, moves: moves)
     }
@@ -48,7 +50,7 @@ extension AppSession {
         var replaced: [UUID] = []
         do {
             for pair in review.pairs where chosen.contains(pair.out.id) {
-                try save(transferFrom: pair.out, to: pair.into.accountID, made: &made)
+                try save(transferFrom: pair.out, to: pair.into.accountID, received: pair.into.amount, made: &made)
                 try client.delete(pair.out.id)
                 replaced.append(pair.out.id)
                 try client.delete(pair.into.id)
@@ -86,10 +88,12 @@ extension AppSession {
         reload()
     }
 
-    private func save(transferFrom entry: TransferMatcher.Entry, to account: UUID, made: inout [UUID]) throws {
+    /// `received` is what landed, for a move between currencies (Wise USD → Meezan PKR).
+    private func save(transferFrom entry: TransferMatcher.Entry, to account: UUID, received: Money? = nil, made: inout [UUID]) throws {
         let magnitude = try entry.amount.magnitude()
         let row = transactions.first { $0.id == entry.id }
         let draft = TransactionDraft(kind: .transfer, amount: magnitude, accountID: entry.accountID, toAccountID: account,
+                                     receivedAmount: received.flatMap { $0.currency == magnitude.currency ? nil : $0 },
                                      note: note(row), occurredAt: occurred(row, entry), source: .import)
         let transfer = try TransactionValidator.build(draft, accounts: ledger.accounts, base: ledger.base)
         try client.save(transfer)
@@ -156,7 +160,7 @@ struct OwnMoneyRows: View {
             } header: {
                 Text("Cash from ATMs")
             } footer: {
-                Text("Moved into your Cash account. It counts as spending when you add what you spent it on.")
+                Text("Cash from the last month. Tick only cash you still have: it moves into your Cash account. Cash you spent stays as spending.")
             }
         }
         if !review.moves.isEmpty {

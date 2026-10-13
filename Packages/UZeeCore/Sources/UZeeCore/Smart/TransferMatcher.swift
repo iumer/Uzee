@@ -60,20 +60,23 @@ public enum TransferMatcher {
     /// Every outgoing entry paired with an incoming one in another account: the same amount and currency, at most
     /// `maxDays` apart, no ATM withdrawal, and at least one side naming you or the other account. Each entry is used
     /// once; sure pairs and close dates win.
-    public static func pairs(_ entries: [Entry], accountNames: [UUID: String], ownerWords: [String]) -> [Pair] {
+    public static func pairs(_ entries: [Entry], accountNames: [UUID: String], ownerWords: [String],
+                             base: Currency = .pkr, rates: [String: Decimal] = [:]) -> [Pair] {
         let owner = ownerWords.map(NameKey.make).filter { $0.count >= 3 }
-        var options: [(score: Int, gap: Int, pair: Pair)] = []
-        for (out, into) in candidates(entries) {
+        var options: [(score: Int, gap: Int, off: Int64, pair: Pair)] = []
+        for (out, into, off) in candidates(entries, base: base, rates: rates) {
             let gap = abs(out.date.days(to: into.date))
-            let outProof = namesOwner(out.text, owner) || namesAccount(out.text, accountNames[into.accountID])
-            let inProof = namesOwner(into.text, owner) || namesAccount(into.text, accountNames[out.accountID])
+            let outProof = namesOwner(out.text, owner) || namesAccount(out.text, accountNames[into.accountID], owner: owner)
+            let inProof = namesOwner(into.text, owner) || namesAccount(into.text, accountNames[out.accountID], owner: owner)
+            // Across currencies (Wise USD → Meezan) the amounts only roughly agree, so both sides must say so.
+            if off > 0 { guard outProof && inProof else { continue } }
             guard outProof || inProof else { continue }
             let sure = outProof && inProof
-            options.append((sure ? 0 : 1, gap, Pair(out: out, into: into, isSure: sure)))
+            options.append((sure ? 0 : 1, gap, off, Pair(out: out, into: into, isSure: sure)))
         }
         var used = Set<UUID>()
         var result: [Pair] = []
-        for option in options.sorted(by: { ($0.score, $0.gap, $0.pair.out.date) < ($1.score, $1.gap, $1.pair.out.date) }) {
+        for option in options.sorted(by: { ($0.score, $0.gap, $0.off, $0.pair.out.date) < ($1.score, $1.gap, $1.off, $1.pair.out.date) }) {
             guard !used.contains(option.pair.out.id), !used.contains(option.pair.into.id) else { continue }
             used.insert(option.pair.out.id)
             used.insert(option.pair.into.id)
@@ -88,7 +91,7 @@ public enum TransferMatcher {
     public static func likelyOwnerWords(_ entries: [Entry], accountNames: [UUID: String]) -> [String] {
         let bankWords = Set(bankAliases.values.flatMap { $0 } + accountNames.values.flatMap { words(NameKey.make($0)) })
         var counts: [String: Int] = [:]
-        for (out, into) in candidates(entries) {
+        for (out, into, _) in candidates(entries) {
             let outWords = Set(words(NameKey.make(out.text)))
             let inWords = words(NameKey.make(into.text))
             var seen = Set<String>()
@@ -101,15 +104,25 @@ public enum TransferMatcher {
     }
 
     /// Same amount and currency, opposite directions, different accounts, close dates, neither an ATM withdrawal.
-    static func candidates(_ entries: [Entry]) -> [(Entry, Entry)] {
+    /// Same amount and currency (or, across currencies, within 5% at the table rate), opposite directions,
+    /// different accounts, close dates, neither an ATM withdrawal. `off` is how far apart the amounts are in base minor units.
+    static func candidates(_ entries: [Entry], base: Currency = .pkr, rates: [String: Decimal] = [:]) -> [(Entry, Entry, off: Int64)] {
         let usable = entries.filter { !$0.amount.isZero && !isATM($0.text) }
         let outs = usable.filter { $0.amount.isNegative }
         let ins = usable.filter { !$0.amount.isNegative }
-        var result: [(Entry, Entry)] = []
+        var result: [(Entry, Entry, off: Int64)] = []
         for out in outs {
-            for into in ins where into.accountID != out.accountID && into.amount.currency == out.amount.currency
-                && into.amount.minorUnits == -out.amount.minorUnits && abs(out.date.days(to: into.date)) <= maxDays {
-                result.append((out, into))
+            for into in ins where into.accountID != out.accountID && abs(out.date.days(to: into.date)) <= maxDays {
+                if into.amount.currency == out.amount.currency {
+                    if into.amount.minorUnits == -out.amount.minorUnits { result.append((out, into, 0)) }
+                    continue
+                }
+                guard let sent = try? RateTable.toBase(out.amount, base: base, rates: rates),
+                      let got = try? RateTable.toBase(into.amount, base: base, rates: rates),
+                      RateTable.hasRate(out.amount.currency, base: base, rates: rates),
+                      RateTable.hasRate(into.amount.currency, base: base, rates: rates) else { continue }
+                let off = abs(-sent.minorUnits - got.minorUnits)
+                if off * 20 <= got.minorUnits { result.append((out, into, max(1, off))) }
             }
         }
         return result
@@ -132,7 +145,8 @@ public enum TransferMatcher {
 
     /// Money out to one of your accounts whose other side isn't in UZee: an account not added, or a statement
     /// that ends before the money landed (F4). `toAccountID` is the UZee account when the row carries its IBAN's
-    /// bank code ("PK00HABB…"); nil when it only names you ("to A KHAN HBL KONNECT"). Sure when it names you.
+    /// bank code ("PK00HABB…") and that account's statements don't cover the day; nil otherwise, so it only leaves
+    /// the account ("Moved to my own account"). Sure when it names you and goes nowhere in UZee.
     public struct Move: Equatable, Sendable {
         public var entry: Entry
         public var toAccountID: UUID?
@@ -148,9 +162,15 @@ public enum TransferMatcher {
             outs[entry.accountID, default: (0, 0)].all += 1
             if namesOwner(entry.text, owner) { outs[entry.accountID, default: (0, 0)].named += 1 }
         }
+        // The days each account's imported statements cover: money that didn't show up there never arrived there (F7).
+        var covered: [UUID: ClosedRange<LocalDate>] = [:]
+        for entry in entries {
+            let range = covered[entry.accountID]
+            covered[entry.accountID] = min(range?.lowerBound ?? entry.date, entry.date)...max(range?.upperBound ?? entry.date, entry.date)
+        }
         var result: [Move] = []
         for entry in entries where entry.amount.isNegative && !used.contains(entry.id) && !isCashWithdrawal(entry.text) {
-            let codes = ibanBankCodes(entry.text)
+            let codes = otherNames(entry.text, owner).isEmpty ? ibanBankCodes(entry.text) : []
             let targets = codes.isEmpty ? [] : accountNames.keys.filter { id in
                 id != entry.accountID && bankAliases.contains { bank, aliases in
                     let nameWords = words(NameKey.make(accountNames[id] ?? ""))
@@ -159,9 +179,14 @@ public enum TransferMatcher {
             }
             let counts = outs[entry.accountID] ?? (0, 0)
             let mine = namesOwner(entry.text, owner) && !(counts.all >= 4 && counts.named * 2 > counts.all)
-            let target = targets.count == 1 ? targets.first : nil
+            var target = targets.count == 1 ? targets.first : nil
             guard mine || target != nil else { continue }
-            result.append(Move(entry: entry, toAccountID: target, isSure: mine))
+            // Into a UZee account only when its statements don't cover that day, and then left for you to tick.
+            if let id = target, covered[id].map({ $0.contains(entry.date) }) ?? false {
+                guard mine else { continue }
+                target = nil
+            }
+            result.append(Move(entry: entry, toAccountID: target, isSure: mine && target == nil))
         }
         return result.sorted { $0.entry.date < $1.entry.date }
     }
@@ -187,9 +212,11 @@ public enum TransferMatcher {
     }
 
     /// "Funds transfer to NAYAPAY 03xx" in the HBL row: the other account's bank or wallet, by any of its aliases.
-    static func namesAccount(_ text: String, _ accountName: String?) -> Bool {
+    static func namesAccount(_ text: String, _ accountName: String?, owner: [String] = []) -> Bool {
         guard let accountName else { return false }
-        let found = Set(words(NameKey.make(text))).union(ibanBankCodes(text))
+        // "to OTHER PERSON PK00TMFB…" is someone else's Easypaisa: an IBAN code only counts when no one else is named (F9).
+        let codes = otherNames(text, owner).isEmpty ? ibanBankCodes(text) : []
+        let found = Set(words(NameKey.make(text))).union(codes)
         let nameWords = words(NameKey.make(accountName))
         for (bank, aliases) in bankAliases where nameWords.contains(bank) || nameWords.contains(where: { aliases.contains($0) }) {
             if aliases.contains(where: { found.contains($0) }) { return true }
@@ -197,6 +224,15 @@ public enum TransferMatcher {
         // An account named after something else ("Salary account"): its first distinctive word.
         if let first = nameWords.first(where: { $0.count >= 4 && !commonWords.contains($0) }) { return found.contains(first) }
         return false
+    }
+
+    /// Words that look like a name and aren't yours, a bank's or a banking word: "OTHER PERSON" in "to OTHER PERSON PK00…".
+    static func otherNames(_ text: String, _ owner: [String]) -> [String] {
+        let banks = Set(bankAliases.values.flatMap { $0 })
+        return words(NameKey.make(text)).filter { word in
+            word.count >= 3 && word.allSatisfy(\.isLetter) && !commonWords.contains(word) && !banks.contains(word)
+                && !owner.contains { sameWord($0, word) }
+        }
     }
 
     /// Lowercased letters-and-digits words: "A/C#123-KHAN" → ["a", "c", "123", "khan"].
