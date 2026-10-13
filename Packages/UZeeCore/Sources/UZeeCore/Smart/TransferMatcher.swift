@@ -35,13 +35,13 @@ public enum TransferMatcher {
 
     /// What banks and wallets print for each other: "MEZ" for Meezan, "HABB" for HBL, "TMFB" for Easypaisa.
     static let bankAliases: [String: [String]] = [
-        "meezan": ["meezan", "mez", "mebl"],
+        "meezan": ["meezan", "mez", "mebl", "mezn"],
         "hbl": ["hbl", "habb"],
         "nayapay": ["nayapay", "naya"],
         "easypaisa": ["easypaisa", "tmfb", "telenor"],
         "sadapay": ["sadapay", "sada"],
-        "jazzcash": ["jazzcash", "jazz", "mobilink"],
-        "mcb": ["mcb", "muco"],
+        "jazzcash": ["jazzcash", "jazz", "mobilink", "jczl"],
+        "mcb": ["mcb", "muco", "mucb"],
         "ubl": ["ubl", "unil"],
         "alfalah": ["alfalah", "alfh"],
         "wise": ["wise", "transferwise"],
@@ -116,7 +116,65 @@ public enum TransferMatcher {
     }
 
     static func isATM(_ text: String) -> Bool {
-        words(NameKey.make(text)).contains("atm")
+        isCashWithdrawal(text)
+    }
+
+    /// "ATM Cash Withdrawal …" or "Cash Withdrawal": cash taken out, never a move between bank accounts (F3).
+    public static func isCashWithdrawal(_ text: String) -> Bool {
+        let found = words(NameKey.make(text))
+        return found.contains("atm") || (found.contains("cash") && found.contains { $0.hasPrefix("withdraw") })
+    }
+
+    /// Cash taken out at an ATM: spending only once it's spent, so offered as a move into Cash.
+    public static func cashWithdrawals(_ entries: [Entry]) -> [Entry] {
+        entries.filter { $0.amount.isNegative && isCashWithdrawal($0.text) }
+    }
+
+    /// Money out to one of your accounts whose other side isn't in UZee: an account not added, or a statement
+    /// that ends before the money landed (F4). `toAccountID` is the UZee account when the row carries its IBAN's
+    /// bank code ("PK00HABB…"); nil when it only names you ("to A KHAN HBL KONNECT"). Sure when it names you.
+    public struct Move: Equatable, Sendable {
+        public var entry: Entry
+        public var toAccountID: UUID?
+        public var isSure: Bool
+    }
+
+    public static func moves(_ entries: [Entry], excluding used: Set<UUID>, accountNames: [UUID: String],
+                             ownerWords: [String]) -> [Move] {
+        let owner = ownerWords.map(NameKey.make).filter { $0.count >= 3 }
+        // A statement that prints your name on most of its other money out (as the sender) says nothing about where it went.
+        var outs: [UUID: (all: Int, named: Int)] = [:]
+        for entry in entries where entry.amount.isNegative && !used.contains(entry.id) && !isCashWithdrawal(entry.text) {
+            outs[entry.accountID, default: (0, 0)].all += 1
+            if namesOwner(entry.text, owner) { outs[entry.accountID, default: (0, 0)].named += 1 }
+        }
+        var result: [Move] = []
+        for entry in entries where entry.amount.isNegative && !used.contains(entry.id) && !isCashWithdrawal(entry.text) {
+            let codes = ibanBankCodes(entry.text)
+            let targets = codes.isEmpty ? [] : accountNames.keys.filter { id in
+                id != entry.accountID && bankAliases.contains { bank, aliases in
+                    let nameWords = words(NameKey.make(accountNames[id] ?? ""))
+                    return (nameWords.contains(bank) || nameWords.contains { aliases.contains($0) }) && aliases.contains { codes.contains($0) }
+                }
+            }
+            let counts = outs[entry.accountID] ?? (0, 0)
+            let mine = namesOwner(entry.text, owner) && !(counts.all >= 4 && counts.named * 2 > counts.all)
+            let target = targets.count == 1 ? targets.first : nil
+            guard mine || target != nil else { continue }
+            result.append(Move(entry: entry, toAccountID: target, isSure: mine))
+        }
+        return result.sorted { $0.entry.date < $1.entry.date }
+    }
+
+    /// "PK00HABB0000…" → ["habb"]: the four-letter bank code inside a Pakistani IBAN.
+    static func ibanBankCodes(_ text: String) -> Set<String> {
+        var codes = Set<String>()
+        for word in words(NameKey.make(text)) where word.count >= 8 && word.hasPrefix("pk") {
+            let chars = Array(word)
+            guard chars[2].isNumber, chars[3].isNumber, chars[4...7].allSatisfy(\.isLetter) else { continue }
+            codes.insert(String(chars[4...7]))
+        }
+        return codes
     }
 
     /// "Raast P2P to A KHAN": your name, allowing one letter's difference and cut-off words. With two or more
@@ -131,7 +189,7 @@ public enum TransferMatcher {
     /// "Funds transfer to NAYAPAY 03xx" in the HBL row: the other account's bank or wallet, by any of its aliases.
     static func namesAccount(_ text: String, _ accountName: String?) -> Bool {
         guard let accountName else { return false }
-        let found = Set(words(NameKey.make(text)))
+        let found = Set(words(NameKey.make(text))).union(ibanBankCodes(text))
         let nameWords = words(NameKey.make(accountName))
         for (bank, aliases) in bankAliases where nameWords.contains(bank) || nameWords.contains(where: { aliases.contains($0) }) {
             if aliases.contains(where: { found.contains($0) }) { return true }

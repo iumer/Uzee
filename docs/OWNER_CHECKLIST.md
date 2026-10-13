@@ -86,6 +86,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-022 | 2026-10-13 | October spending showed Rs 662,544: money moved between my own accounts counted as spending in one and income in the other | Each statement imported on its own; nothing paired the two sides | TransferMatcherTests; Mac check with owner data; Phone | 0.13.13 | Fixed, check on phone |
 | BUG-023 | 2026-10-13 | NayaPay statement pre-set to import into Cash | Account picker took the best same-currency account even with no name match | Mac check; Phone | 0.13.13 | Fixed, check on phone |
 | BUG-024 | 2026-10-13 | Settings › Transfers between my accounts: "Make N transfers" couldn't be tapped; taps went to +, Plan or the row behind | Bottom button sat under the floating tab bar on a screen pushed inside a tab | Mac check; Phone | 0.13.13 (37) | Fixed, check on phone |
+| BUG-025 | 2026-10-13 | Spending still ~Rs 679k after transfers: ATM cash withdrawals (~Rs 197k) and money sent to my own accounts not in UZee (e.g. HBL Konnect) counted as spending | Only pairs with both sides imported were caught | TransferMatcherTests; Mac check with owner data; Phone | 0.13.14 | Fixed, check on phone |
 
 ## Waiting on the owner
 

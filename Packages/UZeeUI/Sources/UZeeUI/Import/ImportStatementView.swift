@@ -71,7 +71,7 @@ struct ImportStatementView: View {
     /// Statement rows imported in this batch (Undo also covers any balance adjustments).
     @State private var rowsImported = 0
     /// Pairs of rows that look like one transfer between your accounts, and which are ticked (the sure ones).
-    @State private var transferPairs: [TransferMatcher.Pair] = []
+    @State private var transferReview = OwnMoneyReview()
     @State private var transferChosen: Set<UUID> = []
     /// Transfers made after this import and the rows they replaced, for Undo.
     @State private var transfersMade: [UUID] = []
@@ -611,9 +611,9 @@ struct ImportStatementView: View {
             return
         }
         // Statements imported earlier count too: the other side of a transfer is often in last week's import.
-        transferPairs = session.ownTransferPairs()
-        transferChosen = Set(transferPairs.filter(\.isSure).map(\.out.id))
-        if transferPairs.isEmpty {
+        transferReview = session.ownMoneyReview()
+        transferChosen = transferReview.sure
+        if transferReview.isEmpty {
             offerRecurring()
         } else {
             step = .transfers(rowsImported)
@@ -622,12 +622,12 @@ struct ImportStatementView: View {
 
     /// Saves the ticked pairs as transfers, then moves on.
     private func makeChosenTransfers() {
-        let picked = transferPairs.filter { transferChosen.contains($0.out.id) }
-        if !picked.isEmpty, let result = session.makeTransfers(picked) {
+        if !transferChosen.isEmpty, let result = session.applyOwnMoney(transferReview, chosen: transferChosen) {
             transfersMade += result.made
             transfersReplaced += result.replaced
-            balanceNotes.append(result.made.count == 1 ? "1 move between your accounts saved as a transfer, not spending."
-                                : "\(result.made.count) moves between your accounts saved as transfers, not spending.")
+            let count = transferChosen.count
+            balanceNotes.append(count == 1 ? "1 row left out of spending: a move between your accounts or ATM cash."
+                                : "\(count) rows left out of spending: moves between your accounts and ATM cash.")
         }
         offerRecurring()
     }
@@ -695,21 +695,19 @@ struct ImportStatementView: View {
             Section {
                 VStack(alignment: .leading, spacing: UZSpacing.s) {
                     Image(systemName: "arrow.left.arrow.right.circle.fill").font(.system(size: 40)).foregroundStyle(UZColor.tint)
-                    Text(transferPairs.count == 1 ? "Found a transfer between your accounts" : "Found \(transferPairs.count) transfers between your accounts")
+                    Text(transferReview.count == 1 ? "Found 1 row that isn't spending" : "Found \(transferReview.count) rows that aren't spending")
                         .font(.title3.weight(.semibold))
-                    Text("Imported \(count) transactions. These show on two of your statements, out of one account and into another. Save each as one transfer so it isn't counted as spending and income? Balances stay the same.")
+                    Text("Imported \(count) transactions. These are money moved between your own accounts and cash taken out at ATMs, so the money stayed yours. Leave them out of spending? Balances stay the same.")
                         .font(.subheadline).foregroundStyle(UZColor.label2)
                 }
                 .listRowBackground(Color.clear)
             }
-            Section {
-                OwnTransferRows(session: session, pairs: transferPairs, chosen: $transferChosen)
-            }
+            OwnMoneyRows(session: session, review: transferReview, chosen: $transferChosen)
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: UZSpacing.m) {
                 Button(action: makeChosenTransfers) {
-                    Text(transferChosen.isEmpty ? "Tick the ones to change" : "Make \(transferChosen.count) \(transferChosen.count == 1 ? "transfer" : "transfers")")
+                    Text(transferChosen.isEmpty ? "Tick the ones to change" : "Leave \(transferChosen.count) out of spending")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, UZSpacing.s)
                 }
                 .buttonStyle(.glassProminent)

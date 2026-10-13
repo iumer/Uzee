@@ -54,7 +54,7 @@ struct SettingsView: View {
                 NavigationLink {
                     OwnTransfersView(session: session)
                 } label: {
-                    SettingsLabel("Transfers between my accounts", symbol: "arrow.left.arrow.right", color: Color(uiColor: .systemIndigo))
+                    SettingsLabel("Transfers & ATM cash", symbol: "arrow.left.arrow.right", color: Color(uiColor: .systemIndigo))
                 }
                 .accessibilityIdentifier("settings.ownTransfers")
                 NavigationLink {

@@ -84,4 +84,38 @@ struct TransferMatcherTests {
         #expect(TransferMatcher.namesAccount("HABB/IBFT", "HBL"))
         #expect(!TransferMatcher.namesAccount("Grocer Mart", "HBL"))
     }
+
+    @Test("An IBAN's bank code names the account: PK00NAYA… is NayaPay, PK00HABB… is HBL")
+    func ibanCodes() {
+        #expect(TransferMatcher.ibanBankCodes("Raast Payment - PK00NAYA0000001234567890") == ["naya"])
+        #expect(TransferMatcher.namesAccount("Raast Payment - PK00HABB0000001234567890", "HBL"))
+        #expect(TransferMatcher.ibanBankCodes("Ref PK1234") == [])
+    }
+
+    @Test("ATM and cash withdrawals are cash taken out, never a transfer pair")
+    func cash() {
+        let atm = entry(meezan, 6, -10_000, "ATM Cash Withdrawal BRANCH STAN(000)")
+        let counter = entry(hbl, 6, -5_000, "Cash Withdrawal")
+        let shop = entry(hbl, 6, -700, "Grocer Mart")
+        #expect(TransferMatcher.cashWithdrawals([atm, counter, shop]) == [atm, counter])
+    }
+
+    @Test("Money out to yourself with no other side is a move: to the account its IBAN names, else out of UZee")
+    func unpairedMoves() {
+        let owner = ["test", "user"]
+        let konnect = entry(meezan, 3, -60_000, "Money Transferred to TEST USER HBL KONNECT")
+        let iban = entry(easypaisa, 12, -8_000, "Raast Payment - PK00HABB0000001234567890")
+        let friend = entry(meezan, 4, -2_000, "Raast P2P to Other Person")
+        let atm = entry(meezan, 5, -1_000, "ATM Cash Withdrawal")
+        let moves = TransferMatcher.moves([konnect, iban, friend, atm], excluding: [], accountNames: names, ownerWords: owner)
+        #expect(moves.count == 2)
+        #expect(moves.first { $0.entry == konnect } == TransferMatcher.Move(entry: konnect, toAccountID: nil, isSure: true))
+        #expect(moves.first { $0.entry == iban } == TransferMatcher.Move(entry: iban, toAccountID: hbl, isSure: false))
+    }
+
+    @Test("A statement that prints your name on most money out doesn't make those rows moves")
+    func senderName() {
+        let rows = (1...5).map { entry(nayapay, $0, -Int64($0) * 100, "Sent by TEST USER to Shop \($0)") }
+        #expect(TransferMatcher.moves(rows, excluding: [], accountNames: names, ownerWords: ["test", "user"]).isEmpty)
+    }
 }
