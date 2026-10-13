@@ -122,22 +122,23 @@ struct OwnTransfersView: View {
                 Section {
                     OwnTransferRows(session: session, pairs: pairs, chosen: $chosen)
                 } footer: {
-                    Text("These were imported from both statements, so they count as spending and income. As transfers, balances stay the same but they leave your spending.")
+                    Text("These were imported from both statements, so they count as spending and income. Tick the ones that are yours and tap Make at the top. As transfers, balances stay the same but they leave your spending.")
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
+        // The button sits in the top bar: this screen is pushed inside a tab, so a bottom button would sit under
+        // the floating +, tab bar and UZee and taps would go to them (BUG-024).
+        .toolbar {
             if !pairs.isEmpty {
-                Button(action: convert) {
-                    Text(chosen.isEmpty ? "Tick the ones to change" : "Make \(chosen.count) \(chosen.count == 1 ? "transfer" : "transfers")")
-                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, UZSpacing.s)
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(chosen.isEmpty ? "Make" : "Make \(chosen.count)", action: convert)
+                        .disabled(chosen.isEmpty)
+                        .accessibilityIdentifier("transfers.make")
                 }
-                .buttonStyle(.glassProminent)
-                .disabled(chosen.isEmpty)
-                .padding(.horizontal, UZSpacing.xxl).padding(.bottom, UZSpacing.m)
-                .accessibilityIdentifier("transfers.make")
             }
         }
+        // Room under the last row to scroll it clear of the floating bar.
+        .contentMargins(.bottom, 140, for: .scrollContent)
         .navigationTitle("Transfers between my accounts")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: load)
