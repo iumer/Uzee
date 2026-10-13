@@ -5,10 +5,30 @@ import UZeeCore
 struct ActivityView: View {
     @Bindable var session: AppSession
     @State private var showingRange = false
+    /// Imported rows that look like moves between your accounts, still to review (owner, 2026-10-14).
+    @State private var toReview = 0
 
     var body: some View {
         let rows = ActivityQuery.filter(session.transactions, session.activityFilter, snapshot: session.ledger, tags: session.tagMap)
         List {
+            if toReview > 0 {
+                Section {
+                    NavigationLink {
+                        OwnTransfersView(session: session)
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                                Text(toReview == 1 ? "1 to review" : "\(toReview) to review").font(.body.weight(.semibold))
+                                Text("Imported rows that look like moves between your accounts or ATM cash")
+                                    .font(.caption).foregroundStyle(UZColor.label2)
+                            }
+                        } icon: {
+                            Image(systemName: "arrow.left.arrow.right.circle.fill").foregroundStyle(UZColor.tint)
+                        }
+                    }
+                    .accessibilityIdentifier("activity.toReview")
+                }
+            }
             if session.activityFilter.count > 0 {
                 Section {
                     Button("Clear filters", systemImage: "xmark.circle") { clearFilters() }
@@ -53,6 +73,8 @@ struct ActivityView: View {
         .sheet(isPresented: $showingRange) {
             DateRangeSheet(filter: $session.activityFilter)
         }
+        .task(id: session.transactions.count) { toReview = session.ownMoneyReview().count }
+        .onAppear { toReview = session.ownMoneyReview().count }
     }
 
     // MARK: Empty and no-result states (TXN-028)

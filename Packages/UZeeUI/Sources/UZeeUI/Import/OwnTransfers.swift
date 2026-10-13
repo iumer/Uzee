@@ -23,8 +23,18 @@ struct OwnMoneyReview {
 }
 
 extension AppSession {
-    /// Imported spending and income only; rows shared with people or groups are left alone.
+    static let ownMoneyKeptKey = "uzee.ownMoney.kept"
+
+    /// Rows you chose to keep as spending or income: never offered again.
+    var ownMoneyKept: Set<UUID> {
+        get { Set((UserDefaults.standard.stringArray(forKey: Self.ownMoneyKeptKey) ?? []).compactMap(UUID.init(uuidString:))) }
+        set { UserDefaults.standard.set(newValue.map(\.uuidString), forKey: Self.ownMoneyKeptKey) }
+    }
+
+    /// Imported spending and income only; rows shared with people or groups, and rows you kept, are left alone.
+    /// What's left is "to review" until you make it a transfer or keep it (owner, 2026-10-14).
     func ownMoneyReview() -> OwnMoneyReview {
+        let kept = ownMoneyKept
         let entries: [TransferMatcher.Entry] = transactions.compactMap { transaction in
             guard transaction.deletedAt == nil, transaction.source == .import, transaction.counterpartyID == nil,
                   transaction.groupID == nil, transaction.kind == .expense || transaction.kind == .income,
@@ -40,7 +50,8 @@ extension AppSession {
         // Only the last month's ATM cash can still be in your wallet; older cash was spent and stays spending (F8).
         let cash = TransferMatcher.cashWithdrawals(entries).filter { $0.date >= today.addingDays(-30) }
         let moves = TransferMatcher.moves(entries, excluding: used, accountNames: names, ownerWords: owner)
-        return OwnMoneyReview(pairs: pairs, cash: cash, moves: moves)
+        return OwnMoneyReview(pairs: pairs.filter { !kept.contains($0.out.id) && !kept.contains($0.into.id) },
+                              cash: cash.filter { !kept.contains($0.id) }, moves: moves.filter { !kept.contains($0.entry.id) })
     }
 
     /// Saves the ticked rows as transfers (or "moved to my own account") and moves the originals to Recently
@@ -229,6 +240,13 @@ struct OwnTransfersView: View {
                         .font(.footnote).foregroundStyle(UZColor.label2)
                 }
                 OwnMoneyRows(session: session, review: review, chosen: $chosen)
+                Section {
+                    Button("Keep the unticked ones as spending", action: keepRest)
+                        .disabled(chosen.count == review.count)
+                        .accessibilityIdentifier("transfers.keep")
+                } footer: {
+                    Text("Unticked rows stay here to review until you make them or keep them.")
+                }
             }
         }
         // The button sits in the top bar: this screen is pushed inside a tab, so a bottom button would sit under
@@ -253,6 +271,17 @@ struct OwnTransfersView: View {
         review = session.ownMoneyReview()
         chosen = review.sure
         loaded = true
+    }
+
+    /// Unticked rows are really spending or income: stop offering them.
+    private func keepRest() {
+        let ids = review.pairs.map(\.out.id) + review.cash.map(\.id) + review.moves.map(\.entry.id)
+        let rest = ids.filter { !chosen.contains($0) }
+        session.ownMoneyKept.formUnion(rest)
+        session.toasts.show(rest.count == 1 ? "Kept 1 as spending or income" : "Kept \(rest.count) as spending or income") { [session] in
+            session.ownMoneyKept.subtract(rest)
+        }
+        load()
     }
 
     private func convert() {

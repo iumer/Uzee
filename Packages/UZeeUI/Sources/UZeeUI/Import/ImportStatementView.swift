@@ -51,7 +51,6 @@ struct ImportStatementView: View {
     @State private var statementCurrency: Currency = .pkr
     @State private var currencyRecognised = false
     @State private var accountProblem: String?
-    @State private var confirming = false
     /// "NayaPay isn't in your accounts yet": asked once per statement when no account matches its bank (owner, 2026-10-13).
     @State private var askingNewAccount = false
     /// Monthly repeats spotted in this statement, offered for the calendar after importing (OWN-024).
@@ -80,6 +79,7 @@ struct ImportStatementView: View {
     @State private var transfersReplaced: [UUID] = []
 
     private var ledger: LedgerSnapshot { session.ledger }
+    private var isDone: Bool { if case .done = step { true } else { false } }
     private var account: Account? { ledger.account(accountID) }
 
     var body: some View {
@@ -137,6 +137,12 @@ struct ImportStatementView: View {
             .onChange(of: accountID) { rebuildRows() }
         }
         .presentationDetents([.large])
+        // A small swipe used to close it mid-import with no word on what was saved (owner, 2026-10-14).
+        .interactiveDismissDisabled(step != .choose && !isDone)
+        .onDisappear {
+            guard !importedIDs.isEmpty, !isDone else { return }
+            session.toasts.show("Imported \(rowsImported) transactions. Anything left to review is at the top of Activity.")
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("import.sheet")
     }
@@ -478,7 +484,14 @@ struct ImportStatementView: View {
                 Section {
                     ForEach(duplicates) { row in rowView(row) }
                 } header: {
-                    Text("Possible duplicates · \(duplicates.count)")
+                    HStack {
+                        Text("Possible duplicates · \(duplicates.count)")
+                        Spacer()
+                        let allOn = duplicates.allSatisfy(\.include)
+                        Button(allOn ? "Select none" : "Select all") { setDuplicates(!allOn) }
+                            .font(.subheadline).textCase(nil)
+                            .accessibilityIdentifier("import.duplicates.all")
+                    }
                 } footer: {
                     Text("These match a transaction already in UZee on the same day or a day apart, so they're off. Turn one on to import it anyway.")
                 }
@@ -487,7 +500,7 @@ struct ImportStatementView: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: UZSpacing.s) {
                 Button {
-                    confirming = true
+                    save()
                 } label: {
                     Text(included.isEmpty ? "Nothing to import" : "Import \(included.count) transactions").frame(maxWidth: .infinity)
                 }
@@ -503,13 +516,10 @@ struct ImportStatementView: View {
             .padding(UZSpacing.xxl)
             .background(.bar)
         }
-        .confirmationDialog("Import \(included.count) transactions into \(account?.name ?? "this account")?", isPresented: $confirming,
-                            titleVisibility: .visible) {
-            Button("Import \(included.count) transactions") { save() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("\(rows.count - included.count) skipped. You can undo the whole import right after.")
-        }
+    }
+
+    private func setDuplicates(_ on: Bool) {
+        for index in rows.indices where rows[index].duplicateOf != nil { rows[index].include = on }
     }
 
     private func binding(_ row: ImportRow) -> Binding<ImportRow> {
@@ -735,7 +745,12 @@ struct ImportStatementView: View {
                 .buttonStyle(.glassProminent)
                 .disabled(transferChosen.isEmpty)
                 .accessibilityIdentifier("import.transfers.make")
-                Button("Keep them as spending and income") { offerRecurring() }
+                Button("Decide later") {
+                    if !transferReview.isEmpty {
+                        balanceNotes.append("Moves between your accounts are waiting at the top of Activity to review.")
+                    }
+                    offerRecurring()
+                }
                     .accessibilityIdentifier("import.transfers.skip")
             }
             .padding(.horizontal, UZSpacing.xxl).padding(.vertical, UZSpacing.m)

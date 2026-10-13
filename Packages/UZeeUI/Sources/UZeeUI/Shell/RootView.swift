@@ -73,8 +73,11 @@ public struct RootView: View {
             // A shared expense opens the Splitwise-style sheet; everything else opens Add.
             if case .shared(let group, let person) = session.addRequest {
                 SharedExpenseSheet(session: session, group: group, person: person).sessionErrors(session)
+                    .interactiveDismissDisabled()
             } else {
+                // Cancel or Save closes it; a stray swipe no longer loses what you typed (owner, 2026-10-14).
                 AddSheet(session: session).sessionErrors(session)
+                    .interactiveDismissDisabled()
             }
         }
         .sheet(isPresented: $session.isVoicePresented) {
