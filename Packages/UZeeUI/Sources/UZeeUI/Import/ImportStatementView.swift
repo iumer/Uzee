@@ -73,6 +73,8 @@ struct ImportStatementView: View {
     @State private var rowsImported = 0
     /// Pairs of rows that look like one transfer between your accounts, and which are ticked (the sure ones).
     @State private var transferReview = OwnMoneyReview()
+    /// Why some ticked rows couldn't change, shown in the transfers step itself (BUG-030).
+    @State private var transferProblem: String?
     @State private var transferChosen: Set<UUID> = []
     /// Transfers made after this import and the rows they replaced, for Undo.
     @State private var transfersMade: [UUID] = []
@@ -652,14 +654,22 @@ struct ImportStatementView: View {
         }
     }
 
-    /// Saves the ticked pairs as transfers, then moves on.
+    /// Saves the ticked pairs as transfers, then moves on. Reads the rows again first, so it works on what's saved
+    /// now (BUG-030). When none of them could change, it stays here and says why instead of moving on silently.
     private func makeChosenTransfers() {
-        if !transferChosen.isEmpty, let result = session.applyOwnMoney(transferReview, chosen: transferChosen) {
-            transfersMade += result.made
-            transfersReplaced += result.replaced
-            let count = transferChosen.count
-            balanceNotes.append(count == 1 ? "1 row left out of spending: a move between your accounts or ATM cash."
-                                : "\(count) rows left out of spending: moves between your accounts and ATM cash.")
+        guard !transferChosen.isEmpty else { return offerRecurring() }
+        let result = session.applyOwnMoney(session.ownMoneyReview(), chosen: transferChosen)
+        transfersMade += result.made
+        transfersReplaced += result.replaced
+        if result.changed > 0 {
+            balanceNotes.append(result.summary)
+        }
+        if result.failed > 0 {
+            transferReview = session.ownMoneyReview()
+            transferChosen = transferChosen.intersection(transferReview.pairs.map(\.out.id) + transferReview.cash.map(\.id)
+                                                         + transferReview.moves.map(\.entry.id))
+            transferProblem = result.summary
+            if result.changed == 0 { return }
         }
         offerRecurring()
     }
@@ -678,9 +688,19 @@ struct ImportStatementView: View {
                                                     accountID: transaction.legs.first?.accountID))
         }
         recurringFound = RecurringFinder.find(payments, existingNames: session.recurring.items.map(\.name), today: session.today)
-        // Seen two months or more: ticked. Seen once: offered, but you tick it yourself.
-        recurringChosen = Set(recurringFound.filter { $0.months >= 2 }.map(\.id))
+        // Seen two months or more: ticked. Seen once, or money sent to a person: offered, but you tick it yourself.
+        recurringChosen = Set(recurringFound.filter { $0.months >= 2 && !looksLikePerson($0.name) }.map(\.id))
         step = recurringFound.isEmpty ? .done(rowsImported) : .recurring(rowsImported)
+    }
+
+    /// Money to a person, not a bill: a bank transfer ("… Allied Bank", "Raast P2P …") or a name in People.
+    private func looksLikePerson(_ name: String) -> Bool {
+        let words = Set(NameKey.make(name).split(whereSeparator: { !$0.isLetter }).map(String.init))
+        if !words.isDisjoint(with: ["bank", "raast", "ibft", "transfer", "transferred", "sent"]) { return true }
+        let names = Set(session.people.people.filter { !$0.isSelf }.flatMap {
+            NameKey.make($0.name).split(whereSeparator: { !$0.isLetter }).map(String.init).filter { $0.count >= 3 }
+        })
+        return !words.isDisjoint(with: names)
     }
 
     /// Adds the ticked repeats as bills, subscriptions or income from their next date. Reminders come from them,
@@ -734,6 +754,13 @@ struct ImportStatementView: View {
                 }
                 .listRowBackground(Color.clear)
             }
+            if let transferProblem {
+                Section {
+                    Label(transferProblem, systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline).foregroundStyle(UZColor.label)
+                        .accessibilityIdentifier("import.transfers.problem")
+                }
+            }
             OwnMoneyRows(session: session, review: transferReview, chosen: $transferChosen)
         }
         .safeAreaInset(edge: .bottom) {
@@ -751,10 +778,13 @@ struct ImportStatementView: View {
                     }
                     offerRecurring()
                 }
-                    .accessibilityIdentifier("import.transfers.skip")
+                .buttonStyle(.plain).font(.body.weight(.medium)).foregroundStyle(UZColor.tint)
+                .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                .accessibilityIdentifier("import.transfers.skip")
             }
             .padding(.horizontal, UZSpacing.xxl).padding(.vertical, UZSpacing.m)
-            .background(.bar)
+            // A solid, hit-testable bar: taps on it never fall through to the list behind (BUG-031).
+            .frame(maxWidth: .infinity).background(.bar).contentShape(Rectangle())
         }
         .accessibilityIdentifier("import.transfers")
     }
@@ -790,10 +820,12 @@ struct ImportStatementView: View {
                 .disabled(recurringChosen.isEmpty)
                 .accessibilityIdentifier("import.recurring.add")
                 Button("Not now") { step = .done(count) }
+                    .buttonStyle(.plain).font(.body.weight(.medium)).foregroundStyle(UZColor.tint)
+                    .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
                     .accessibilityIdentifier("import.recurring.skip")
             }
             .padding(.horizontal, UZSpacing.xxl).padding(.vertical, UZSpacing.m)
-            .background(.bar)
+            .frame(maxWidth: .infinity).background(.bar).contentShape(Rectangle())
         }
         .accessibilityIdentifier("import.recurring")
     }

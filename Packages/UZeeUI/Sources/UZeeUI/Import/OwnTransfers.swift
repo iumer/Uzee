@@ -22,6 +22,25 @@ struct OwnMoneyReview {
     }
 }
 
+/// What Make did: Undo needs `made` and `replaced`; `failed` rows were left as they were.
+struct OwnMoneyResult {
+    var made: [UUID] = []
+    var replaced: [UUID] = []
+    var changed = 0
+    var failed = 0
+    var problem: String?
+
+    /// One line for the screen: what changed and, when some couldn't, how many and why.
+    var summary: String {
+        var text = changed == 1 ? "Left 1 out of spending." : "Left \(changed) out of spending."
+        if failed > 0 {
+            text += failed == 1 ? " 1 couldn't be changed and is still in the list." : " \(failed) couldn't be changed and are still in the list."
+            if let problem { text += " (\(problem))" }
+        }
+        return text
+    }
+}
+
 extension AppSession {
     static let ownMoneyKeptKey = "uzee.ownMoney.kept"
 
@@ -55,26 +74,45 @@ extension AppSession {
     }
 
     /// Saves the ticked rows as transfers (or "moved to my own account") and moves the originals to Recently
-    /// Deleted. Nothing changes when any of them fails. Returns what Undo needs.
-    func applyOwnMoney(_ review: OwnMoneyReview, chosen: Set<UUID>) -> (made: [UUID], replaced: [UUID])? {
-        var made: [UUID] = []
-        var replaced: [UUID] = []
-        do {
-            for pair in review.pairs where chosen.contains(pair.out.id) {
+    /// Deleted. Each row is changed on its own: one that fails is put back as it was and the rest still change
+    /// (BUG-030: one bad row used to undo all 163, silently, inside Import). Returns what Undo needs and what failed.
+    func applyOwnMoney(_ review: OwnMoneyReview, chosen: Set<UUID>) -> OwnMoneyResult {
+        var result = OwnMoneyResult()
+        func change(_ work: (inout [UUID], inout [UUID]) throws -> Void) {
+            var made: [UUID] = []
+            var replaced: [UUID] = []
+            do {
+                try work(&made, &replaced)
+                result.made += made
+                result.replaced += replaced
+                result.changed += 1
+            } catch {
+                for id in made { try? client.discard(id) }
+                for id in replaced { try? activity.restore(id) }
+                result.failed += 1
+                if result.problem == nil { result.problem = String(describing: error) }
+            }
+        }
+        for pair in review.pairs where chosen.contains(pair.out.id) {
+            change { made, replaced in
                 try save(transferFrom: pair.out, to: pair.into.accountID, received: pair.into.amount, made: &made)
                 try client.delete(pair.out.id)
                 replaced.append(pair.out.id)
                 try client.delete(pair.into.id)
                 replaced.append(pair.into.id)
             }
-            let cash = review.cash.filter { chosen.contains($0.id) }
-            for entry in cash {
+        }
+        let cash = review.cash.filter { chosen.contains($0.id) }
+        for entry in cash {
+            change { made, replaced in
                 let cashAccount = try cashAccount(entry.amount.currency, since: cash.map(\.date).min() ?? entry.date)
                 try save(transferFrom: entry, to: cashAccount, made: &made)
                 try client.delete(entry.id)
                 replaced.append(entry.id)
             }
-            for move in review.moves where chosen.contains(move.entry.id) {
+        }
+        for move in review.moves where chosen.contains(move.entry.id) {
+            change { made, replaced in
                 if let target = move.toAccountID {
                     try save(transferFrom: move.entry, to: target, made: &made)
                 } else {
@@ -83,13 +121,9 @@ extension AppSession {
                 try client.delete(move.entry.id)
                 replaced.append(move.entry.id)
             }
-        } catch {
-            undoTransfers(made: made, replaced: replaced)
-            errorMessage = "Couldn't change them. Nothing was changed."
-            return nil
         }
         reload()
-        return (made, replaced)
+        return result
     }
 
     /// Puts the spending and income back and removes what replaced them.
@@ -227,9 +261,18 @@ struct OwnTransfersView: View {
     @State private var review = OwnMoneyReview()
     @State private var chosen: Set<UUID> = []
     @State private var loaded = false
+    /// What the last Make or Keep did, shown at the top so it can't be missed (BUG-030).
+    @State private var done: String?
 
     var body: some View {
         List {
+            if let done {
+                Section {
+                    Label(done, systemImage: "checkmark.circle.fill")
+                        .font(.subheadline).foregroundStyle(UZColor.label)
+                        .accessibilityIdentifier("transfers.done")
+                }
+            }
             if loaded && review.isEmpty {
                 ContentUnavailableView("Nothing to fix", systemImage: "checkmark.circle",
                                        description: Text("Moves between your accounts and ATM cash are already left out of spending."))
@@ -241,11 +284,11 @@ struct OwnTransfersView: View {
                 }
                 OwnMoneyRows(session: session, review: review, chosen: $chosen)
                 Section {
-                    Button("Keep the unticked ones as spending", action: keepRest)
-                        .disabled(chosen.count == review.count)
+                    Button(unticked == 1 ? "Keep the 1 unticked as spending" : "Keep the \(unticked) unticked as spending", action: keepRest)
+                        .disabled(unticked == 0)
                         .accessibilityIdentifier("transfers.keep")
                 } footer: {
-                    Text("Unticked rows stay here to review until you make them or keep them.")
+                    Text("Ticked rows wait for Make at the top. Unticked rows stay here until you make them or keep them.")
                 }
             }
         }
@@ -267,6 +310,8 @@ struct OwnTransfersView: View {
         .onAppear(perform: load)
     }
 
+    private var unticked: Int { max(0, review.count - chosen.count) }
+
     private func load() {
         review = session.ownMoneyReview()
         chosen = review.sure
@@ -282,14 +327,21 @@ struct OwnTransfersView: View {
             session.ownMoneyKept.subtract(rest)
         }
         load()
+        var text = rest.count == 1 ? "Kept 1 as spending or income." : "Kept \(rest.count) as spending or income."
+        if !review.isEmpty {
+            text += review.count == 1 ? " 1 ticked row is left: tap Make at the top." : " \(review.count) ticked rows are left: tap Make at the top."
+        }
+        done = text
     }
 
     private func convert() {
-        guard let result = session.applyOwnMoney(review, chosen: chosen) else { return }
-        let count = chosen.count
-        session.toasts.show(count == 1 ? "Changed 1 row" : "Changed \(count) rows") { [session] in
-            session.undoTransfers(made: result.made, replaced: result.replaced)
+        let result = session.applyOwnMoney(review, chosen: chosen)
+        if result.changed > 0 {
+            session.toasts.show(result.changed == 1 ? "Changed 1 row" : "Changed \(result.changed) rows") { [session] in
+                session.undoTransfers(made: result.made, replaced: result.replaced)
+            }
         }
         load()
+        done = result.summary
     }
 }
