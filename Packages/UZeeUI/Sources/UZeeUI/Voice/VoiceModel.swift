@@ -30,6 +30,19 @@ struct VoiceCard: Equatable {
         case .question, .unknown: "Request"
         }
     }
+
+    /// The thing being saved, for "Here's the …": "loan", not "lent".
+    static func noun(_ action: VoiceAction) -> String {
+        switch action {
+        case .expense: "expense"
+        case .income: "income"
+        case .transfer: "transfer"
+        case .lend: "loan you gave"
+        case .borrow: "loan you took"
+        case .repaidToMe, .repaidByMe: "repayment"
+        case .question, .unknown: "request"
+        }
+    }
 }
 
 /// The UZee helper (SCR-03, J5): a spoken conversation. Tapping the mic opens voice mode: UZee listens, works out
@@ -574,7 +587,7 @@ final class VoiceModel {
                          accountID: accountID, toAccountID: account(command.toAccount), categoryID: categoryID,
                          payee: command.payee ?? "", date: date, problem: problem)
         cardTurn = turn
-        var intro = "Here's the \(VoiceCard.title(command.action).lowercased()). Change anything, then save."
+        var intro = "Here's the \(VoiceCard.noun(command.action)). Change anything, then save."
         if let newPerson { intro = "\(newPerson) is new. I'll add them to People when you save. " + intro }
         else if let personID, command.action == .lend || command.action == .borrow {
             let net = session.balances.net(of: personID)
