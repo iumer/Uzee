@@ -89,6 +89,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-025 | 2026-10-13 | Spending still ~Rs 679k after transfers: ATM cash withdrawals (~Rs 197k) and money sent to my own accounts not in UZee (e.g. HBL Konnect) counted as spending | Only pairs with both sides imported were caught | TransferMatcherTests; Mac check with owner data; Phone | 0.13.14 | Fixed, check on phone |
 | BUG-026 | 2026-10-13 | After Settle up the person shows "All settled up" but their loans still say Open / Rs 20,000 left | Settle up never recorded payments on the loans | PeopleStoreTests settleClosesLoans; Mac check; Phone | 0.13.15 | Fixed, check on phone |
 | BUG-027 | 2026-10-13 | 0.13.14 Transfers & ATM cash (Mac check, not installed): a year of ATM cash (Rs 23 lakh) went into Cash; HBL/NayaPay got +4,500/+4,000 their statements don't show; a Rs 1,000 payment to someone else marked as my own move; Wise income counted twice (Wise and Meezan) | ATM cash pre-ticked with no age limit; IBAN target ignored statement coverage; IBAN code beat another person's name; no cross-currency pairing | TransferMatcherTests; Mac check | 0.13.15 (40) | Fixed, Mac to check |
+| BUG-028 | 2026-10-14 | Import: a bank with no account only showed a small red line; the "Leave N out of spending" button drew over the list | No prompt; bottom actions had no background | Phone | 0.13.16 | Fixed, check on phone |
 
 ## Waiting on the owner
 

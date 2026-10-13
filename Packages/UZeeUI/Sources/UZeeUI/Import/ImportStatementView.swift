@@ -52,6 +52,8 @@ struct ImportStatementView: View {
     @State private var currencyRecognised = false
     @State private var accountProblem: String?
     @State private var confirming = false
+    /// "NayaPay isn't in your accounts yet": asked once per statement when no account matches its bank (owner, 2026-10-13).
+    @State private var askingNewAccount = false
     /// Monthly repeats spotted in this statement, offered for the calendar after importing (OWN-024).
     @State private var recurringFound: [RecurringFinder.Found] = []
     /// Which found payments are ticked to add (all, to start with).
@@ -115,6 +117,15 @@ struct ImportStatementView: View {
                 transfersMade = []
                 transfersReplaced = []
                 nextFile()
+            }
+            .alert(newAccountTitle, isPresented: $askingNewAccount) {
+                Button("Add “\(newAccountName)”") { addAccount() }
+                Button("Choose an account I have") {}
+                if fileCount > 1 {
+                    Button(queue.isEmpty ? "Skip this statement" : "Skip to the next statement", role: .cancel) { skip("you skipped it") }
+                }
+            } message: {
+                Text("This \(bankName.isEmpty ? "" : bankName + " ")statement is in \(statementCurrency.code). Add a \(newAccountName) account for it, starting from the statement's opening balance, or choose one of your accounts.")
             }
             .alert("This PDF has a password", isPresented: $askingPassword) {
                 SecureField("Password", text: $password)
@@ -265,6 +276,7 @@ struct ImportStatementView: View {
         accountProblem = nil
         rebuildRows()
         step = .review
+        askingNewAccount = accountID == nil
     }
 
     /// The account this statement most likely belongs to: same currency, and the bank's name in the account's name
@@ -287,6 +299,10 @@ struct ImportStatementView: View {
     /// "Meezan Bank" → "Meezan", for matching account names.
     private var bankShortName: String {
         bankName == StatementSource.meezan.rawValue ? "Meezan" : bankName
+    }
+
+    private var newAccountTitle: String {
+        bankName.isEmpty || bankName == "Other" ? "No account for this statement yet" : "\(bankName) isn't in your accounts yet"
     }
 
     /// The name for a new account: "Wise USD", "Meezan Bank", or "Imported USD".
@@ -435,6 +451,12 @@ struct ImportStatementView: View {
                     if let first = rows.map(\.date).min(), let last = rows.map(\.date).max() {
                         Text("\(DateText.long(first)) – \(DateText.long(last))")
                             .font(.subheadline).foregroundStyle(UZColor.label2)
+                    }
+                    if !rows.isEmpty, rows.allSatisfy({ $0.duplicateOf != nil }) {
+                        Label("All \(rows.count) are already in \(account?.name ?? "this account"), so there's nothing new to import.",
+                              systemImage: "checkmark.circle")
+                            .font(.footnote).foregroundStyle(UZColor.label2)
+                            .accessibilityIdentifier("import.allThere")
                     }
                     if guessedSigns {
                         Label("This statement has no balance column, so money in and out was guessed from the words. Tap an amount to switch it.",
@@ -716,7 +738,8 @@ struct ImportStatementView: View {
                 Button("Keep them as spending and income") { offerRecurring() }
                     .accessibilityIdentifier("import.transfers.skip")
             }
-            .padding(.horizontal, UZSpacing.xxl).padding(.bottom, UZSpacing.m)
+            .padding(.horizontal, UZSpacing.xxl).padding(.vertical, UZSpacing.m)
+            .background(.bar)
         }
         .accessibilityIdentifier("import.transfers")
     }
@@ -754,7 +777,8 @@ struct ImportStatementView: View {
                 Button("Not now") { step = .done(count) }
                     .accessibilityIdentifier("import.recurring.skip")
             }
-            .padding(.horizontal, UZSpacing.xxl).padding(.bottom, UZSpacing.m)
+            .padding(.horizontal, UZSpacing.xxl).padding(.vertical, UZSpacing.m)
+            .background(.bar)
         }
         .accessibilityIdentifier("import.recurring")
     }
