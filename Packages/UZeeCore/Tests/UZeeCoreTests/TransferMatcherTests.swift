@@ -33,7 +33,7 @@ struct TransferMatcherTests {
         #expect(owner.contains("user"))
         let pairs = TransferMatcher.pairs(rows, accountNames: names, ownerWords: owner)
         #expect(pairs.count == 2)
-        #expect(pairs.allSatisfy(\.isSure))
+        #expect(pairs.allSatisfy { $0.isSure })
     }
 
     @Test("Someone else's name on one side never makes a sure pair; an ATM withdrawal never pairs")
