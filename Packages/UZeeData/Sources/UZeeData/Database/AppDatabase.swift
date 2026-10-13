@@ -53,6 +53,11 @@ public final class AppDatabase: Sendable {
         }
         // M7: custom calendar entries (CAL-03).
         migrator.registerMigration("v9_calendar_events") { db in try EventSchema.create(db) }
+        // 0.13.15: one settle-up can pay off several loans, so a transaction may back several loan payments (BUG-026).
+        migrator.registerMigration("v10_settle_up_loans") { db in
+            try db.execute(sql: "DROP INDEX loan_payment_txn")
+            try db.execute(sql: "CREATE INDEX loan_payment_txn ON loan_payment(txn_id) WHERE txn_id IS NOT NULL")
+        }
         return migrator
     }
 
