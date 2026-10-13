@@ -56,6 +56,7 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | OWN-044 | 2026-10-13 | Statements read exactly as the PDF shows (Easypaisa, HBL, Meezan, NayaPay, Wise): every row, amount, direction and balance; opening + rows = closing where the bank prints both | Auto: StatementLayoutTests "Statement check 2026-10-13"; Mac check of the owner's PDFs; Phone | – | – | – |
 | OWN-045 | 2026-10-13 | Import several statement files at once: each reviewed in turn into its own account, empty ones skipped with a note, duplicates across files left out, one Undo | Simulator; Phone | – | – | – |
 | OWN-046 | 2026-10-13 | When an imported PDF or CSV has a closing balance, that account's balance is set from it (as of the statement's last day) | Simulator: Accounts after import; Phone | – | – | – |
+| OWN-047 | 2026-10-13 | Transfers between my own accounts are not spending: after import (or Settings › Transfers between my accounts) UZee lists the pairs, I tick them, and each becomes one transfer; balances unchanged, Undo works | Auto: TransferMatcherTests; Simulator; Phone | – | – | – |
 
 ## Bugs
 
@@ -82,6 +83,8 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-019 | 2026-10-12 | Ask UZee often showed the Indian rupee sign ₹ instead of Rs | iOS dictation and the on-device model write ₹ | VoiceTests.RupeeTextTests; Phone | 0.13.9 | Fixed, check on phone |
 | BUG-020 | 2026-10-13 | Statement import: Easypaisa money in read as spending and not recognised; NayaPay descriptions and balances lost; HBL oldest credit read as debit; opening/closing balances missed | No Easypaisa layout; PDFKit line order put NayaPay text after amounts; balances printed under their labels weren't read | Auto: StatementLayoutTests; Mac check | 0.13.10 | Fixed, check on phone |
 | BUG-021 | 2026-10-13 | "Something went wrong" after importing Wise EUR, then on adding a person and on Reconcile (they saved, then the alert) | No EUR rate: Available threw, so every reload failed after each action | MissingRateTests; Mac check with owner data; Phone | 0.13.12 | Fixed, check on phone |
+| BUG-022 | 2026-10-13 | October spending showed Rs 662,544: money moved between my own accounts counted as spending in one and income in the other | Each statement imported on its own; nothing paired the two sides | TransferMatcherTests; Mac check with owner data; Phone | 0.13.13 | Fixed, check on phone |
+| BUG-023 | 2026-10-13 | NayaPay statement pre-set to import into Cash | Account picker took the best same-currency account even with no name match | Mac check; Phone | 0.13.13 | Fixed, check on phone |
 
 ## Waiting on the owner
 

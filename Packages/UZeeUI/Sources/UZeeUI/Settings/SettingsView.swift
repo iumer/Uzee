@@ -52,6 +52,12 @@ struct SettingsView: View {
                 }
                 .accessibilityIdentifier("settings.import")
                 NavigationLink {
+                    OwnTransfersView(session: session)
+                } label: {
+                    SettingsLabel("Transfers between my accounts", symbol: "arrow.left.arrow.right", color: Color(uiColor: .systemIndigo))
+                }
+                .accessibilityIdentifier("settings.ownTransfers")
+                NavigationLink {
                     PrayerView(session: session)
                 } label: {
                     SettingsLabel("Namaz times & Qibla", symbol: "moon.stars", color: Color(uiColor: .systemGreen))
