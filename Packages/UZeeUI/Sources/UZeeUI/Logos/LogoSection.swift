@@ -14,7 +14,7 @@ struct LogoSection: View {
     @State private var photo: PhotosPickerItem?
 
     var body: some View {
-        if let brand = LogoStore.brand(name) {
+        if let brand = store.savedBrand(in: name) ?? LogoStore.brand(name) {
             Section {
                 HStack(spacing: UZSpacing.l) {
                     BrandIcon(name: name) {
