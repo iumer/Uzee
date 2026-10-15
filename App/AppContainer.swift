@@ -160,6 +160,8 @@ final class AppContainer {
                 guard let day else { return await WiseRateFetcher.shared.live(currency, in: base) }
                 return await WiseRateFetcher.shared.rate(currency, in: base, on: day, today: LocalDate(Date(), in: .current))
             },
+            marketRate: { currency, base in await OtherRateFetcher.shared.market(currency, in: base) },
+            providerRate: { provider, currency, base in await OtherRateFetcher.shared.provider(provider, currency, in: base) },
             setSpeechHints: { SpeechListener.shared.hints = $0 })
     }
 

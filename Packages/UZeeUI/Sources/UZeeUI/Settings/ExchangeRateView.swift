@@ -10,6 +10,10 @@ struct ExchangeRateView: View {
     @State private var usesWise = true
     @State private var isFetching = false
     @State private var updated: Date?
+    /// Other rates by "market.USD" or "westernUnion.USD"; nil while loading, .none when it couldn't be read.
+    @State private var others: [String: Decimal?] = [:]
+    @State private var loadingOthers = false
+    @State private var providers: [RateProvider] = []
 
     private var base: Currency { session.ledger.base }
 
@@ -72,6 +76,7 @@ struct ExchangeRateView: View {
                     Button("Save rates", action: save).accessibilityIdentifier("rate.save")
                 }
             }
+            otherRatesSection
             if let problem {
                 Section { Text(problem).foregroundStyle(UZColor.negative).accessibilityIdentifier("rate.problem") }
             }
@@ -81,7 +86,114 @@ struct ExchangeRateView: View {
             fillTexts()
             usesWise = session.usesWiseRates
             updated = session.wiseRatesUpdated
+            providers = session.rateProviders
         }
+        .task { await loadOthers() }
+    }
+
+    // MARK: Other rates (owner, 2026-10-15)
+
+    /// USD and EUR always, plus the other currencies your accounts use.
+    private var otherCurrencies: [Currency] {
+        var list = currencies
+        if !list.contains(.eur), base != .eur { list.insert(.eur, at: min(1, list.count)) }
+        return list
+    }
+
+    @ViewBuilder private var otherRatesSection: some View {
+        Section {
+            ForEach(otherCurrencies, id: \.code) { currency in
+                LabeledContent(one(currency), value: otherText("market", currency))
+                    .monospacedDigit()
+                    .accessibilityIdentifier("rate.market.\(currency.code)")
+            }
+        } header: {
+            Text("Google (market rate)")
+        } footer: {
+            Text("The mid-market rate Google shows. For comparing only; totals use the rate at the top.")
+        }
+        ForEach(providers) { provider in
+            Section {
+                ForEach(otherCurrencies, id: \.code) { currency in
+                    LabeledContent(one(currency)) {
+                        if let rate = others[key(provider.rawValue, currency)] ?? nil {
+                            Text("\(base.symbol) " + ExchangeRate.display(rate)).monospacedDigit()
+                        } else if others[key(provider.rawValue, currency)] == nil, loadingOthers {
+                            ProgressView()
+                        } else {
+                            // Couldn't read the service's rate: the market rate, said plainly.
+                            Text(otherText("market", currency) + " (Google)").monospacedDigit().foregroundStyle(UZColor.label2)
+                        }
+                    }
+                    .accessibilityIdentifier("rate.\(provider.rawValue).\(currency.code)")
+                }
+            } header: {
+                HStack {
+                    Text(provider.name)
+                    Spacer()
+                    Button("Remove") { remove(provider) }.font(.caption).textCase(nil)
+                }
+            } footer: {
+                if provider != .westernUnion {
+                    Text("\(provider.name) doesn't share its rate online, so this shows Google's rate.")
+                }
+            }
+        }
+        Section {
+            let missing = RateProvider.allCases.filter { !providers.contains($0) }
+            if !missing.isEmpty {
+                Menu {
+                    ForEach(missing) { provider in Button(provider.name) { add(provider) } }
+                } label: {
+                    Label("Add a money service", systemImage: "plus")
+                }
+                .accessibilityIdentifier("rate.addProvider")
+            }
+            Button {
+                Task { await loadOthers() }
+            } label: {
+                HStack {
+                    Text("Refresh these rates")
+                    if loadingOthers { Spacer(); ProgressView() }
+                }
+            }
+            .disabled(loadingOthers)
+        } footer: {
+            Text("Services in your account names, like Western Union or Payoneer, are added here by themselves.")
+        }
+    }
+
+    private func key(_ source: String, _ currency: Currency) -> String { source + "." + currency.code }
+
+    private func otherText(_ source: String, _ currency: Currency) -> String {
+        guard let value = others[key(source, currency)] else { return loadingOthers ? "Loading…" : "—" }
+        guard let rate = value else { return "Couldn't load" }
+        return "\(base.symbol) " + ExchangeRate.display(rate)
+    }
+
+    private func loadOthers() async {
+        guard !loadingOthers else { return }
+        loadingOthers = true
+        others = [:]
+        let base = self.base
+        for currency in otherCurrencies {
+            others[key("market", currency)] = .some(await session.smart.marketRate(currency, base))
+            for provider in providers {
+                others[key(provider.rawValue, currency)] = .some(await session.smart.providerRate(provider, currency, base))
+            }
+        }
+        loadingOthers = false
+    }
+
+    private func add(_ provider: RateProvider) {
+        session.setRateProvider(provider, shown: true)
+        providers = session.rateProviders
+        Task { await loadOthers() }
+    }
+
+    private func remove(_ provider: RateProvider) {
+        session.setRateProvider(provider, shown: false)
+        providers = session.rateProviders
     }
 
     private func one(_ currency: Currency) -> String {

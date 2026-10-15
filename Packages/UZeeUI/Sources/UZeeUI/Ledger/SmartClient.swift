@@ -37,6 +37,9 @@ public struct SmartClient: Sendable {
     public var listeningLevel: @Sendable () -> Float
     /// Wise's rate for 1 `currency` in `base` on a day (nil = live), or nil when Wise can't be reached.
     public var wiseRate: @Sendable (_ currency: Currency, _ base: Currency, _ day: LocalDate?) async -> Decimal?
+    /// The market rate Google shows, and a money service's own rate (nil when it can't be read).
+    public var marketRate: @Sendable (_ currency: Currency, _ base: Currency) async -> Decimal?
+    public var providerRate: @Sendable (_ provider: RateProvider, _ currency: Currency, _ base: Currency) async -> Decimal?
 
     public struct VoiceChoice: Hashable, Sendable, Identifiable {
         public let id: String
@@ -76,6 +79,8 @@ public struct SmartClient: Sendable {
                 previewVoice: @escaping @Sendable (String) -> Void = { _ in },
                 listeningLevel: @escaping @Sendable () -> Float = { 0 },
                 wiseRate: @escaping @Sendable (Currency, Currency, LocalDate?) async -> Decimal? = { _, _, _ in nil },
+                marketRate: @escaping @Sendable (Currency, Currency) async -> Decimal? = { _, _ in nil },
+                providerRate: @escaping @Sendable (RateProvider, Currency, Currency) async -> Decimal? = { _, _, _ in nil },
                 setSpeechHints: @escaping @Sendable ([String]) -> Void = { _ in }) {
         self.setSpeechHints = setSpeechHints
         self.readReceipt = readReceipt
@@ -94,6 +99,8 @@ public struct SmartClient: Sendable {
         self.previewVoice = previewVoice
         self.listeningLevel = listeningLevel
         self.wiseRate = wiseRate
+        self.marketRate = marketRate
+        self.providerRate = providerRate
     }
 
     /// Previews and tests: rules only, no camera text, no microphone.

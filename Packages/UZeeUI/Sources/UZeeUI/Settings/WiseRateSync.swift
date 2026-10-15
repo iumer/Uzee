@@ -51,4 +51,29 @@ extension AppSession {
         guard base != .usd else { return "" }
         return "USD at $1 = \(base.symbol) \(ExchangeRate.display(ledger.rate(for: .usd)))"
     }
+
+    // MARK: Other rates (owner, 2026-10-15)
+
+    static let providersAddedKey = "uzee.rate.providers.added"
+    static let providersRemovedKey = "uzee.rate.providers.removed"
+
+    /// Money services whose rates show in Settings › Exchange rate: those you added, plus those named in your
+    /// accounts ("Western Union USD"), minus those you removed.
+    var rateProviders: [RateProvider] {
+        let defaults = UserDefaults.standard
+        let added = Set((defaults.stringArray(forKey: Self.providersAddedKey) ?? []).compactMap(RateProvider.init(rawValue:)))
+        let removed = Set((defaults.stringArray(forKey: Self.providersRemovedKey) ?? []).compactMap(RateProvider.init(rawValue:)))
+        let detected = Set(RateProvider.detected(in: ledger.activeAccounts.map(\.name)))
+        return RateProvider.allCases.filter { (added.contains($0) || detected.contains($0)) && !removed.contains($0) }
+    }
+
+    func setRateProvider(_ provider: RateProvider, shown: Bool) {
+        let defaults = UserDefaults.standard
+        var added = Set(defaults.stringArray(forKey: Self.providersAddedKey) ?? [])
+        var removed = Set(defaults.stringArray(forKey: Self.providersRemovedKey) ?? [])
+        if shown { added.insert(provider.rawValue); removed.remove(provider.rawValue) }
+        else { added.remove(provider.rawValue); removed.insert(provider.rawValue) }
+        defaults.set(added.sorted(), forKey: Self.providersAddedKey)
+        defaults.set(removed.sorted(), forKey: Self.providersRemovedKey)
+    }
 }
