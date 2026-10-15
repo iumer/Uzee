@@ -11,14 +11,20 @@ public struct PaymentTodo: Hashable, Sendable, Identifiable {
     public var createdAt: Date
     /// Set when it was marked paid in full.
     public var doneAt: Date?
+    /// Optional date by which the payment is due.
+    public var dueDate: Date?
+    /// If set, a local notification fires at this exact time.
+    public var reminderAt: Date?
 
-    public init(id: UUID = UUID(), name: String, amount: Money, paid: Money? = nil, createdAt: Date = Date(), doneAt: Date? = nil) {
+    public init(id: UUID = UUID(), name: String, amount: Money, paid: Money? = nil, createdAt: Date = Date(), doneAt: Date? = nil, dueDate: Date? = nil, reminderAt: Date? = nil) {
         self.id = id
         self.name = name
         self.amount = amount
         self.paid = paid ?? .zero(amount.currency)
         self.createdAt = createdAt
         self.doneAt = doneAt
+        self.dueDate = dueDate
+        self.reminderAt = reminderAt
     }
 
     /// What's still to pay, never below zero.

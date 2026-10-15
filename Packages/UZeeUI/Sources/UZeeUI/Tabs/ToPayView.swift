@@ -123,10 +123,16 @@ struct ToPayView: View {
                 HStack {
                     Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(todo.isDone ? UZColor.positive : UZColor.label3)
-                    Text(todo.name).strikethrough(todo.isDone).foregroundStyle(UZColor.label)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(todo.name).strikethrough(todo.isDone).foregroundStyle(UZColor.label)
+                        if !todo.isDone, let due = todo.dueDate {
+                            Text(due.formatted(date: .abbreviated, time: .omitted))
+                                .font(.caption2).foregroundStyle(UZColor.label3)
+                        }
+                    }
                     Spacer()
                     Text(MoneyFormatter.string(todo.isDone ? todo.amount : todo.remaining)).monospacedDigit().fontWeight(.semibold)
-                        .foregroundStyle(todo.isDone ? UZColor.label2 : UZColor.label)
+                        .foregroundStyle(todo.isDone ? UZColor.label2 : UZColor.negative)
                 }
                 if !todo.isDone, todo.paid.minorUnits > 0 {
                     ProgressBarView(fraction: fraction, tint: UZColor.positive,
@@ -163,6 +169,10 @@ struct PaymentTodoForm: View {
     @State private var reopen = false
     @State private var problem: String?
     @State private var didLoad = false
+    @State private var hasDueDate = false
+    @State private var dueDate = Date()
+    @State private var hasReminder = false
+    @State private var reminderAt = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
 
     var body: some View {
         let currency = self.currency ?? session.ledger.base
@@ -181,6 +191,16 @@ struct PaymentTodoForm: View {
                 } footer: {
                     if let editing, editing.paid.minorUnits > 0 {
                         Text("Paid so far: \(MoneyFormatter.string(editing.paid)).")
+                    }
+                }
+                Section {
+                    Toggle("Set a due date", isOn: $hasDueDate)
+                    if hasDueDate {
+                        DatePicker("Due date", selection: $dueDate, displayedComponents: .date)
+                        Toggle("Remind me", isOn: $hasReminder)
+                        if hasReminder {
+                            DatePicker("Reminder", selection: $reminderAt, in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                        }
                     }
                 }
                 if let editing, editing.isDone {
@@ -209,6 +229,8 @@ struct PaymentTodoForm: View {
                     name = editing.name
                     amountText = MarkPaidSheet.plain(editing.amount)
                     self.currency = editing.amount.currency
+                    if let due = editing.dueDate { hasDueDate = true; dueDate = due }
+                    if let rem = editing.reminderAt { hasReminder = true; reminderAt = rem }
                 }
             }
         }
@@ -231,6 +253,8 @@ struct PaymentTodoForm: View {
         } else {
             todo.doneAt = nil
         }
+        todo.dueDate = hasDueDate ? dueDate : nil
+        todo.reminderAt = (hasDueDate && hasReminder) ? reminderAt : nil
         guard !todo.name.isEmpty else { problem = "Give it a name."; return }
         if session.perform("Couldn't save. Try again.", { try session.calendar.savePaymentTodo(todo) }) {
             dismiss()

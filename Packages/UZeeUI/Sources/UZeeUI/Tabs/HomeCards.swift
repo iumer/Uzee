@@ -25,46 +25,57 @@ struct HomeCards: View {
     static let ringSize: CGFloat = 96
     static let palette: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .yellow, .indigo, .mint, .gray]
 
-    /// The big circle: this month's spending by category (owner, 2026-10-12). Opens Reports.
+    /// The big circle: this month's spending by category (owner, 2026-10-12). Tap a row to see its transactions.
     @ViewBuilder
     private var whereItWent: some View {
         let shares = ReportCalculator.byGroup(session.transactions, from: today.firstOfMonth, through: today.lastOfMonth,
                                               categories: session.ledger.categories, base: base, rates: session.ledger.rates)
         if !shares.isEmpty {
             let month = today.startDate(in: .current).formatted(.dateTime.month(.wide))
-            Button {
-                session.paths[.home, default: []].append(.reports)
-            } label: {
-                UZCard {
-                    VStack(alignment: .leading, spacing: UZSpacing.l) {
-                        Text("Where it went in \(month)").font(.headline).foregroundStyle(UZColor.label)
-                        HStack(spacing: UZSpacing.xxl) {
-                            Chart(shares) { share in
-                                SectorMark(angle: .value("Amount", Double(share.amount.minorUnits)), innerRadius: .ratio(0.6), angularInset: 1.5)
-                                    .cornerRadius(3)
-                                    .foregroundStyle(color(share.categoryID))
-                            }
-                            .chartLegend(.hidden)
-                            .frame(width: 140, height: 140)
-                            .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: UZSpacing.s) {
-                                ForEach(shares.prefix(6)) { share in
+            UZCard {
+                VStack(alignment: .leading, spacing: UZSpacing.l) {
+                    Button {
+                        session.paths[.home, default: []].append(.reports)
+                    } label: {
+                        HStack {
+                            Text("Where it went in \(month)").font(.headline).foregroundStyle(UZColor.label)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(UZColor.label3)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    HStack(spacing: UZSpacing.xxl) {
+                        Chart(shares) { share in
+                            SectorMark(angle: .value("Amount", Double(share.amount.minorUnits)), innerRadius: .ratio(0.6), angularInset: 1.5)
+                                .cornerRadius(3)
+                                .foregroundStyle(color(share.categoryID))
+                        }
+                        .chartLegend(.hidden)
+                        .frame(width: 140, height: 140)
+                        .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: UZSpacing.s) {
+                            ForEach(shares.prefix(6)) { share in
+                                Button {
+                                    session.openActivity(categoryID: share.categoryID,
+                                                         from: today.firstOfMonth,
+                                                         through: today.lastOfMonth)
+                                } label: {
                                     HStack(spacing: UZSpacing.s) {
                                         Circle().fill(color(share.categoryID)).frame(width: 8, height: 8)
                                         Text(session.ledger.category(share.categoryID)?.name ?? "Other").font(.footnote).lineLimit(1)
                                         Spacer(minLength: 0)
                                         Text("\(share.percent)%").font(.footnote.weight(.semibold)).monospacedDigit()
+                                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(UZColor.label3)
                                     }
+                                    .contentShape(.rect)
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("home.category.\(session.ledger.category(share.categoryID)?.name ?? "Other")")
                             }
                         }
                     }
                 }
             }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(shares.prefix(6).map { "\(session.ledger.category($0.categoryID)?.name ?? "Other") \($0.percent) percent" }
-                                    .joined(separator: ", "))
             .accessibilityIdentifier("home.whereItWent")
         }
     }

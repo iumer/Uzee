@@ -104,10 +104,6 @@ struct HomeView: View {
                 AmountText(session.ledger.available, font: .system(.title3, weight: .bold))
                     .minimumScaleFactor(0.5).lineLimit(1)
                     .accessibilityIdentifier("home.available")
-                if let footnote = session.ledger.footnote {
-                    Text(footnote).font(.caption2).foregroundStyle(UZColor.label2).multilineTextAlignment(.center)
-                        .accessibilityIdentifier("home.footnote")
-                }
             }
             .frame(maxWidth: .infinity)
             .contentShape(.rect)

@@ -11,9 +11,12 @@ extension EventStore {
                 .compactMap { row in
                     guard let id = UUID(uuidString: row["id"]), let currency = Currency.known(code: row["currency_code"]) else { return nil }
                     let done: Int64? = row["done_at"]
+                    let due: Int64? = row["due_date"]
+                    let reminder: Int64? = row["reminder_at"]
                     return PaymentTodo(id: id, name: row["name"], amount: Money(minorUnits: row["amount_minor"], currency: currency),
                                        paid: Money(minorUnits: row["paid_minor"], currency: currency),
-                                       createdAt: Timestamp.date(row["created_at"]), doneAt: done.map(Timestamp.date))
+                                       createdAt: Timestamp.date(row["created_at"]), doneAt: done.map(Timestamp.date),
+                                       dueDate: due.map(Timestamp.date), reminderAt: reminder.map(Timestamp.date))
                 }
         }
     }
@@ -24,12 +27,14 @@ extension EventStore {
         try database.writer.write { db in
             let now = Timestamp.now()
             try db.execute(sql: """
-                INSERT INTO payment_todo (id, created_at, updated_at, name, amount_minor, paid_minor, currency_code, done_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO payment_todo (id, created_at, updated_at, name, amount_minor, paid_minor, currency_code, done_at, due_date, reminder_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, amount_minor = excluded.amount_minor,
-                    paid_minor = excluded.paid_minor, currency_code = excluded.currency_code, done_at = excluded.done_at
+                    paid_minor = excluded.paid_minor, currency_code = excluded.currency_code, done_at = excluded.done_at,
+                    due_date = excluded.due_date, reminder_at = excluded.reminder_at
                 """, arguments: [todo.id.uuidString, Timestamp.from(todo.createdAt), now, todo.name.trimmingCharacters(in: .whitespaces),
-                                 todo.amount.minorUnits, todo.paid.minorUnits, todo.amount.currency.code, todo.doneAt.map(Timestamp.from)])
+                                 todo.amount.minorUnits, todo.paid.minorUnits, todo.amount.currency.code, todo.doneAt.map(Timestamp.from),
+                                 todo.dueDate.map(Timestamp.from), todo.reminderAt.map(Timestamp.from)])
         }
     }
 

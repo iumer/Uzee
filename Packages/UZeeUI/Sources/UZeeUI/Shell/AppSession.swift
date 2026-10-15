@@ -224,8 +224,19 @@ public final class AppSession {
         previous?.cancel()
         let prayers = prayer.reminders(from: Date(), timeZone: .current)
         // "Top up Meezan": a bill soon from an account without enough in it comes first (owner, 2026-10-15).
-        let money = TopUpCheck.reminders(topUpWarnings, settings: reminderSettings, today: today, minuteNow: Self.minuteNow(),
-                                         format: { MoneyFormatter.string($0) })
+        let todoReminders: [PlannedReminder] = paymentTodos.compactMap { todo in
+            guard !todo.isDone, let fireDate = todo.reminderAt else { return nil }
+            guard fireDate > Date() else { return nil }
+            let local = LocalDate(fireDate, in: .current)
+            let parts = Calendar.current.dateComponents(in: .current, from: fireDate)
+            let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+            return PlannedReminder(id: "\(PlannedReminder.idPrefix)todo.\(todo.id.uuidString)", kind: .todo,
+                                   fireDate: local, minuteOfDay: minute,
+                                   title: todo.name, body: "\(MoneyFormatter.string(todo.remaining)) still to pay")
+        }
+        let money = todoReminders
+            + TopUpCheck.reminders(topUpWarnings, settings: reminderSettings, today: today, minuteNow: Self.minuteNow(),
+                                   format: { MoneyFormatter.string($0) })
             + ReminderPlanner.plan(recurring: recurring, events: events, loans: loanReminders, settings: reminderSettings,
                                    today: today, minuteNow: Self.minuteNow(), format: { MoneyFormatter.string($0) })
         // Bills come first; prayers fill what's left of the 60 (iOS keeps 64 at most).
@@ -552,6 +563,12 @@ public final class AppSession {
     public func open(_ part: PlanPart) {
         planPart = part
         selectedTab = .plan
+    }
+
+    /// Opens Activity tab pre-filtered to one category for the given month.
+    public func openActivity(categoryID: UUID, from: LocalDate, through: LocalDate) {
+        activityFilter = ActivityFilter(categoryIDs: [categoryID], from: from, through: through)
+        selectedTab = .activity
     }
 
     public func path(for tab: AppTab) -> Binding<[Route]> {

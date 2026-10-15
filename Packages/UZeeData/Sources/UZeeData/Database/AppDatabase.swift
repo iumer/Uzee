@@ -78,6 +78,12 @@ public final class AppDatabase: Sendable {
                 t.column("done_at", .integer)
             }
         }
+        migrator.registerMigration("v13_todo_due_reminder") { db in
+            try db.alter(table: "payment_todo") { t in
+                t.add(column: "due_date", .integer)
+                t.add(column: "reminder_at", .integer)
+            }
+        }
         return migrator
     }
 
