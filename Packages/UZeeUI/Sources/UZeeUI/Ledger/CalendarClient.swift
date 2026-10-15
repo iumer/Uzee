@@ -22,6 +22,10 @@ public struct CalendarClient: Sendable {
     public var paymentTodos: @Sendable () throws -> [PaymentTodo]
     public var savePaymentTodo: @Sendable (PaymentTodo) throws -> Void
     public var deletePaymentTodo: @Sendable (UUID) throws -> Void
+    /// Merchant logos: stored PNG blobs keyed by payee name.
+    public var merchantLogos: @Sendable () throws -> [(payeeName: String, imageData: Data)]
+    public var saveMerchantLogo: @Sendable (_ payeeName: String, _ imageData: Data, _ sourceURL: String?) throws -> Void
+    public var deleteMerchantLogo: @Sendable (String) throws -> Void
 
     public init(events: @escaping @Sendable () throws -> [CalendarEvent],
                 saveEvent: @escaping @Sendable (CalendarEvent) throws -> Void,
@@ -37,7 +41,10 @@ public struct CalendarClient: Sendable {
                 exportToCalendar: @escaping @Sendable ([CalendarExportItem], String?, LocalDate) async -> Void = { _, _, _ in },
                 paymentTodos: @escaping @Sendable () throws -> [PaymentTodo] = { [] },
                 savePaymentTodo: @escaping @Sendable (PaymentTodo) throws -> Void = { _ in throw CoreError.notFound },
-                deletePaymentTodo: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound }) {
+                deletePaymentTodo: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
+                merchantLogos: @escaping @Sendable () throws -> [(payeeName: String, imageData: Data)] = { [] },
+                saveMerchantLogo: @escaping @Sendable (String, Data, String?) throws -> Void = { _, _, _ in throw CoreError.notFound },
+                deleteMerchantLogo: @escaping @Sendable (String) throws -> Void = { _ in throw CoreError.notFound }) {
         self.events = events
         self.saveEvent = saveEvent
         self.deleteEvent = deleteEvent
@@ -53,6 +60,9 @@ public struct CalendarClient: Sendable {
         self.paymentTodos = paymentTodos
         self.savePaymentTodo = savePaymentTodo
         self.deletePaymentTodo = deletePaymentTodo
+        self.merchantLogos = merchantLogos
+        self.saveMerchantLogo = saveMerchantLogo
+        self.deleteMerchantLogo = deleteMerchantLogo
     }
 
     public static let unavailable = CalendarClient(

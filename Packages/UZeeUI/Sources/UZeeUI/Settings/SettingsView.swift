@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Bindable var session: AppSession
     @State private var confirmingRemove = false
     @State private var confirmingErase = false
+    @State private var showingLogoScan = false
 
     var body: some View {
         List {
@@ -45,6 +46,12 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings.deleted")
             }
             Section {
+                Button {
+                    showingLogoScan = true
+                } label: {
+                    SettingsLabel("Find brand logos", symbol: "photo.badge.arrow.down", color: Color(uiColor: .systemOrange))
+                }
+                .accessibilityIdentifier("settings.findLogos")
                 Button {
                     session.openImport()
                 } label: {
@@ -177,6 +184,7 @@ struct SettingsView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingLogoScan) { LogoReviewSheet(session: session) }
         .confirmationDialog("Remove sample data?", isPresented: $confirmingRemove, titleVisibility: .visible) {
             Button("Remove sample data", role: .destructive) { session.removeSampleData() }
         } message: {

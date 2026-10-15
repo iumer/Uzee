@@ -435,7 +435,11 @@ struct CalendarTabView: View {
                         Text("\(event.date.day)").font(.headline).monospacedDigit()
                     }
                     .frame(width: 34)
-                    Image(systemName: event.glyph).font(.caption).foregroundStyle(event.color).frame(width: 14)
+                    if let data = session.logo(for: event.name) {
+                        MerchantLogoView(data: data, size: 22).frame(width: 14)
+                    } else {
+                        Image(systemName: event.glyph).font(.caption).foregroundStyle(event.color).frame(width: 14)
+                    }
                     VStack(alignment: .leading, spacing: UZSpacing.xxs) {
                         Text(event.name).foregroundStyle(UZColor.label).lineLimit(1)
                         Text(event.meta).font(.footnote).foregroundStyle(UZColor.label2).lineLimit(2)
