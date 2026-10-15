@@ -35,6 +35,7 @@ struct HomeView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("home.empty")
                 } else {
+                    TopUpCard(session: session)
                     moneyTile
                     HomeCards(session: session, model: RecurringModel(session: session), paying: $paying)
                     if session.prayer.hasPlace { PrayerHomeCard(session: session) }

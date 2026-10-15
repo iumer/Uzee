@@ -221,8 +221,11 @@ public final class AppSession {
         let previous = scheduling
         previous?.cancel()
         let prayers = prayer.reminders(from: Date(), timeZone: .current)
-        let money = ReminderPlanner.plan(recurring: recurring, events: events, loans: loanReminders, settings: reminderSettings,
-                                         today: today, minuteNow: Self.minuteNow(), format: { MoneyFormatter.string($0) })
+        // "Top up Meezan": a bill soon from an account without enough in it comes first (owner, 2026-10-15).
+        let money = TopUpCheck.reminders(topUpWarnings, settings: reminderSettings, today: today, minuteNow: Self.minuteNow(),
+                                         format: { MoneyFormatter.string($0) })
+            + ReminderPlanner.plan(recurring: recurring, events: events, loans: loanReminders, settings: reminderSettings,
+                                   today: today, minuteNow: Self.minuteNow(), format: { MoneyFormatter.string($0) })
         // Bills come first; prayers fill what's left of the 60 (iOS keeps 64 at most).
         // Prayers keep at least 15 places; a daily reminder can't crowd them all out.
         let room = ReminderPlanner.cap - min(prayers.count, 15)
@@ -264,6 +267,12 @@ public final class AppSession {
     }
 
     /// Open loans with a due date (LOAN-07).
+    /// Bills in the next 5 days from an account that won't cover them.
+    public var topUpWarnings: [TopUpWarning] {
+        TopUpCheck.warnings(recurring: recurring, accounts: ledger.accounts, balances: ledger.balances, base: ledger.base,
+                            rates: ledger.rates, selfID: people.selfID, today: today)
+    }
+
     private var loanReminders: [(name: String, outstanding: Money, due: LocalDate, owedToMe: Bool)] {
         people.loans.compactMap { loan in
             guard let due = loan.dueDate, let name = people.person(loan.personID)?.name ?? loan.institution else { return nil }
