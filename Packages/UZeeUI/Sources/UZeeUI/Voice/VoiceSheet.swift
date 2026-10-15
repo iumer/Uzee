@@ -64,6 +64,9 @@ struct VoiceSheet: View {
             .sheet(isPresented: $showsPast) {
                 PastChatsView(model: model)
             }
+            .sheet(item: $model.recurringForm) { draft in
+                RecurringFormSheet(session: session, item: nil, draft: draft)
+            }
             .onAppear {
                 if let request = session.voiceRequest {
                     session.voiceRequest = nil
@@ -393,6 +396,13 @@ struct VoiceCardView: View {
             TextField(action == .income ? "From (payer)" : "Paid to (payee)", text: card.payee)
                 .textInputAutocapitalization(.words)
                 .accessibilityIdentifier("voiceCard.payee")
+            Picker("Repeats", selection: card.repeats) {
+                Text("Just once").tag(RecurrenceUnit?.none)
+                Text("Every week").tag(RecurrenceUnit?.some(.week))
+                Text("Every month").tag(RecurrenceUnit?.some(.month))
+                Text("Every year").tag(RecurrenceUnit?.some(.year))
+            }
+            .accessibilityIdentifier("voiceCard.repeats")
         }
     }
 

@@ -100,7 +100,8 @@ public enum RecurringPhrase {
             "month", "months", "year", "years", "week", "weeks", "day", "rs", "pkr", "rupees", "rupee", "usd", "dollars",
             "dollar", "thousand", "lakh", "hundred", "k", "uzee", "hey", "ok", "okay", "this", "that", "which", "comes", "due",
             "half", "quarter", "other", "two", "three", "six", "twice", "next", "starting", "start", "from", "account", "bank",
-            "debited", "charged", "deducted", "get", "receive", "will", "be", "should", "need", "want", "wanna", "me", "new"
+            "debited", "charged", "deducted", "get", "receive", "will", "be", "should", "need", "want", "wanna", "me", "new",
+            "payment", "payments", "subscription", "expense", "transaction", "entry"
         ]
         let accountWords = Set(accounts.flatMap { VoiceRuleParser.normalise($0).split(separator: " ").map(String.init) })
         let words = sentence.split(whereSeparator: { $0.isWhitespace }).map { $0.trimmingCharacters(in: .punctuationCharacters) }
