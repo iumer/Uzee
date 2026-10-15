@@ -94,6 +94,17 @@ struct SharedExpenseSheet: View {
                         }
                     }
                     Section {
+                        if let other = onlyOther {
+                            // Owner, 2026-10-15: the three everyday cases in one tap.
+                            Picker("Who owes", selection: Binding(get: { quick }, set: { setQuick($0, other: other) })) {
+                                Text("Split equally").tag(Quick.equal)
+                                Text("They owe all").tag(Quick.theyOweAll)
+                                Text("I owe all").tag(Quick.iOweAll)
+                                if quick == .custom { Text("Custom").tag(Quick.custom) }
+                            }
+                            .pickerStyle(.segmented)
+                            .accessibilityIdentifier("shared.quick")
+                        }
                         SplitSentence(session: session, draft: $draft, total: total, isIncome: false)
                     } footer: {
                         SplitEffects(session: session, draft: draft, total: total, isIncome: false)
@@ -155,6 +166,45 @@ struct SharedExpenseSheet: View {
         .presentationSizing(.form)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("shared.sheet")
+    }
+
+    /// The one other person, when it's just you and them (no group).
+    private var onlyOther: UUID? {
+        let others = draft.members.filter { $0 != me }
+        return draft.groupID == nil && others.count == 1 ? others.first : nil
+    }
+
+    private enum Quick: Hashable { case equal, theyOweAll, iOweAll, custom }
+
+    private var quick: Quick {
+        guard let other = onlyOther else { return .custom }
+        if draft.method == .equal, draft.payer == me, Set(draft.participants) == Set(draft.members) { return .equal }
+        if draft.method == .shares, draft.payer == me, draft.inputs[me] == 0, (draft.inputs[other] ?? 0) > 0 { return .theyOweAll }
+        if draft.method == .shares, draft.payer == other, draft.inputs[other] == 0, (draft.inputs[me] ?? 0) > 0 { return .iOweAll }
+        return .custom
+    }
+
+    private func setQuick(_ choice: Quick, other: UUID) {
+        switch choice {
+        case .equal:
+            draft.payer = me
+            draft.method = .equal
+            draft.participants = draft.members
+            draft.inputs = [:]
+        case .theyOweAll:
+            draft.payer = me
+            draft.method = .shares
+            draft.participants = draft.members
+            draft.inputs = [me: 0, other: 1]
+        case .iOweAll:
+            draft.payer = other
+            draft.method = .shares
+            draft.participants = draft.members
+            draft.inputs = [me: 1, other: 0]
+        case .custom:
+            break
+        }
+        draft.paidAmounts = [:]
     }
 
     private var categoryButton: some View {

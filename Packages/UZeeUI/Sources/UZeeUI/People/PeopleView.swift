@@ -35,7 +35,10 @@ struct PeopleView: View {
                         }
                     }
                 }
-                Text("Tap + to add an expense with someone. Each person shows one balance from loans and shared groups; only your share of a split counts as your spending.")
+                Button("Add balances from before UZee", systemImage: "list.bullet.rectangle") { sheet = .existingBalances }
+                    .font(.subheadline)
+                    .accessibilityIdentifier("people.existing")
+                Text("Tap Add to add an expense or loan with someone. Each person shows one balance from loans and shared groups; only your share of a split counts as your spending.")
                     .font(.footnote)
                     .foregroundStyle(UZColor.label2)
                 if let footnote = model.footnote {
@@ -57,19 +60,12 @@ struct PeopleView: View {
                 }
                 .accessibilityIdentifier("people.groups")
             }
+            // One Add (owner, 2026-10-15): pick or add the person, the amount, and who owes. Groups keep their own button.
             ToolbarItem(placement: .topBarLeading) {
-                Menu {
-                    Button("Add person", systemImage: "person.badge.plus") { sheet = .addPerson }
-                        .accessibilityIdentifier("people.addPerson")
-                    Button("Add existing balances", systemImage: "list.bullet.rectangle") { sheet = .existingBalances }
-                        .accessibilityIdentifier("people.existing")
-                    Button("New group", systemImage: "person.3") { sheet = .newGroup }
-                        .accessibilityIdentifier("people.newGroup")
-                } label: {
-                    // A person icon, not a second "+": the bottom + already adds an expense here.
-                    Image(systemName: "person.badge.plus")
+                Button { session.openAdd(.shared(group: nil, person: nil)) } label: {
+                    Label("Add", systemImage: "plus")
+                        .labelStyle(.titleAndIcon)
                 }
-                .accessibilityLabel("Add person or group")
                 .accessibilityIdentifier("people.add")
             }
         }
