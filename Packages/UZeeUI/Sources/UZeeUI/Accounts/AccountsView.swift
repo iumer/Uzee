@@ -217,6 +217,9 @@ struct AccountFormSheet: View {
                 } footer: {
                     if currencyLocked { Text("Currency can't change once the account has transactions.") }
                 }
+                if !name.trimmingCharacters(in: .whitespaces).isEmpty {
+                    LogoSection(name: name, note: "Shows for \(name) in Accounts, Home and when picking an account.")
+                }
                 Section {
                     TextField("Opening balance", text: $opening)
                         .keyboardType(.decimalPad)

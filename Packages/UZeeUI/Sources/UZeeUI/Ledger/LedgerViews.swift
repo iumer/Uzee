@@ -33,12 +33,17 @@ enum ProblemText {
     }
 }
 
-/// Account tile: generic symbol on the account colour (AUD-42, never bank logos).
+/// Account tile: the bank's logo when the owner added one (Settings › Brand logos or the account's Logo row,
+/// 2026-10-15), else a generic symbol on the account colour (AUD-42).
 struct AccountIcon: View {
     let account: Account
     var size: CGFloat = 36
 
     var body: some View {
+        BrandIcon(name: account.name, size: size) { symbol }
+    }
+
+    private var symbol: some View {
         Image(systemName: account.kind.symbolName)
             .font(.system(size: size * 0.45, weight: .semibold))
             .foregroundStyle(.white)

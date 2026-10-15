@@ -61,7 +61,7 @@ final class LogoStore {
         "lunch", "dinner", "breakfast", "food", "home", "house", "car", "bike", "mobile", "phone", "school", "tuition", "doctor",
         "medicine", "charges", "tax", "zakat", "sadaqah", "donation", "gift", "money", "balance", "adjustment", "kameti", "committee",
         "raast", "ibft", "pos", "debit", "credit", "card", "visa", "mastercard", "online", "received", "sent", "incoming", "outgoing",
-        "moved", "currency", "conversion", "wise", "converted", "staff", "maid", "driver", "plumber", "electrician", "tea", "snacks"
+        "moved", "currency", "conversion", "converted", "staff", "maid", "driver", "plumber", "electrician", "tea", "snacks"
     ]
 
     func image(for name: String?) -> UIImage? {

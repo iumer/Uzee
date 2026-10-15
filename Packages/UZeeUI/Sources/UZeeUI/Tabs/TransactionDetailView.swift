@@ -63,6 +63,9 @@ struct TransactionDetailView: View {
             }
             TagsSection(session: session, transactionID: transaction.id)
             ReceiptsSection(session: session, transactionID: transaction.id)
+            if let payee = transaction.payeeName, transaction.kind == .expense || transaction.kind == .income {
+                LogoSection(name: payee, note: "Used for every transaction and bill from \(payee), past and future.")
+            }
             Section {
                 if AddSheet.kinds.contains(transaction.kind) {
                     Button("Edit") { session.openAdd(.edit(transaction)) }
