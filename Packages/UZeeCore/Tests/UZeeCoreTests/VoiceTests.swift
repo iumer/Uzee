@@ -567,3 +567,12 @@ struct RecurringPhraseTests {
         #expect(RecurringPhrase.request("Paid 1000 for groceries this month", vocabulary: names, today: today) == nil)
     }
 }
+
+@Suite("Recurring names by voice")
+struct RecurringNameTests {
+    @Test("Generic words don't become part of the name")
+    func names() {
+        #expect(RecurringPhrase.name("Add a recurring payment of 1100 for Netflix every month", accounts: []) == "Netflix")
+        #expect(RecurringPhrase.name("Recurring mobile bill of Rs 1900 on 20th of every month", accounts: []) == "Mobile bill")
+    }
+}

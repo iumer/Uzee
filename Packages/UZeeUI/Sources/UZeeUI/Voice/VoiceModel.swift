@@ -15,6 +15,8 @@ struct VoiceCard: Equatable {
     var payee: String
     var date: Date
     var problem: String?
+    /// "Every month" said, or chosen on the card: after saving, the bill form opens with it filled in (owner, 2026-10-15).
+    var repeats: RecurrenceUnit?
 
     static let actions: [VoiceAction] = [.expense, .income, .transfer, .lend, .borrow, .repaidToMe, .repaidByMe]
 
@@ -83,6 +85,9 @@ final class VoiceModel {
     private var lastBalanceAccount: UUID?
     /// "Add Mobile bill, Rs 1,900 every month from Oct 20?" waiting for yes or no.
     private var pendingRecurring: RecurringItem?
+    /// The full "Bill or subscription" form, filled in from what was said, so every option (how often, first date,
+    /// end, account, category, reminder) can be set before saving (owner, 2026-10-15).
+    var recurringForm: RecurringItem?
     private var need: VoiceDialog.Need?
     /// Counts the user's sentences, so the model can't show a card and save it in the same turn.
     private var turn = 0
@@ -615,10 +620,11 @@ final class VoiceModel {
         let item = RecurringItem(name: request.name, type: request.type, amount: amount, accountID: account?.id, categoryID: categoryID,
                                  rule: RecurrenceRule(unit: request.unit, interval: request.interval, anchor: request.next),
                                  trackedFrom: request.next, colorHex: isMoneyIn ? "#34C759" : "#5E5CE6")
-        pendingRecurring = item
+        pendingRecurring = nil
         let how = RecurringPhrase.describe(request.unit, request.interval)
-        say("Add \(item.name), \(MoneyFormatter.string(amount)) \(how), next on \(DateText.short(request.next))"
-            + (account.map { " from \($0.name)" } ?? "") + "? It goes on your calendar with a reminder before each one. Say yes to add it.")
+        say("Here's \(item.name), \(MoneyFormatter.string(amount)) \(how), next on \(DateText.short(request.next))"
+            + (account.map { " from \($0.name)" } ?? "") + ". Check how often, the account and the reminder, then tap Save.")
+        recurringForm = item
     }
 
     private func saveRecurring(_ item: RecurringItem) {
@@ -690,8 +696,19 @@ final class VoiceModel {
         card = VoiceCard(action: command.action, amountText: amountText, personID: personID, newPersonName: newPerson,
                          accountID: accountID, toAccountID: account(command.toAccount), categoryID: categoryID,
                          payee: command.payee ?? "", date: date, problem: problem)
+        // "… every month", "monthly", "har mahine": the card starts on that repeat.
+        let said = " " + lastSentence.lowercased() + " "
+        if command.action == .expense || command.action == .income {
+            if [" every month", " monthly", " each month", " per month", " har mahine", " recurring"].contains(where: said.contains) {
+                card?.repeats = .month
+            } else if [" every week", " weekly", " each week"].contains(where: said.contains) {
+                card?.repeats = .week
+            } else if [" every year", " yearly", " annually", " each year", " per year", " annual "].contains(where: said.contains) {
+                card?.repeats = .year
+            }
+        }
         cardTurn = turn
-        var intro = "Here's the \(VoiceCard.noun(command.action)). Change anything, then save."
+        var intro = "Here's the \(VoiceCard.noun(command.action))" + (card?.repeats != nil ? ", repeating" : "") + ". Change anything, then save."
         if let newPerson { intro = "\(newPerson) is new. I'll add them to People when you save. " + intro }
         else if let personID, command.action == .lend || command.action == .borrow {
             let net = session.balances.net(of: personID)
@@ -786,6 +803,20 @@ final class VoiceModel {
         }
         guard session.save(built, isNew: true) else { return nil }
         let what = payee.isEmpty ? (ledger.categoryPath(card.categoryID) ?? VoiceCard.title(card.action)) : payee
+        if let unit = card.repeats, card.action == .expense || card.action == .income {
+            let day = LocalDate(card.date, in: .current)
+            let next = switch unit {
+            case .day: day.addingDays(1)
+            case .week: day.addingDays(7)
+            case .month: day.addingMonths(1)
+            case .year: day.addingMonths(12)
+            }
+            let isIncome = card.action == .income
+            recurringForm = RecurringItem(name: what, type: isIncome ? .income : .bill, amount: amount, accountID: card.accountID,
+                                          categoryID: card.categoryID, rule: RecurrenceRule(unit: unit, interval: 1, anchor: next),
+                                          trackedFrom: next, colorHex: isIncome ? "#34C759" : "#5E5CE6")
+            return "Saved · \(what) \(MoneyFormatter.string(amount)). Now set up how it repeats, then tap Save."
+        }
         return "Saved · \(what) \(MoneyFormatter.string(amount))."
     }
 
