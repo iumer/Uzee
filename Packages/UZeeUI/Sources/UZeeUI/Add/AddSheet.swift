@@ -19,6 +19,8 @@ struct AddSheet: View {
     /// What arrived, filled in from Wise's rate on the transfer's day; replaced while the user hasn't typed over it.
     @State private var wiseFill: (text: String, note: String)?
     @State private var accountID: UUID?
+    /// "Add an account…" from the from/to menu (owner, 2026-10-15): which side gets the new account.
+    @State private var addingAccountForTo: Bool?
     /// The currency picked on the amount when no account sets it (someone else paid), and the one an edited
     /// transaction already has, so editing never changes it quietly (owner, 2026-10-15).
     @State private var chosenCurrency: Currency?
@@ -147,6 +149,11 @@ struct AddSheet: View {
                 CameraPicker { image in readReceipt(image?.jpegData(compressionQuality: 0.9)) }
                     .ignoresSafeArea()
             }
+            .sheet(isPresented: Binding(get: { addingAccountForTo != nil }, set: { if !$0 { addingAccountForTo = nil } })) {
+                AccountFormSheet(session: session, editing: nil) { id in
+                    if addingAccountForTo == true { toAccountID = id } else { accountID = id }
+                }
+            }
             .onChange(of: accountID) { problem = nil }
             .task(id: wiseKey) { await fillFromWise() }
             .onChange(of: kind) { _, newKind in
@@ -230,6 +237,13 @@ struct AddSheet: View {
                         .tag(UUID?.some(account.id))
                 }
             }
+            Divider()
+            Button {
+                addingAccountForTo = identifier == "add.to"
+            } label: {
+                Label("Add an account…", systemImage: "plus.circle")
+            }
+            .accessibilityIdentifier(identifier + ".new")
         } label: {
             HStack(spacing: UZSpacing.xxs) {
                 Text(prefix).foregroundStyle(UZColor.label2)

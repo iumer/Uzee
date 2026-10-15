@@ -161,6 +161,8 @@ struct AccountDetailView: View {
 struct AccountFormSheet: View {
     @Bindable var session: AppSession
     let editing: Account?
+    /// Called with the new account's id (Add screen: "Add an account…" selects it right away).
+    var onCreated: ((UUID) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var kind: AccountKind = .bank
@@ -274,8 +276,9 @@ struct AccountFormSheet: View {
                 account.includeInTotals = includeInTotals
                 try session.client.updateAccount(account)
             } else {
-                _ = try session.client.createAccount(.init(name: name, kind: kind, currency: currency, openingBalance: openingMoney,
-                                                           openingDate: day, includeInTotals: includeInTotals))
+                let created = try session.client.createAccount(.init(name: name, kind: kind, currency: currency, openingBalance: openingMoney,
+                                                                     openingDate: day, includeInTotals: includeInTotals))
+                onCreated?(created.id)
             }
             session.reload()
             session.toasts.show(editing == nil ? "Account added" : "Account saved")
