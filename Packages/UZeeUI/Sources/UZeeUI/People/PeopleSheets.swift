@@ -94,6 +94,8 @@ struct ExistingBalancesSheet: View {
         var name = ""
         var owesYou = true
         var amount = ""
+        /// nil: your base currency. Owner, 2026-10-15: a loan's currency is picked, never assumed.
+        var currency: Currency?
     }
 
     @State private var rows: [Row] = [Row()]
@@ -117,7 +119,9 @@ struct ExistingBalancesSheet: View {
                         }
                         .pickerStyle(.segmented)
                         HStack {
-                            Text(session.ledger.base.symbol).foregroundStyle(UZColor.label2)
+                            CurrencyMenu(ledger: session.ledger, currency: row.currency ?? session.ledger.base, size: 17) {
+                                row.currency = $0
+                            }
                             TextField("0", text: $row.amount)
                                 .keyboardType(.decimalPad)
                                 .monospacedDigit()
@@ -153,7 +157,7 @@ struct ExistingBalancesSheet: View {
         var parsed: [PeopleClient.BalanceRow] = []
         for row in rows where !row.name.trimmingCharacters(in: .whitespaces).isEmpty || !row.amount.isEmpty {
             guard (try? Person.validateName(row.name)) != nil else { problem = "Enter a name on every row."; return }
-            guard let amount = try? AmountParser.parse(row.amount, currency: session.ledger.base), amount.minorUnits > 0 else {
+            guard let amount = try? AmountParser.parse(row.amount, currency: row.currency ?? session.ledger.base), amount.minorUnits > 0 else {
                 problem = "Enter an amount for \(row.name)."
                 return
             }
