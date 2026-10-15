@@ -7,7 +7,7 @@ import UZeeCore
 /// - money sent to your own account whose other side isn't in UZee: a transfer when the account is known, else a
 ///   balance change marked "Moved to my own account".
 /// Balances stay the same in every case; only spending and income change.
-struct OwnMoneyReview {
+struct OwnMoneyReview: Sendable {
     var pairs: [TransferMatcher.Pair] = []
     var cash: [TransferMatcher.Entry] = []
     var moves: [TransferMatcher.Move] = []
@@ -47,13 +47,24 @@ extension AppSession {
     /// Rows you chose to keep as spending or income: never offered again.
     var ownMoneyKept: Set<UUID> {
         get { Set((UserDefaults.standard.stringArray(forKey: Self.ownMoneyKeptKey) ?? []).compactMap(UUID.init(uuidString:))) }
-        set { UserDefaults.standard.set(newValue.map(\.uuidString), forKey: Self.ownMoneyKeptKey) }
+        set {
+            UserDefaults.standard.set(newValue.map(\.uuidString), forKey: Self.ownMoneyKeptKey)
+            // Screens that count what's left to review work it out again.
+            budgetRevision += 1
+        }
     }
 
-    /// Imported spending and income only; rows shared with people or groups, and rows you kept, are left alone.
-    /// What's left is "to review" until you make it a transfer or keep it (owner, 2026-10-14).
-    func ownMoneyReview() -> OwnMoneyReview {
-        let kept = ownMoneyKept
+    /// What the matching needs, read from the session on the main actor.
+    struct OwnMoneyInput: Sendable {
+        var entries: [TransferMatcher.Entry]
+        var names: [UUID: String]
+        var base: Currency
+        var rates: [String: Decimal]
+        var today: LocalDate
+        var kept: Set<UUID>
+    }
+
+    func ownMoneyInput() -> OwnMoneyInput {
         let entries: [TransferMatcher.Entry] = transactions.compactMap { transaction in
             guard transaction.deletedAt == nil, transaction.source == .import, transaction.counterpartyID == nil,
                   transaction.groupID == nil, transaction.kind == .expense || transaction.kind == .income,
@@ -62,15 +73,42 @@ extension AppSession {
             return TransferMatcher.Entry(id: transaction.id, accountID: leg.accountID, date: transaction.localDate,
                                          amount: leg.amount, text: text)
         }
-        let names = Dictionary(uniqueKeysWithValues: ledger.accounts.map { ($0.id, $0.name) })
+        return OwnMoneyInput(entries: entries, names: Dictionary(uniqueKeysWithValues: ledger.accounts.map { ($0.id, $0.name) }),
+                             base: ledger.base, rates: ledger.rates, today: today, kept: ownMoneyKept)
+    }
+
+    /// Imported spending and income only; rows shared with people or groups, and rows you kept, are left alone.
+    /// What's left is "to review" until you make it a transfer or keep it (owner, 2026-10-14).
+    nonisolated static func ownMoneyReview(_ input: OwnMoneyInput) -> OwnMoneyReview {
+        let entries = input.entries
+        let names = input.names
+        let kept = input.kept
         let owner = TransferMatcher.likelyOwnerWords(entries, accountNames: names)
-        let pairs = TransferMatcher.pairs(entries, accountNames: names, ownerWords: owner, base: ledger.base, rates: ledger.rates)
+        let pairs = TransferMatcher.pairs(entries, accountNames: names, ownerWords: owner, base: input.base, rates: input.rates)
         let used = Set(pairs.flatMap { [$0.out.id, $0.into.id] })
         // Only the last month's ATM cash can still be in your wallet; older cash was spent and stays spending (F8).
-        let cash = TransferMatcher.cashWithdrawals(entries).filter { $0.date >= today.addingDays(-30) }
+        let cash = TransferMatcher.cashWithdrawals(entries).filter { $0.date >= input.today.addingDays(-30) }
         let moves = TransferMatcher.moves(entries, excluding: used, accountNames: names, ownerWords: owner)
         return OwnMoneyReview(pairs: pairs.filter { !kept.contains($0.out.id) && !kept.contains($0.into.id) },
                               cash: cash.filter { !kept.contains($0.id) }, moves: moves.filter { !kept.contains($0.entry.id) })
+    }
+
+    /// The review as of the last change, worked out once per change.
+    func ownMoneyReview() -> OwnMoneyReview {
+        if let cache = ownMoneyCache, cache.revision == budgetRevision { return cache.review }
+        let review = Self.ownMoneyReview(ownMoneyInput())
+        ownMoneyCache = (budgetRevision, review)
+        return review
+    }
+
+    /// The same, matched off the main thread so opening Activity never waits for it.
+    func ownMoneyReviewInBackground() async -> OwnMoneyReview {
+        if let cache = ownMoneyCache, cache.revision == budgetRevision { return cache.review }
+        let revision = budgetRevision
+        let input = ownMoneyInput()
+        let review = await Task.detached(priority: .userInitiated) { Self.ownMoneyReview(input) }.value
+        if revision == budgetRevision { ownMoneyCache = (revision, review) }
+        return review
     }
 
     /// Saves the ticked rows as transfers (or "moved to my own account") and moves the originals to Recently

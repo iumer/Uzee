@@ -9,7 +9,7 @@ struct ActivityView: View {
     @State private var toReview = 0
 
     var body: some View {
-        let rows = ActivityQuery.filter(session.transactions, session.activityFilter, snapshot: session.ledger, tags: session.tagMap)
+        let shown = session.activityDays()
         List {
             if toReview > 0 {
                 Section {
@@ -37,7 +37,7 @@ struct ActivityView: View {
                     Text(filterSummary).accessibilityIdentifier("activity.filterSummary")
                 }
             }
-            ForEach(ActivityQuery.days(rows, snapshot: session.ledger)) { day in
+            ForEach(shown.days) { day in
                 Section {
                     ForEach(day.transactions) { transaction in
                         NavigationLink(value: Route.transaction(transaction.id)) {
@@ -58,7 +58,7 @@ struct ActivityView: View {
                 }
             }
         }
-        .overlay { emptyState(hasRows: !rows.isEmpty) }
+        .overlay { emptyState(hasRows: shown.hasRows) }
         .searchable(text: $session.activityFilter.text, prompt: "Payee, note or amount")
         .navigationTitle("Activity")
         .toolbar {
@@ -73,8 +73,9 @@ struct ActivityView: View {
         .sheet(isPresented: $showingRange) {
             DateRangeSheet(filter: $session.activityFilter)
         }
-        .task(id: session.transactions.count) { toReview = session.ownMoneyReview().count }
-        .onAppear { toReview = session.ownMoneyReview().count }
+        // Worked out off the main thread, once per change: opening Activity and coming back from a row used to
+        // redo the whole match each time and the screen hung (owner, 2026-10-15).
+        .task(id: session.budgetRevision) { toReview = await session.ownMoneyReviewInBackground().count }
     }
 
     // MARK: Empty and no-result states (TXN-028)
@@ -188,6 +189,18 @@ struct ActivityView: View {
     }
 
     private var today: LocalDate { LocalDate(Date(), in: .current) }
+}
+
+extension AppSession {
+    /// Activity's days for the current filter, kept until the data or the filter changes.
+    func activityDays() -> (hasRows: Bool, days: [ActivityDay]) {
+        let filter = activityFilter
+        if let cache = activityCache, cache.revision == budgetRevision, cache.filter == filter { return (cache.hasRows, cache.days) }
+        let rows = ActivityQuery.filter(transactions, filter, snapshot: ledger, tags: tagMap)
+        let days = ActivityQuery.days(rows, snapshot: ledger)
+        activityCache = (budgetRevision, filter, !rows.isEmpty, days)
+        return (!rows.isEmpty, days)
+    }
 }
 
 /// Date presets for the Activity filter, in the phone's calendar.

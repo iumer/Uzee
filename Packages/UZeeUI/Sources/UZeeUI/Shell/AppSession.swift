@@ -33,6 +33,10 @@ public final class AppSession {
     /// Budgets live behind `budgets` (not observed), so screens read this and saves bump it. Without it the
     /// Budget screen kept asking to set a budget after one was saved (owner, 2026-10-12).
     public var budgetRevision = 0
+    /// Worked-out screens kept until the next change, so Activity doesn't redo them on every visit (owner,
+    /// 2026-10-15: "Activity hangs a bit").
+    @ObservationIgnored var ownMoneyCache: (revision: Int, review: OwnMoneyReview)?
+    @ObservationIgnored var activityCache: (revision: Int, filter: ActivityFilter, hasRows: Bool, days: [ActivityDay])?
     public var paths: [AppTab: [Route]] = [:]
     /// A day the Calendar should jump to (from a reminder).
     public var calendarFocus: LocalDate?
