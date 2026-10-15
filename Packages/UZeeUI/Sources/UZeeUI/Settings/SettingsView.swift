@@ -65,6 +65,12 @@ struct SettingsView: View {
                 }
                 .accessibilityIdentifier("settings.ownTransfers")
                 NavigationLink {
+                    BrandLogosView(session: session)
+                } label: {
+                    SettingsLabel("Brand logos", symbol: "photo.on.rectangle.angled", color: Color(uiColor: .systemPink))
+                }
+                .accessibilityIdentifier("settings.logos")
+                NavigationLink {
                     PrayerView(session: session)
                 } label: {
                     SettingsLabel("Namaz times & Qibla", symbol: "moon.stars", color: Color(uiColor: .systemGreen))

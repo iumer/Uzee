@@ -245,7 +245,7 @@ struct RecurringRow: View {
     var body: some View {
         let amount = occurrence?.amount ?? item.amount
         HStack(spacing: UZSpacing.l) {
-            RecurringTile(item: item)
+            BrandIcon(name: item.name) { RecurringTile(item: item) }
             VStack(alignment: .leading, spacing: UZSpacing.xxs) {
                 Text(item.name).font(.body).foregroundStyle(UZColor.label).lineLimit(1)
                 Text(metaLine).font(.footnote).foregroundStyle(UZColor.label2).lineLimit(1)

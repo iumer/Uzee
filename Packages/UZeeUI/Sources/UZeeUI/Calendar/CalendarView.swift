@@ -319,12 +319,18 @@ struct CalendarTabView: View {
                     } else if allPaid {
                         Image(systemName: "checkmark").font(.system(size: 8, weight: .black)).foregroundStyle(UZColor.positive)
                     } else {
+                        // A brand's logo instead of a dot when one was picked in Settings › Brand logos.
                         ForEach(events.prefix(3)) { event in
-                            Image(systemName: event.glyph).font(.system(size: 6)).foregroundStyle(event.color)
+                            if let logo = LogoStore.shared.image(for: event.name) {
+                                Image(uiImage: logo).resizable().scaledToFit().frame(width: 12, height: 12)
+                                    .clipShape(.rect(cornerRadius: 3))
+                            } else {
+                                Image(systemName: event.glyph).font(.system(size: 6)).foregroundStyle(event.color)
+                            }
                         }
                     }
                 }
-                .frame(height: 8)
+                .frame(height: 12)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(.rect)

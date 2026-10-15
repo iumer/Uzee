@@ -88,7 +88,7 @@ struct TransactionRow: View {
 
     var body: some View {
         HStack(spacing: UZSpacing.l) {
-            CategoryTile(group)
+            BrandIcon(name: transaction.kind == .transfer ? nil : transaction.payeeName) { CategoryTile(group) }
             VStack(alignment: .leading, spacing: UZSpacing.xxs) {
                 HStack(spacing: UZSpacing.xs) {
                     Text(title).font(.body).lineLimit(1)
