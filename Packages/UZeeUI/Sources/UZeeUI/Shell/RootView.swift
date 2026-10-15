@@ -65,8 +65,8 @@ public struct RootView: View {
             .padding(.trailing, UZSpacing.xxl)
             .padding(.bottom, sizeClass == .compact ? 72 : UZSpacing.xxl)
             .ignoresSafeArea(.keyboard)
-            .opacity(isKeyboardUp ? 0 : 1)
-            .allowsHitTesting(!isKeyboardUp)
+            .opacity(isKeyboardUp || session.hidesFloatingButtons ? 0 : 1)
+            .allowsHitTesting(!isKeyboardUp && !session.hidesFloatingButtons)
         }
         .task { await showHints() }
         .sheet(isPresented: $session.isAddPresented) {

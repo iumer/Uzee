@@ -37,6 +37,8 @@ struct LoanDetailView: View {
         }
         .background(UZColor.bg)
         .navigationTitle(title)
+        .onAppear { session.hidesFloatingButtons = true }
+        .onDisappear { session.hidesFloatingButtons = false }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let loan {

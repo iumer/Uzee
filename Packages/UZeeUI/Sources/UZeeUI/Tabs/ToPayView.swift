@@ -258,14 +258,14 @@ struct PayTodoSheet: View {
                     LabeledContent("Left to pay", value: MoneyFormatter.string(todo.remaining))
                     HStack {
                         Text(todo.amount.currency.symbol).foregroundStyle(UZColor.label2)
-                        TextField("Amount", text: $amountText)
+                        TextField(MarkPaidSheet.plain(todo.remaining), text: $amountText)
                             .keyboardType(.decimalPad).monospacedDigit()
                             .accessibilityIdentifier("toPay.payAmount")
                     }
                 } header: {
                     Text(todo.name)
                 } footer: {
-                    Text("Change the amount if you paid only a part. The rest stays on the list.")
+                    Text("Leave it empty to pay all of it, or type what you paid. The rest stays on the list.")
                 }
                 Section {
                     Picker("Paid from", selection: $accountID) {
@@ -291,13 +291,15 @@ struct PayTodoSheet: View {
             .onAppear {
                 guard !didLoad else { return }
                 didLoad = true
-                amountText = MarkPaidSheet.plain(todo.remaining)
+                // Empty, with the full amount as the hint: typing a part no longer adds to "20000" (it became "2000010000").
             }
         }
     }
 
     private func pay() {
-        guard let part = try? AmountParser.parse(amountText, currency: todo.amount.currency), part.minorUnits > 0 else {
+        // Left empty: all of what's left.
+        let text = amountText.trimmingCharacters(in: .whitespaces).isEmpty ? MarkPaidSheet.plain(todo.remaining) : amountText
+        guard let part = try? AmountParser.parse(text, currency: todo.amount.currency), part.minorUnits > 0 else {
             problem = "Enter what you paid."
             return
         }

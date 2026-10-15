@@ -45,6 +45,8 @@ public final class AppSession {
     }
     /// What the Add sheet opens with: a blank expense, a transfer, an edit or a repeat (TXN-014).
     public var addRequest: AddRequest = .new
+    /// A screen with its own box at the bottom (loan notes) hides the floating UZee so it can't cover Send.
+    public var hidesFloatingButtons = false
     public var isVoicePresented = false {
         didSet { if !isVoicePresented { voiceRequest = nil } }
     }
