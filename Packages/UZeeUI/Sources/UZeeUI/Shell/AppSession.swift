@@ -29,7 +29,7 @@ public final class AppSession {
 
     public var selectedTab: AppTab = .home
     /// Which half of the Plan tab shows: Budget or Calendar.
-    public var planPart: PlanPart = .month
+    public var planPart: PlanPart = .toPay
     /// Budgets live behind `budgets` (not observed), so screens read this and saves bump it. Without it the
     /// Budget screen kept asking to set a budget after one was saved (owner, 2026-10-12).
     public var budgetRevision = 0
@@ -75,6 +75,8 @@ public final class AppSession {
     public private(set) var recurring: RecurringSnapshot = .empty
     /// Custom calendar entries (CAL-03) and reminder preferences (CAL-04).
     public private(set) var events: [CalendarEvent] = []
+    /// Plan › To pay.
+    public private(set) var paymentTodos: [PaymentTodo] = []
     public private(set) var reminderSettings: ReminderSettings = .standard
     private var scheduling: Task<Void, Never>?
 
@@ -156,6 +158,7 @@ public final class AppSession {
             events = try calendar.events()
             reminderSettings = try calendar.reminderSettings()
         }
+        read("to pay") { paymentTodos = try calendar.paymentTodos() }
         if !failed.isEmpty {
             #if DEBUG
             errorMessage = "Couldn't read your data. Close UZee and open it again. [\(failed.joined(separator: "; "))]"

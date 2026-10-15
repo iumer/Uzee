@@ -67,6 +67,17 @@ public final class AppDatabase: Sendable {
             }
             try db.execute(sql: "CREATE INDEX loan_note_loan ON loan_note(loan_id)")
         }
+        // 0.14.3: Plan › To pay, payments to make with no month or date (owner, 2026-10-15).
+        migrator.registerMigration("v12_payment_todos") { db in
+            try db.create(table: "payment_todo") { t in
+                MoneySchema.standardColumns(t)
+                t.column("name", .text).notNull()
+                t.column("amount_minor", .integer).notNull().check { $0 > 0 }
+                t.column("paid_minor", .integer).notNull().defaults(to: 0)
+                t.column("currency_code", .text).notNull().references("currency")
+                t.column("done_at", .integer)
+            }
+        }
         return migrator
     }
 

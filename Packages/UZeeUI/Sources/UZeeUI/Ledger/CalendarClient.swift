@@ -18,6 +18,10 @@ public struct CalendarClient: Sendable {
     public var calendars: @Sendable () -> [CalendarChoice]
     public var defaultCalendarID: @Sendable () -> String?
     public var exportToCalendar: @Sendable ([CalendarExportItem], String?, LocalDate) async -> Void
+    /// Plan › To pay (owner, 2026-10-15).
+    public var paymentTodos: @Sendable () throws -> [PaymentTodo]
+    public var savePaymentTodo: @Sendable (PaymentTodo) throws -> Void
+    public var deletePaymentTodo: @Sendable (UUID) throws -> Void
 
     public init(events: @escaping @Sendable () throws -> [CalendarEvent],
                 saveEvent: @escaping @Sendable (CalendarEvent) throws -> Void,
@@ -30,7 +34,10 @@ public struct CalendarClient: Sendable {
                 requestCalendarAccess: @escaping @Sendable () async -> Bool = { false },
                 calendars: @escaping @Sendable () -> [CalendarChoice] = { [] },
                 defaultCalendarID: @escaping @Sendable () -> String? = { nil },
-                exportToCalendar: @escaping @Sendable ([CalendarExportItem], String?, LocalDate) async -> Void = { _, _, _ in }) {
+                exportToCalendar: @escaping @Sendable ([CalendarExportItem], String?, LocalDate) async -> Void = { _, _, _ in },
+                paymentTodos: @escaping @Sendable () throws -> [PaymentTodo] = { [] },
+                savePaymentTodo: @escaping @Sendable (PaymentTodo) throws -> Void = { _ in throw CoreError.notFound },
+                deletePaymentTodo: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound }) {
         self.events = events
         self.saveEvent = saveEvent
         self.deleteEvent = deleteEvent
@@ -43,6 +50,9 @@ public struct CalendarClient: Sendable {
         self.calendars = calendars
         self.defaultCalendarID = defaultCalendarID
         self.exportToCalendar = exportToCalendar
+        self.paymentTodos = paymentTodos
+        self.savePaymentTodo = savePaymentTodo
+        self.deletePaymentTodo = deletePaymentTodo
     }
 
     public static let unavailable = CalendarClient(

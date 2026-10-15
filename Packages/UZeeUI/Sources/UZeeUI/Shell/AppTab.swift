@@ -35,11 +35,11 @@ public enum AppTab: String, CaseIterable, Hashable, Sendable {
 
 /// The two halves of the Plan tab.
 public enum PlanPart: String, CaseIterable, Hashable, Sendable {
-    case month, budget, calendar
+    case toPay, budget, calendar
 
     public var title: String {
         switch self {
-        case .month: "Month"
+        case .toPay: "To pay"
         case .budget: "Budget"
         case .calendar: "Calendar"
         }

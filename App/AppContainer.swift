@@ -106,7 +106,10 @@ final class AppContainer {
             defaultCalendarID: { CalendarExporter.shared.defaultCalendarID },
             exportToCalendar: { items, calendarID, today in
                 await Task.detached { CalendarExporter.shared.sync(items, calendarID: calendarID, today: today) }.value
-            })
+            },
+            paymentTodos: { try store.paymentTodos() },
+            savePaymentTodo: { try store.save($0) },
+            deletePaymentTodo: { try store.deletePaymentTodo($0) })
     }
 
     /// The one container, shared by the app scene and Siri (App Intents run in the app's process).
