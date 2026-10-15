@@ -77,18 +77,15 @@ struct MarkPaidSheet: View {
                             .accessibilityIdentifier("markPaid.confirm")
                     }
                     Section {
-                        Button("Skip this time") {
-                            session.skip(occurrence)
-                            dismiss()
-                        }
-                        .accessibilityIdentifier("markPaid.skip")
+                        Button(item.type.isIncome ? "Got nothing this time (Rs 0)" : "Not charged this time (Rs 0)") { chargedNothing() }
+                            .accessibilityIdentifier("markPaid.skip")
                         Button("Snooze 1 day") {
                             session.snooze(occurrence)
                             dismiss()
                         }
                         .accessibilityIdentifier("markPaid.snooze")
                     } footer: {
-                        Text("Skip moves on to the next date with no payment. Snooze reminds you tomorrow.")
+                        Text("On hold or cancelled this time? Rs 0 records nothing for this date; the next one stays \(MoneyFormatter.string(item.amount)). You can also type 0 above. Snooze reminds you tomorrow.")
                     }
                 }
             }
@@ -144,11 +141,17 @@ struct MarkPaidSheet: View {
         return cents == 0 ? String(whole) : String(format: "%lld.%02lld", whole, cents)
     }
 
+    private func chargedNothing() {
+        session.skip(occurrence)
+        dismiss()
+    }
+
     private func save() {
         let money: Money
         do {
             money = try AmountParser.parse(amountText, currency: occurrence.amount.currency)
-            guard money.minorUnits > 0 else { problem = "The amount must be more than zero."; return }
+            // Rs 0: on hold or cancelled this time; the next one is back to the usual amount (owner, 2026-10-15).
+            guard money.minorUnits > 0 else { chargedNothing(); return }
         } catch {
             problem = ProblemText.message(error)
             return

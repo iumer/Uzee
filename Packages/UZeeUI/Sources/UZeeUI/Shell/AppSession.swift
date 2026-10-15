@@ -476,7 +476,7 @@ public final class AppSession {
 
     /// Skip this time or snooze (REC-08), with Undo.
     public func skip(_ occurrence: Occurrence) {
-        resolve(occurrence, toast: "Skipped this time") { try $0.skip(occurrence.itemID, occurrence.scheduledDate) }
+        resolve(occurrence, toast: "Rs 0 this time") { try $0.skip(occurrence.itemID, occurrence.scheduledDate) }
     }
 
     public func snooze(_ occurrence: Occurrence, days: Int = 1) {

@@ -49,6 +49,7 @@ struct RecurringDetailView: View {
                         .accessibilityIdentifier("recurring.markPaid")
                 }
             }
+            if let next, item.isActive, !item.type.isPlan { comingUpSection(item, after: next, records: records, model: model) }
             if item.type == .installment { installmentSection(item, records: records, model: model) }
             if item.type == .kameti { kametiSection(item, records: records, model: model) }
             if item.priceHistory.count > 1 { priceSection(item) }
@@ -191,6 +192,39 @@ struct RecurringDetailView: View {
             }
         }
         .accessibilityIdentifier("recurring.prices")
+    }
+
+    /// The next few dates after the next one, each can be set to Rs 0 ahead (a month on hold) without changing
+    /// the usual amount (owner, 2026-10-15).
+    private func comingUpSection(_ item: RecurringItem, after next: Occurrence, records: [OccurrenceRecord], model: RecurringModel) -> some View {
+        let later = OccurrenceGenerator.occurrences(item, records: records, from: next.dueDate.addingDays(1),
+                                                    through: next.dueDate.addingMonths(6), today: session.today)
+            .filter { $0.scheduledDate != next.scheduledDate }
+            .prefix(4)
+        return Section {
+            ForEach(Array(later)) { occurrence in
+                HStack {
+                    Text(DateText.short(occurrence.dueDate))
+                    Spacer()
+                    if occurrence.state == .skipped {
+                        Text("Rs 0, on hold").foregroundStyle(UZColor.label2)
+                    } else {
+                        Text(MoneyFormatter.string(occurrence.amount)).monospacedDigit()
+                    }
+                }
+                .contentShape(.rect)
+                .onTapGesture { if !occurrence.isResolved { paying = occurrence } }
+                .swipeActions {
+                    if !occurrence.isResolved {
+                        Button("Rs 0") { session.skip(occurrence) }.tint(UZColor.warning)
+                    }
+                }
+            }
+        } header: {
+            Text("Coming up")
+        } footer: {
+            Text("On hold one month? Swipe it and tap Rs 0. The others keep the usual amount.")
+        }
     }
 
     private func installmentSection(_ item: RecurringItem, records: [OccurrenceRecord], model: RecurringModel) -> some View {
