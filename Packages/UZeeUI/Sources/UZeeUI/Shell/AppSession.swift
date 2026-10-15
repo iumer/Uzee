@@ -79,8 +79,6 @@ public final class AppSession {
     public private(set) var events: [CalendarEvent] = []
     /// Plan › To pay.
     public private(set) var paymentTodos: [PaymentTodo] = []
-    /// Merchant logos: lowercased payee name → PNG data.
-    public private(set) var merchantLogos: [String: Data] = [:]
     public private(set) var reminderSettings: ReminderSettings = .standard
     private var scheduling: Task<Void, Never>?
 
@@ -163,10 +161,6 @@ public final class AppSession {
             reminderSettings = try calendar.reminderSettings()
         }
         read("to pay") { paymentTodos = try calendar.paymentTodos() }
-        read("logos") {
-            let pairs = try calendar.merchantLogos()
-            merchantLogos = Dictionary(pairs.map { ($0.payeeName.lowercased(), $0.imageData) }) { _, last in last }
-        }
         if !failed.isEmpty {
             #if DEBUG
             errorMessage = "Couldn't read your data. Close UZee and open it again. [\(failed.joined(separator: "; "))]"
@@ -576,9 +570,6 @@ public final class AppSession {
         activityFilter = ActivityFilter(categoryIDs: [categoryID], from: from, through: through)
         selectedTab = .activity
     }
-
-    /// Returns the stored PNG logo for a payee name, if any.
-    public func logo(for payeeName: String) -> Data? { merchantLogos[payeeName.lowercased()] }
 
     public func path(for tab: AppTab) -> Binding<[Route]> {
         Binding(get: { self.paths[tab] ?? [] }, set: { self.paths[tab] = $0 })

@@ -109,13 +109,7 @@ final class AppContainer {
             },
             paymentTodos: { try store.paymentTodos() },
             savePaymentTodo: { try store.save($0) },
-            deletePaymentTodo: { try store.deletePaymentTodo($0) },
-            merchantLogos: { try store.merchantLogos().compactMap { logo in logo.imageData.map { (logo.payeeName, $0) } } },
-            saveMerchantLogo: { payeeName, imageData, sourceURL in
-                let logo = MerchantLogo(payeeName: payeeName, imageData: imageData, sourceURL: sourceURL)
-                try store.saveMerchantLogo(logo)
-            },
-            deleteMerchantLogo: { try store.deleteMerchantLogo(payeeName: $0) })
+            deletePaymentTodo: { try store.deletePaymentTodo($0) })
     }
 
     /// The one container, shared by the app scene and Siri (App Intents run in the app's process).

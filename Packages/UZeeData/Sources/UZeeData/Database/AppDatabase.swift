@@ -84,14 +84,6 @@ public final class AppDatabase: Sendable {
                 t.add(column: "reminder_at", .integer)
             }
         }
-        migrator.registerMigration("v14_merchant_logos") { db in
-            try db.create(table: "merchant_logo") { t in
-                t.primaryKey("payee_name", .text).collating(.nocase)
-                t.column("image_data", .blob)
-                t.column("source_url", .text)
-                t.column("fetched_at", .integer).notNull()
-            }
-        }
         return migrator
     }
 
