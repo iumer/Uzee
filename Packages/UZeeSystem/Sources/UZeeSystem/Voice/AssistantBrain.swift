@@ -182,7 +182,7 @@ struct AnswerQuestionTool: Tool {
 
     @Generable
     struct Arguments {
-        @Guide(description: "One of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming, afford (can the user afford a purchase)")
+        @Guide(description: "One of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming, afford (can the user afford a purchase), biggest (biggest expenses or where the money went; set period), compare (this month vs last month)")
         var question: String
         @Guide(description: "The person, for iOwe or owesMe. Empty for everyone.")
         var person: String

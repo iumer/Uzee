@@ -21,6 +21,8 @@ struct VoiceAnswerer {
         case .dueBeforeSalary: return dueBeforeSalary()
         case .upcoming: return upcoming()
         case .afford(let amount): return afford(amount)
+        case .biggest(let period): return biggest(period)
+        case .compare: return compare()
         }
     }
 
@@ -169,6 +171,46 @@ struct VoiceAnswerer {
         }
         let totals = ReportCalculator.totals(transactions, from: start, through: end, base: base, rates: session.ledger.rates)
         return "You spent \(money(totals.spending))\(label) \(period.name). Only your shares count."
+    }
+
+    /// "Your biggest expense this month is Office, Rs 37,000 (48%). Then Transport Rs 16,000 and Food Rs 15,500.
+    /// The largest single payment was Office rent, Rs 30,000 on Oct 1."
+    private func biggest(_ period: VoicePeriod) -> String {
+        let (start, end) = range(period)
+        let shares = ReportCalculator.byGroup(session.transactions, from: start, through: end, categories: session.ledger.categories,
+                                              base: base, rates: session.ledger.rates)
+        guard let top = shares.first else { return "You haven't spent anything \(period.name)." }
+        func name(_ id: UUID) -> String { session.ledger.category(id)?.name ?? "Other" }
+        var parts = ["Your biggest expense \(period.name) is \(name(top.categoryID)), \(money(top.amount)) (\(top.percent)% of your spending)."]
+        let next = shares.dropFirst().prefix(2).map { "\(name($0.categoryID)) \(money($0.amount))" }
+        if !next.isEmpty { parts.append("Then " + ListFormatter.localizedString(byJoining: next) + ".") }
+        let rows = session.transactions.filter { $0.isEffective && $0.kind == .expense && $0.localDate >= start && $0.localDate <= end }
+        let largest = rows.max { a, b in
+            ((try? RateTable.toBase(a.myShare, base: base, rates: session.ledger.rates))?.minorUnits ?? 0)
+                < ((try? RateTable.toBase(b.myShare, base: base, rates: session.ledger.rates))?.minorUnits ?? 0)
+        }
+        if let largest {
+            let what = largest.payeeName ?? session.ledger.categoryPath(largest.categoryID) ?? "a payment"
+            parts.append("The largest single payment was \(what), \(money(largest.amount)) on \(DateText.short(largest.localDate)).")
+        }
+        if name(top.categoryID) == "Other", top.percent >= 40 {
+            parts.append("Most of it has no category yet, so giving those payments a category would make this clearer.")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// This month so far against the same days of last month.
+    private func compare() -> String {
+        let start = today.firstOfMonth
+        let lastStart = start.addingMonths(-1)
+        let lastEnd = min(lastStart.addingDays(today.day - 1), lastStart.lastOfMonth)
+        let now = ReportCalculator.totals(session.transactions, from: start, through: today, base: base, rates: session.ledger.rates).spending
+        let then = ReportCalculator.totals(session.transactions, from: lastStart, through: lastEnd, base: base, rates: session.ledger.rates).spending
+        let difference = Money(minorUnits: (now.minorUnits - then.minorUnits).magnitudeClamped, currency: base)
+        let days = "the first \(today.day) days"
+        if then.isZero { return "You've spent \(money(now)) this month. There's nothing from \(days) of last month to compare with." }
+        if now.minorUnits == then.minorUnits { return "You've spent \(money(now)) this month, the same as \(days) of last month." }
+        return "You've spent \(money(now)) this month, \(money(difference)) \(now.minorUnits > then.minorUnits ? "more" : "less") than \(days) of last month (\(money(then)))."
     }
 
     // MARK: Bills

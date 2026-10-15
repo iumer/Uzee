@@ -589,3 +589,25 @@ struct PricePhraseTests {
         #expect(PricePhrase.request("Balance in my HBL account is actually 35771") == nil)
     }
 }
+
+@Suite("Biggest expense and comparing months")
+struct BiggestQuestionTests {
+    private let names = VoiceVocabulary(categories: ["Food", "Fuel"])
+    @Test("Asked many ways", arguments: [
+        "What's my biggest expense this month?", "Where did I spend the most?", "What's my largest expense?",
+        "Top expenses this month", "Where does my money go?", "What did I spend the most money on last month?"
+    ])
+    func biggest(_ sentence: String) {
+        let question = VoiceRuleParser.parse(sentence, vocabulary: names, today: today).question
+        if case .biggest = question {} else { Issue.record("\(sentence) → \(String(describing: question))") }
+    }
+
+    @Test("Last month is last month")
+    func period() {
+        #expect(VoiceRuleParser.parse("What did I spend the most money on last month?", vocabulary: names, today: today).question
+                == .biggest(period: .lastMonth))
+        #expect(VoiceRuleParser.parse("Am I spending more than last month?", vocabulary: names, today: today).question == .compare)
+        #expect(VoiceRuleParser.parse("How much did I spend on food this month?", vocabulary: names, today: today).question
+                == .spent(category: "Food", period: .thisMonth))
+    }
+}

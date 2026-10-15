@@ -35,6 +35,10 @@ public enum VoiceQuestion: Equatable, Sendable {
     case upcoming
     /// "Can I afford a 30,000 phone?" (nil amount = what's left to spend).
     case afford(amount: SpokenAmount?)
+    /// "What's my biggest expense this month?", "where did I spend the most?" (owner, 2026-10-15).
+    case biggest(period: VoicePeriod)
+    /// "Am I spending more than last month?"
+    case compare
 }
 
 /// A request understood from one sentence. Names are as matched against the user's own people,
@@ -491,6 +495,9 @@ public enum VoiceRuleParser {
         let start = String(t.dropFirst())
         if questionStarts.contains(where: { start.hasPrefix($0) }) { return true }
         if original.hasSuffix("?") { return true }
+        // "Top expenses this month", "biggest spending" without a question word (no amount, so not an entry).
+        if has(t, [" top expense", " top spending", " biggest expense", " biggest spending", " largest expense"]),
+           AmountPhrase.find(in: original) == nil { return true }
         return false
     }
 
@@ -500,6 +507,15 @@ public enum VoiceRuleParser {
             return .iOwe(person: person)
         }
         if has(t, [" pay me back ", " paid me back "]) { return .owesMe(person: person) }
+        // "biggest / largest / highest / most expensive / top expense", "spend the most", "where does my money go".
+        if has(t, [" biggest", " largest", " highest", " most expensive", " top expense", " top spending", " top categor",
+                   " the most", " most money", " main expense", " where does my money go", " where did my money go", " big expense"]) {
+            return .biggest(period: period(t))
+        }
+        if has(t, [" than last month", " compared to last month", " compare", " vs last month", " versus last month",
+                   " more or less than", " last month and this month", " this month and last month"]) {
+            return .compare
+        }
         if t.contains(" budget") { return .budgetLeft }
         if t.contains(" subscription") { return .subscriptions }
         if t.contains(" salary"), has(t, [" before ", " until ", " till ", " due ", " bills "]) { return .dueBeforeSalary }
@@ -509,14 +525,16 @@ public enum VoiceRuleParser {
             if !has(t, [" spend", " spent", " spending"]) { return .balance(account: account) }
         }
         if has(t, [" spend", " spent", " spending", " expense", " expenses", " cost "]) {
-            let period: VoicePeriod
-            if t.contains(" today ") { period = .today }
-            else if t.contains(" this week ") || t.contains(" week ") { period = .thisWeek }
-            else if t.contains(" last month ") { period = .lastMonth }
-            else { period = .thisMonth }
-            return .spent(category: category, period: period)
+            return .spent(category: category, period: period(t))
         }
         return nil
+    }
+
+    static func period(_ t: String) -> VoicePeriod {
+        if t.contains(" today ") { return .today }
+        if t.contains(" this week ") || t.contains(" week ") { return .thisWeek }
+        if t.contains(" last month ") { return .lastMonth }
+        return .thisMonth
     }
 
     static func classifyAction(_ t: String, amount: SpokenAmount?, accounts: [(name: String, position: Int)]) -> VoiceAction {

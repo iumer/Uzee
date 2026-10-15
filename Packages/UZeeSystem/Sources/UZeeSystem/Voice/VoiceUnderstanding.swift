@@ -60,7 +60,7 @@ struct GeneratedVoiceCommand {
     var category: String
     @Guide(description: "The shop, company or payer. Empty if none.")
     var payee: String
-    @Guide(description: "For questions only, one of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming, afford. Empty otherwise.")
+    @Guide(description: "For questions only, one of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming, afford, biggest, compare. Empty otherwise.")
     var question: String
     @Guide(description: "For spending questions: today, thisWeek, thisMonth or lastMonth. Empty otherwise.")
     var period: String
@@ -141,6 +141,8 @@ enum ModelParser {
         case "dueBeforeSalary": .dueBeforeSalary
         case "upcoming": .upcoming
         case "afford": .afford(amount: amount)
+        case "biggest": .biggest(period: period)
+        case "compare": .compare
         default: nil
         }
     }
