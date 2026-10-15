@@ -91,6 +91,7 @@ struct OnboardingView: View {
 
     @State private var step: Step = .welcome
     @State private var picks: [Pick] = []
+    @FocusState private var focusedBalance: UUID?
     @State private var incomeType: IncomeType?
     @State private var hasRegular = false
     @State private var payDay = 0
@@ -231,12 +232,25 @@ struct OnboardingView: View {
                         .background(UZColor.fill, in: .capsule)
                 }
                 .accessibilityIdentifier("onboarding.currency.\(group.kind.rawValue)")
-                Spacer()
-                Text("Balance").font(.subheadline).foregroundStyle(UZColor.label2)
-                TextField("0", text: pick.balance)
-                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing).monospacedDigit()
-                    .frame(maxWidth: 130)
-                    .accessibilityIdentifier("onboarding.balance.\(group.kind.rawValue)")
+                // A bordered box that takes a tap anywhere inside it, not only on the "0" (owner, 2026-10-15).
+                HStack(spacing: UZSpacing.s) {
+                    Text("Balance").font(.subheadline).foregroundStyle(UZColor.label2)
+                    Spacer(minLength: 0)
+                    Text(pick.wrappedValue.currency.symbol).font(.body).foregroundStyle(UZColor.label2)
+                    TextField("0", text: pick.balance)
+                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing).monospacedDigit()
+                        .font(.body.weight(.semibold))
+                        .focused($focusedBalance, equals: pick.wrappedValue.id)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .accessibilityIdentifier("onboarding.balance.\(group.kind.rawValue)")
+                }
+                .padding(.horizontal, UZSpacing.m).frame(maxWidth: .infinity, minHeight: 44)
+                .background(UZColor.fill.opacity(0.5), in: .rect(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(focusedBalance == pick.wrappedValue.id ? UZColor.tint : UZColor.label3.opacity(0.4),
+                                  lineWidth: focusedBalance == pick.wrappedValue.id ? 2 : 1))
+                .contentShape(.rect)
+                .onTapGesture { focusedBalance = pick.wrappedValue.id }
             }
         }
         .padding(.vertical, UZSpacing.xxs)
