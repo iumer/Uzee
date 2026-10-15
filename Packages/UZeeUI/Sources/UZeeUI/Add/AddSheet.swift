@@ -753,18 +753,27 @@ struct CategoryPicker: View {
     let type: CategoryType
     @Binding var selection: UUID?
     @Environment(\.dismiss) private var dismiss
+    /// Main categories first; tap one to open its subcategories (owner, 2026-10-15). The current choice's group starts open.
+    @State private var open: Set<UUID> = []
 
     var body: some View {
         List {
             ForEach(parents) { parent in
+                let subs = children(of: parent)
                 Section {
-                    row(parent, isParent: true)
-                    ForEach(children(of: parent)) { child in row(child, isParent: false) }
+                    parentRow(parent, hasChildren: !subs.isEmpty)
+                    if open.contains(parent.id) {
+                        row(parent, title: "All \(parent.name)", indent: true)
+                        ForEach(subs) { child in row(child, title: child.name, indent: true) }
+                    }
                 }
             }
         }
         .navigationTitle("Category")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if let chosen = categories.first(where: { $0.id == selection }) { open.insert(chosen.parentID ?? chosen.id) }
+        }
     }
 
     private var parents: [SpendCategory] {
@@ -775,20 +784,57 @@ struct CategoryPicker: View {
         categories.filter { $0.parentID == parent.id && !$0.isHidden }.sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    private func row(_ category: SpendCategory, isParent: Bool) -> some View {
+    /// A main category: opens its subcategories, or is picked straight away when it has none.
+    private func parentRow(_ parent: SpendCategory, hasChildren: Bool) -> some View {
+        let chosenHere = selection == parent.id || children(of: parent).contains { $0.id == selection }
+        return Button {
+            if hasChildren {
+                withAnimation(.snappy) {
+                    if open.contains(parent.id) { open.remove(parent.id) } else { open.insert(parent.id) }
+                }
+            } else {
+                selection = parent.id
+                dismiss()
+            }
+        } label: {
+            HStack(spacing: UZSpacing.l) {
+                CategoryTile(parent.group, size: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(parent.name).font(.body.weight(.semibold))
+                    if chosenHere, let name = categories.first(where: { $0.id == selection })?.name, selection != parent.id {
+                        Text(name).font(.caption).foregroundStyle(UZColor.tint)
+                    }
+                }
+                Spacer()
+                if hasChildren {
+                    Image(systemName: open.contains(parent.id) ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold)).foregroundStyle(UZColor.label3)
+                } else if selection == parent.id {
+                    Image(systemName: "checkmark").foregroundStyle(UZColor.tint)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .foregroundStyle(UZColor.label)
+        .accessibilityIdentifier("category.\(parent.name)")
+        .accessibilityAddTraits(chosenHere ? .isSelected : [])
+    }
+
+    private func row(_ category: SpendCategory, title: String, indent: Bool) -> some View {
         Button {
             selection = category.id
             dismiss()
         } label: {
             HStack(spacing: UZSpacing.l) {
-                if isParent { CategoryTile(category.group, size: 30) } else { Color.clear.frame(width: 30, height: 1) }
-                Text(category.name).font(isParent ? .body.weight(.semibold) : .body)
+                Color.clear.frame(width: 30, height: 1)
+                Text(title)
                 Spacer()
                 if selection == category.id { Image(systemName: "checkmark").foregroundStyle(UZColor.tint) }
             }
+            .contentShape(.rect)
         }
         .foregroundStyle(UZColor.label)
-        .accessibilityIdentifier("category.\(category.name)")
+        .accessibilityIdentifier(title.hasPrefix("All ") ? "category.all.\(category.name)" : "category.\(category.name)")
         .accessibilityAddTraits(selection == category.id ? .isSelected : [])
     }
 }
