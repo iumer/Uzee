@@ -148,15 +148,24 @@ struct ReportsView: View {
                         .frame(height: 180)
                         .accessibilityHidden(true)
                         ForEach(shares) { share in
-                            HStack(spacing: UZSpacing.m) {
-                                Circle().fill(color(share.categoryID)).frame(width: 10, height: 10)
-                                Text(session.ledger.category(share.categoryID)?.name ?? "Other")
-                                Spacer()
-                                Text(MoneyFormatter.string(share.amount)).monospacedDigit()
-                                Text("\(share.percent)%").foregroundStyle(UZColor.label2).monospacedDigit().frame(width: 44, alignment: .trailing)
+                            // Tap a category to see its transactions in this period (owner, 2026-10-15).
+                            Button {
+                                session.openActivity(categoryID: share.categoryID, from: range.start, through: range.end)
+                            } label: {
+                                HStack(spacing: UZSpacing.m) {
+                                    Circle().fill(color(share.categoryID)).frame(width: 10, height: 10)
+                                    Text(session.ledger.category(share.categoryID)?.name ?? "Other").foregroundStyle(UZColor.label)
+                                    Spacer()
+                                    Text(MoneyFormatter.string(share.amount)).monospacedDigit().foregroundStyle(UZColor.label)
+                                    Text("\(share.percent)%").foregroundStyle(UZColor.label2).monospacedDigit().frame(width: 44, alignment: .trailing)
+                                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(UZColor.label3)
+                                }
+                                .font(.subheadline)
+                                .contentShape(.rect)
                             }
-                            .font(.subheadline)
+                            .buttonStyle(.plain)
                             .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("reports.category.\(session.ledger.category(share.categoryID)?.name ?? "Other")")
                         }
                     }
                 }
