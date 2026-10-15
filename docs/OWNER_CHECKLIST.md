@@ -94,6 +94,13 @@ Status per build goes in the last column: ✓ passed, ✗ broke (then it becomes
 | BUG-029 | 2026-10-14 | A small swipe closed Import (and Add) mid-way with no word on whether it saved; re-import showed everything unticked with no Select all; extra "Import 777 transactions?" pop-up | Sheets allowed swipe-to-dismiss; no bulk toggle | Phone | 0.13.16 (42) | Fixed, check on phone |
 | BUG-030 | 2026-10-14 | Mac check of 0.13.17: Import's "Leave 163 out of spending" saved nothing (0 transfers; Activity still showed 186 to review); Keep in Transfers & ATM cash gave no feedback and the count went 22→14 | One failing row rolled back all of them and the error alert hid under the sheet; Keep only keeps unticked rows, ticked ones stay for Make | Phone (Mac) | 0.13.18 (44) | Fixed; the "saved nothing" and "can't tap" parts were the Mac's mis-aimed test taps, not the app |
 | BUG-031 | 2026-10-14 | Import: "Decide later" (transfers) and "Not now" (recurring) couldn't be tapped; taps went to the list behind | Bottom bar wasn't hit-testable around the small text buttons | Phone (Mac) | 0.13.18 (44) | Fixed; the "saved nothing" and "can't tap" parts were the Mac's mis-aimed test taps, not the app |
+| BUG-032 | 2026-10-15 | Voice: "Recurring mobile bill of Rs 1900 on 20th of every month" saved a one-off expense; a yearly fee became monthly | Voice had no recurring request at all | Phone | 0.14.0 (45) | Fixed, check on phone |
+| BUG-033 | 2026-10-15 | Shared expense paid by someone else saved Rs 50,000 as $50,000; Edit then showed Rs and saved it in rupees | Currency came from a hidden "Paid from" account; edit fell back to the base currency | Phone | 0.14.0 (45) | Fixed, check on phone |
+| BUG-034 | 2026-10-15 | Income vs spending chart showed income far above spending though the owner spends what they earn | Chart showed income and my-share spending, leaving out loans, others' shares of splits and money sent to people; now money in vs out | Phone | 0.14.0 (45) | Fixed, check on phone |
+| BUG-035 | 2026-10-15 | Activity hangs a bit on opening and when going back from a transaction | Transfer review matching (all imported rows) and day grouping ran on the main thread on every appear | Phone | 0.14.0 (45) | Fixed, check on phone |
+| OWN-049 | 2026-10-15 | Wording: "Select" not "Tick"; "Repeat…" not "Repeat every month…"; Add a bill or subscription easy to find | — | Phone | 0.14.0 (45) | Done, check on phone |
+| OWN-050 | 2026-10-15 | Add transactions from screenshots (bank app list, order email, notification) | New | Phone | 0.14.0 (45) | Done, check on phone |
+| OWN-051 | 2026-10-15 | Monthly plan like the Google Sheet: coming in, going out, left | New: Plan › Month | Phone | 0.14.0 (45) | Done, check on phone |
 
 ## Waiting on the owner
 

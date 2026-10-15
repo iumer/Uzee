@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 import UZeeCore
@@ -37,6 +38,10 @@ struct ImportStatementView: View {
     @State private var step: Step = .choose
     @State private var accountID: UUID?
     @State private var showingFiles = false
+    /// Screenshots of a bank app, an order email or a notification (owner, 2026-10-15).
+    @State private var photoItems: [PhotosPickerItem] = []
+    /// The file being reviewed is a screenshot: it goes into the account you use most, not a new bank account.
+    @State private var isScreenshot = false
     @State private var fileURL: URL?
     @State private var fileName = ""
     @State private var problem: String?
@@ -105,20 +110,23 @@ struct ImportStatementView: View {
                         .accessibilityIdentifier("import.close")
                 }
             }
-            .fileImporter(isPresented: $showingFiles, allowedContentTypes: [.pdf, .commaSeparatedText, .plainText],
+            .fileImporter(isPresented: $showingFiles, allowedContentTypes: [.pdf, .commaSeparatedText, .plainText, .image],
                           allowsMultipleSelection: true) { result in
                 guard case .success(let urls) = result, !urls.isEmpty else { return }
-                queue = urls
-                fileCount = urls.count
-                fileNumber = 0
-                skipped = []
-                statementsImported = 0
-                importedIDs = []
-                balanceNotes = []
-                rowsImported = 0
-                transfersMade = []
-                transfersReplaced = []
-                nextFile()
+                start(urls)
+            }
+            .onChange(of: photoItems) { _, items in
+                guard !items.isEmpty else { return }
+                photoItems = []
+                Task {
+                    var urls: [URL] = []
+                    for (index, item) in items.enumerated() {
+                        guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Screenshot \(index + 1).png")
+                        if (try? data.write(to: url)) != nil { urls.append(url) }
+                    }
+                    if urls.isEmpty { problem = "Couldn't open those pictures. Try again." } else { start(urls) }
+                }
             }
             .alert(newAccountTitle, isPresented: $askingNewAccount) {
                 Button("Add “\(newAccountName)”") { addAccount() }
@@ -161,6 +169,10 @@ struct ImportStatementView: View {
                     Label("Choose PDF or CSV statements", systemImage: "doc.text")
                 }
                 .accessibilityIdentifier("import.pick")
+                PhotosPicker(selection: $photoItems, maxSelectionCount: 20, matching: .images) {
+                    Label("Choose screenshots", systemImage: "camera.viewfinder")
+                }
+                .accessibilityIdentifier("import.screenshots")
                 if let problem {
                     Text(problem).foregroundStyle(UZColor.negative)
                         .accessibilityIdentifier("import.problem")
@@ -168,7 +180,7 @@ struct ImportStatementView: View {
             } header: {
                 Text("Step 1 of 2 · Pick the statement")
             } footer: {
-                Text("Download statements from your bank's app or website first. Pick one, or several at once. UZee works out each one's bank and currency, then asks which account it belongs to. It reads the files on this iPhone; nothing is uploaded.")
+                Text("Download statements from your bank's app or website first, or take screenshots: a bank app's transactions, an order email or a payment notification. Pick one, or several at once. UZee reads them on this iPhone; nothing is uploaded.")
             }
             Section("Reads") {
                 Text("MCB, HBL, Meezan Bank, Easypaisa, SadaPay, NayaPay and Wise statements, and most other banks' PDF or CSV statements with a date, an amount and a balance on each row.")
@@ -190,6 +202,49 @@ struct ImportStatementView: View {
         .padding(UZSpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("import.reading")
+    }
+
+    /// Reads the picked statements or screenshots one after another.
+    private func start(_ urls: [URL]) {
+        queue = urls
+        fileCount = urls.count
+        fileNumber = 0
+        skipped = []
+        statementsImported = 0
+        importedIDs = []
+        balanceNotes = []
+        rowsImported = 0
+        transfersMade = []
+        transfersReplaced = []
+        nextFile()
+    }
+
+    private static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "heic", "heif", "gif", "tiff", "webp"]
+
+    /// A screenshot: text read on this iPhone, then a bank app's list, an order or a notification (owner, 2026-10-15).
+    private func readScreenshot(_ url: URL) {
+        let smart = session.smart
+        let base = ledger.base
+        let today = session.today
+        Task {
+            let lines = await Task.detached { () -> [String]? in
+                let access = url.startAccessingSecurityScopedResource()
+                defer { if access { url.stopAccessingSecurityScopedResource() } }
+                guard let data = try? Data(contentsOf: url), let pieces = try? smart.readReceipt(data) else { return nil }
+                return ReceiptParser.lines(pieces)
+            }.value
+            guard let lines, !lines.isEmpty else {
+                fail("UZee couldn't read any text in this picture. Try a clearer screenshot.")
+                return
+            }
+            let reading = ScreenshotParser.read(lines: lines, currency: base, today: today)
+            guard !reading.rows.isEmpty else {
+                fail("UZee couldn't find an amount in this screenshot. Try one that shows the amount and what it was for.")
+                return
+            }
+            isScreenshot = true
+            review(reading)
+        }
     }
 
     /// The next picked file, or the end when all have been read.
@@ -222,6 +277,11 @@ struct ImportStatementView: View {
         guard let fileURL else { return }
         step = .reading
         problem = nil
+        isScreenshot = false
+        if Self.imageExtensions.contains(fileURL.pathExtension.lowercased()) {
+            readScreenshot(fileURL)
+            return
+        }
         let smart = session.smart
         let secret = password.isEmpty ? nil : password
         Task {
@@ -297,12 +357,16 @@ struct ImportStatementView: View {
             var points = 0
             if !bank.isEmpty, NameKey.make(account.name).contains(bank) { points += 4 }
             if account.id == session.importAccountID { points += 2 }
+            if isScreenshot, account.id == lastUsedAccount { points += 2 }
             if bankName == StatementSource.wise.rawValue, account.kind == .multiCurrency { points += 1 }
             return points
         }
         guard let best = matching.max(by: { score($0) < score($1) }), score(best) >= 2 else { return nil }
         return best.id
     }
+
+    /// The account you last saved into, for screenshots, which rarely name their bank.
+    private var lastUsedAccount: UUID? { try? session.client.lastUsedAccountID() }
 
     /// "Meezan Bank" → "Meezan", for matching account names.
     private var bankShortName: String {

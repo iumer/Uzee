@@ -9,6 +9,7 @@ struct PlanView: View {
 
     var body: some View {
         switch session.planPart {
+        case .month: MonthPlanView(session: session)
         case .budget: BudgetView(session: session)
         case .calendar: CalendarTabView(session: session)
         }

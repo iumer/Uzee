@@ -29,7 +29,7 @@ public final class AppSession {
 
     public var selectedTab: AppTab = .home
     /// Which half of the Plan tab shows: Budget or Calendar.
-    public var planPart: PlanPart = .budget
+    public var planPart: PlanPart = .month
     /// Budgets live behind `budgets` (not observed), so screens read this and saves bump it. Without it the
     /// Budget screen kept asking to set a budget after one was saved (owner, 2026-10-12).
     public var budgetRevision = 0

@@ -185,7 +185,7 @@ struct RecurringFormSheet: View {
         currency = session.ledger.base
         guard let item = item ?? draft else { return }
         name = item.name
-        amountText = MarkPaidSheet.plain(item.amount)
+        amountText = item.amount.isZero ? "" : MarkPaidSheet.plain(item.amount)
         currency = item.amount.currency
         type = item.type
         unit = item.rule.unit

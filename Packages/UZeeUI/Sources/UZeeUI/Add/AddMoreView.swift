@@ -71,6 +71,18 @@ struct AddMoreView: View {
                         kindRow("Refund", "Money back from a shop", systemImage: "arrow.uturn.backward")
                     }
                     .accessibilityIdentifier("add.more.refund")
+                    Button {
+                        // Import opens from the root, so Add closes first.
+                        session.isAddPresented = false
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(500))
+                            session.openImport()
+                        }
+                    } label: {
+                        kindRow("From screenshots or statements", "A bank app's list, an order email or a notification",
+                                systemImage: "camera.viewfinder")
+                    }
+                    .accessibilityIdentifier("add.more.screenshots")
                     Button { addingRecurring = true } label: {
                         kindRow("Bill or subscription", "Something you pay or get every month or year, with reminders",
                                 systemImage: "arrow.triangle.2.circlepath")

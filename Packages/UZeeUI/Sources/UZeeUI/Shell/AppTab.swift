@@ -35,9 +35,15 @@ public enum AppTab: String, CaseIterable, Hashable, Sendable {
 
 /// The two halves of the Plan tab.
 public enum PlanPart: String, CaseIterable, Hashable, Sendable {
-    case budget, calendar
+    case month, budget, calendar
 
-    public var title: String { self == .budget ? "Budget" : "Calendar" }
+    public var title: String {
+        switch self {
+        case .month: "Month"
+        case .budget: "Budget"
+        case .calendar: "Calendar"
+        }
+    }
 }
 
 /// Pushed destinations. Each tab keeps its own path, so Back always works (AUD-14).
