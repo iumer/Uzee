@@ -79,6 +79,18 @@ public struct PlannedReminder: Hashable, Sendable {
     public var scheduledDate: LocalDate?
 
     public static let idPrefix = "uzee."
+
+    public init(id: String, kind: Kind, fireDate: LocalDate, minuteOfDay: Int, title: String, body: String,
+                itemID: UUID? = nil, scheduledDate: LocalDate? = nil) {
+        self.id = id
+        self.kind = kind
+        self.fireDate = fireDate
+        self.minuteOfDay = minuteOfDay
+        self.title = title
+        self.body = body
+        self.itemID = itemID
+        self.scheduledDate = scheduledDate
+    }
 }
 
 /// Plans one reminder per upcoming occurrence (CAL-05), nearest first, never more than iOS allows (64 pending;
