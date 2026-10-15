@@ -115,7 +115,7 @@ public enum ScreenshotParser {
 
     static func stripDate(_ line: String) -> String {
         var result = line
-        for found in TextScan.dates(in: line).reversed() {
+        for found in TextScan.dates(in: line, defaultYear: 2000).reversed() {
             let chars = Array(result)
             guard found.end <= chars.count else { continue }
             result = String(chars[..<found.start]) + String(chars[found.end...])

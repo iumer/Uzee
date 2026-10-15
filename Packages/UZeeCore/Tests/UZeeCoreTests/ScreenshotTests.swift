@@ -31,6 +31,7 @@ struct ScreenshotTests {
         #expect(rows[0].date == LocalDate(year: 2026, month: 10, day: 12))
         #expect(rows[1].date == LocalDate(year: 2026, month: 10, day: 3))
         #expect(rows.allSatisfy { $0.amount < 0 })
+        #expect(rows[1].description == "Daraz")
     }
 
     @Test("An order email is one payment: its total")
