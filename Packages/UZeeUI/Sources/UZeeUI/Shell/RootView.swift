@@ -279,6 +279,7 @@ struct TabRoot: View {
                     case .budgetCategory(let id, let start):
                         BudgetCategoryView(session: session, categoryID: id, periodStart: start)
                     case .person(let id): PersonDetailView(session: session, personID: id)
+                    case .loan(let id): LoanDetailView(session: session, loanID: id)
                     case .groups: GroupsView(session: session)
                     case .group(let id): GroupDetailView(session: session, groupID: id)
                     case .bills: BillsHubView(session: session, tab: tab)

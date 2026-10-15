@@ -11,6 +11,7 @@ public struct PeopleStore: Sendable {
         /// A person or group with money still between you is archived, not deleted.
         case hasBalance
         case needsAccount
+        case emptyNote
     }
 
     let database: AppDatabase
@@ -189,6 +190,31 @@ public struct PeopleStore: Sendable {
         }
     }
 
+    /// Adds a dated note to a loan (owner, 2026-10-15).
+    @discardableResult
+    public func addNote(_ text: String, loanID: UUID, at time: Date = Date()) throws -> LoanNote {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { throw Problem.emptyNote }
+        let note = LoanNote(text: body, createdAt: time)
+        try database.writer.write { db in
+            guard try Bool.fetchOne(db, sql: "SELECT 1 FROM loan WHERE id = ? AND deleted_at IS NULL", arguments: [loanID.uuidString]) == true else {
+                throw Problem.notFound
+            }
+            let stamp = Timestamp.from(time)
+            try db.execute(sql: "INSERT INTO loan_note (id, created_at, updated_at, loan_id, body) VALUES (?, ?, ?, ?, ?)",
+                           arguments: [note.id.uuidString, stamp, stamp, loanID.uuidString, body])
+        }
+        return note
+    }
+
+    public func deleteNote(_ noteID: UUID) throws {
+        try database.writer.write { db in
+            try db.execute(sql: "UPDATE loan_note SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+                           arguments: [Timestamp.now(), Timestamp.now(), noteID.uuidString])
+            guard db.changesCount == 1 else { throw Problem.notFound }
+        }
+    }
+
     public func setDueDate(_ date: LocalDate?, interestBasisPoints: Int?, loanID: UUID) throws {
         try database.writer.write { db in
             try db.execute(sql: "UPDATE loan SET due_date = ?, interest_rate_bps = ?, updated_at = ? WHERE id = ?",
@@ -336,6 +362,11 @@ extension PeopleStore {
                 LoanPayment(id: id, transactionID: txn.flatMap(UUID.init(uuidString:)),
                             amount: Money(minorUnits: row["amount_minor"], currency: .pkr), paidOn: paidOn))
         }
+        var notes: [String: [LoanNote]] = [:]
+        for row in try Row.fetchAll(db, sql: "SELECT * FROM loan_note WHERE deleted_at IS NULL ORDER BY created_at") {
+            guard let id = UUID(uuidString: row["id"]) else { continue }
+            notes[row["loan_id"], default: []].append(LoanNote(id: id, text: row["body"], createdAt: Timestamp.date(row["created_at"])))
+        }
         return try Row.fetchAll(db, sql: """
             SELECT l.* FROM loan l LEFT JOIN txn t ON t.id = l.txn_id
             WHERE l.deleted_at IS NULL AND (l.txn_id IS NULL OR t.deleted_at IS NULL) ORDER BY l.start_date DESC, l.created_at DESC
@@ -353,7 +384,8 @@ extension PeopleStore {
                         institution: row["institution_name"], principal: Money(minorUnits: row["principal_minor"], currency: currency),
                         startDate: start, dueDate: due.flatMap(LocalDate.init), interestBasisPoints: row["interest_rate_bps"],
                         transactionID: txn.flatMap(UUID.init(uuidString:)), writtenOffAt: writtenOff.map(Timestamp.date),
-                        notes: row["notes"], payments: loanPayments, isSample: row["is_sample"])
+                        notes: row["notes"], payments: loanPayments, noteLog: notes[row["id"]] ?? [],
+                        createdAt: Timestamp.date(row["created_at"]), isSample: row["is_sample"])
         }
     }
 

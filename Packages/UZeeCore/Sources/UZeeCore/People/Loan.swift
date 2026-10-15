@@ -34,6 +34,19 @@ public struct LoanPayment: Hashable, Sendable, Identifiable {
     }
 }
 
+/// A dated note on a loan (owner, 2026-10-15): "Mom said pay by Eid", kept like messages in a chat.
+public struct LoanNote: Hashable, Sendable, Identifiable {
+    public var id: UUID
+    public var text: String
+    public var createdAt: Date
+
+    public init(id: UUID = UUID(), text: String, createdAt: Date = Date()) {
+        self.id = id
+        self.text = text
+        self.createdAt = createdAt
+    }
+}
+
 /// A loan with a person or an institution (LOAN-02). `transactionID` is the lend/borrow transaction
 /// that moved the money (LOAN-05); nil for an opening balance (LOAN-08).
 public struct Loan: Hashable, Sendable, Identifiable {
@@ -50,11 +63,16 @@ public struct Loan: Hashable, Sendable, Identifiable {
     public var writtenOffAt: Date?
     public var notes: String?
     public var payments: [LoanPayment]
+    /// Dated notes, oldest first.
+    public var noteLog: [LoanNote]
+    /// When it was added to UZee.
+    public var createdAt: Date?
     public var isSample: Bool
 
     public init(id: UUID = UUID(), direction: LoanDirection, personID: UUID? = nil, institution: String? = nil, principal: Money,
                 startDate: LocalDate, dueDate: LocalDate? = nil, interestBasisPoints: Int? = nil, transactionID: UUID? = nil,
-                writtenOffAt: Date? = nil, notes: String? = nil, payments: [LoanPayment] = [], isSample: Bool = false) {
+                writtenOffAt: Date? = nil, notes: String? = nil, payments: [LoanPayment] = [], noteLog: [LoanNote] = [],
+                createdAt: Date? = nil, isSample: Bool = false) {
         self.id = id
         self.direction = direction
         self.personID = personID
@@ -67,6 +85,8 @@ public struct Loan: Hashable, Sendable, Identifiable {
         self.writtenOffAt = writtenOffAt
         self.notes = notes
         self.payments = payments
+        self.noteLog = noteLog
+        self.createdAt = createdAt
         self.isSample = isSample
     }
 

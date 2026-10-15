@@ -118,6 +118,23 @@ struct PeopleStoreTests {
         #expect(try world.ledger.transactions().isEmpty)
     }
 
+    @Test("Notes on a loan, oldest first, with their time; deleted ones go")
+    func loanNotes() throws {
+        let world = try empty()
+        let other = try world.people.createPerson(name: "Other Person")
+        let loan = try world.people.recordLoan(direction: .borrowed, personID: other.id, amount: rs(150_000), accountID: nil, on: day(10, 1))
+        let first = try world.people.addNote("Pay back by Eid", loanID: loan.id, at: Date(timeIntervalSince1970: 1_790_000_000))
+        try world.people.addNote("  Paid 20k in cash, more next month  ", loanID: loan.id, at: Date(timeIntervalSince1970: 1_790_100_000))
+        #expect(throws: PeopleStore.Problem.emptyNote) { try world.people.addNote("   ", loanID: loan.id) }
+        var saved = try world.people.snapshot().loans[0]
+        #expect(saved.noteLog.map(\.text) == ["Pay back by Eid", "Paid 20k in cash, more next month"])
+        #expect(saved.noteLog[0].createdAt == Date(timeIntervalSince1970: 1_790_000_000))
+        #expect(saved.createdAt != nil)
+        try world.people.deleteNote(first.id)
+        saved = try world.people.snapshot().loans[0]
+        #expect(saved.noteLog.map(\.text) == ["Paid 20k in cash, more next month"])
+    }
+
     @Test("LOAN-008 existing balances: no money moves, matching names add up, write-off zeroes")
     func existingBalances() throws {
         let world = try empty()

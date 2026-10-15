@@ -58,6 +58,15 @@ public final class AppDatabase: Sendable {
             try db.execute(sql: "DROP INDEX loan_payment_txn")
             try db.execute(sql: "CREATE INDEX loan_payment_txn ON loan_payment(txn_id) WHERE txn_id IS NOT NULL")
         }
+        // 0.14.2: dated notes on a loan, like a chat (owner, 2026-10-15).
+        migrator.registerMigration("v11_loan_notes") { db in
+            try db.create(table: "loan_note") { t in
+                MoneySchema.standardColumns(t)
+                t.column("loan_id", .text).notNull().references("loan", onDelete: .cascade)
+                t.column("body", .text).notNull()
+            }
+            try db.execute(sql: "CREATE INDEX loan_note_loan ON loan_note(loan_id)")
+        }
         return migrator
     }
 

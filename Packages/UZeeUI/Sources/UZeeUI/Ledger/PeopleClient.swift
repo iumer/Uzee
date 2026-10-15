@@ -19,6 +19,9 @@ public struct PeopleClient: Sendable {
     public var setDueDate: @Sendable (_ due: LocalDate?, _ interestBasisPoints: Int?, _ loan: UUID) throws -> Void
     public var addExistingBalances: @Sendable ([BalanceRow]) throws -> Void
     public var settle: @Sendable (_ person: UUID, _ group: UUID?, _ amount: Money, _ iPaid: Bool, _ account: UUID, _ date: Date) throws -> Void
+    /// Dated notes on a loan, like a chat (owner, 2026-10-15).
+    public var addLoanNote: @Sendable (_ text: String, _ loan: UUID) throws -> Void
+    public var deleteLoanNote: @Sendable (_ note: UUID) throws -> Void
 
     public init(snapshot: @escaping @Sendable () throws -> PeopleSnapshot,
                 createPerson: @escaping @Sendable (String, String?) throws -> Person,
@@ -31,7 +34,9 @@ public struct PeopleClient: Sendable {
                 setWrittenOff: @escaping @Sendable (Bool, UUID) throws -> Void,
                 setDueDate: @escaping @Sendable (LocalDate?, Int?, UUID) throws -> Void,
                 addExistingBalances: @escaping @Sendable ([BalanceRow]) throws -> Void,
-                settle: @escaping @Sendable (UUID, UUID?, Money, Bool, UUID, Date) throws -> Void) {
+                settle: @escaping @Sendable (UUID, UUID?, Money, Bool, UUID, Date) throws -> Void,
+                addLoanNote: @escaping @Sendable (String, UUID) throws -> Void = { _, _ in throw CoreError.notFound },
+                deleteLoanNote: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound }) {
         self.snapshot = snapshot
         self.createPerson = createPerson
         self.updatePerson = updatePerson
@@ -44,6 +49,8 @@ public struct PeopleClient: Sendable {
         self.setDueDate = setDueDate
         self.addExistingBalances = addExistingBalances
         self.settle = settle
+        self.addLoanNote = addLoanNote
+        self.deleteLoanNote = deleteLoanNote
     }
 
     public static let unavailable = PeopleClient(

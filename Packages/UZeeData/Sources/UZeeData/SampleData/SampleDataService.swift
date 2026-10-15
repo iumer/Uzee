@@ -8,7 +8,7 @@ public struct SampleDataService: Sendable {
     /// Each milestone that adds a user-content table appends it here.
     public static let defaultTables: [String] = [
         "calendar_event", "occurrence", "price_history", "kameti_payout", "recurring_item",
-        "budget_limit", "budget", "attachment", "txn_tag", "tag", "split_share", "split_payer", "split", "loan_payment", "loan",
+        "budget_limit", "budget", "attachment", "txn_tag", "tag", "split_share", "split_payer", "split", "loan_note", "loan_payment", "loan",
         "transaction_leg", "txn", "group_member", "split_group", "person", "payee", "account"
     ]
 

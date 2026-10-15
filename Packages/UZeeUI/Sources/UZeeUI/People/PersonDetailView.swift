@@ -123,7 +123,9 @@ struct PersonDetailView: View {
             UZCard {
                 VStack(spacing: 0) {
                     ForEach(loans) { loan in
-                        loanRow(loan)
+                        // Tap a loan for its date, payments and notes (owner, 2026-10-15).
+                        NavigationLink(value: Route.loan(loan.id)) { loanRow(loan) }
+                            .buttonStyle(.plain)
                         if loan.id != loans.last?.id { Divider() }
                     }
                 }
@@ -157,9 +159,6 @@ struct PersonDetailView: View {
         }
         .padding(.vertical, UZSpacing.m)
         .contentShape(.rect)
-        .onTapGesture {
-            if status == .open || status == .partiallyPaid { sheet = .repay(loan.id) }
-        }
         .contextMenu {
             if status == .open || status == .partiallyPaid {
                 Button(loan.direction == .lent ? "They paid you" : "You paid back", systemImage: "arrow.uturn.backward") { sheet = .repay(loan.id) }
@@ -186,7 +185,10 @@ struct PersonDetailView: View {
                 } else {
                     VStack(spacing: 0) {
                         ForEach(items) { item in
-                            if item.opensTransaction {
+                            if let loan = item.loanID {
+                                NavigationLink(value: Route.loan(loan)) { historyRow(item) }
+                                    .buttonStyle(.plain)
+                            } else if item.opensTransaction {
                                 NavigationLink(value: Route.transaction(item.id)) { historyRow(item) }
                                     .buttonStyle(.plain)
                             } else {
@@ -236,6 +238,8 @@ struct PersonDetailView: View {
         var date = Date.distantPast
         /// Records kept without an account have no transaction to open.
         var opensTransaction = true
+        /// A loan opens its own page, with notes.
+        var loanID: UUID?
     }
 
     /// Everything that moved this balance, newest first, including debts and payments kept as records only.
@@ -253,10 +257,12 @@ struct PersonDetailView: View {
                 switch transaction.kind {
                 case .loanOut:
                     return HistoryItem(id: transaction.id, title: "You lent \(name)", meta: meta,
-                                       amount: MoneyFormatter.string(transaction.amount), theyOwe: true, caption: "you lent", date: when)
+                                       amount: MoneyFormatter.string(transaction.amount), theyOwe: true, caption: "you lent", date: when,
+                                       loanID: loanByTransaction[transaction.id]?.id)
                 case .loanIn:
                     return HistoryItem(id: transaction.id, title: "\(name) lent you", meta: meta,
-                                       amount: MoneyFormatter.string(transaction.amount), theyOwe: false, caption: "you borrowed", date: when)
+                                       amount: MoneyFormatter.string(transaction.amount), theyOwe: false, caption: "you borrowed", date: when,
+                                       loanID: loanByTransaction[transaction.id]?.id)
                 case .repayment:
                     let lent = paymentLoans[transaction.id]?.direction != .borrowed
                     return HistoryItem(id: transaction.id, title: lent ? "\(name) paid you" : "You paid back", meta: meta,
@@ -289,7 +295,7 @@ struct PersonDetailView: View {
                 items.append(HistoryItem(id: loan.id, title: lent ? "\(name) owes you" : "You owe \(name)",
                                          meta: loan.startDate.listTitle(today: today) + " · record",
                                          amount: MoneyFormatter.string(loan.principal), theyOwe: lent,
-                                         date: loan.startDate.startDate(in: .current), opensTransaction: false))
+                                         date: loan.startDate.startDate(in: .current), opensTransaction: false, loanID: loan.id))
             }
             for payment in loan.payments where payment.transactionID == nil {
                 items.append(HistoryItem(id: payment.id, title: lent ? "\(name) paid you" : "You paid back",

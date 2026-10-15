@@ -252,7 +252,9 @@ final class AppContainer {
             addExistingBalances: { rows in try store.addExistingBalances(rows, on: day(Date())) },
             settle: { person, group, amount, iPaid, account, date in
                 try store.settle(personID: person, groupID: group, amount: amount, iPaid: iPaid, accountID: account, on: day(date), at: date)
-            }
+            },
+            addLoanNote: { text, loan in _ = try store.addNote(text, loanID: loan) },
+            deleteLoanNote: { try store.deleteNote($0) }
         )
     }
 

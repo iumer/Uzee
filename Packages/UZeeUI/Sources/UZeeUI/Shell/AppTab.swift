@@ -60,6 +60,7 @@ public enum Route: Hashable, Sendable {
     case budgetLimits
     case budgetCategory(UUID, LocalDate)
     case person(UUID)
+    case loan(UUID)
     case groups
     case group(UUID)
     case bills
