@@ -82,6 +82,8 @@ final class VoiceModel {
     private var pending: VoiceCommand?
     /// "Set HBL to Rs 35,771?" waiting for yes or no; the account last talked about, for "update it".
     private var pendingBalance: (account: Account, target: Money)?
+    /// "The actual ChatGPT price was 5,000": the charge to correct and the bill to update, waiting for yes.
+    private var pendingPrice: (bill: RecurringItem?, charge: MoneyTransaction?, name: String, value: Decimal)?
     private var lastBalanceAccount: UUID?
     /// "Add Mobile bill, Rs 1,900 every month from Oct 20?" waiting for yes or no.
     private var pendingRecurring: RecurringItem?
@@ -283,6 +285,14 @@ final class VoiceModel {
         if card == nil, pending == nil, let request = RecurringPhrase.request(sentence, vocabulary: vocabulary, today: session.today) {
             pendingBalance = nil
             offerRecurring(request)
+            return
+        }
+        if let price = pendingPrice, let intent = AssistantReply.intent(sentence) {
+            pendingPrice = nil
+            if intent == .confirm { applyPrice(price) } else { say("OK, I left \(price.name) as it is.") }
+            return
+        }
+        if card == nil, pending == nil, let request = PricePhrase.request(sentence), offerPrice(request) {
             return
         }
         if card == nil, pending == nil, let request = BalancePhrase.request(sentence, vocabulary: vocabulary) {
@@ -599,6 +609,67 @@ final class VoiceModel {
             return
         }
         say("Done. \(account.name) is now \(MoneyFormatter.string(target)).")
+    }
+
+    // MARK: Correcting a price
+
+    /// Finds the bill and its latest charge named in the sentence; false when nothing matches (another rule may fit).
+    private func offerPrice(_ request: PricePhrase.Request) -> Bool {
+        func named(_ name: String?) -> Bool {
+            guard let name else { return false }
+            let words = NameKey.make(name).split(separator: " ").filter { $0.count >= 3 }
+            return !words.isEmpty && words.allSatisfy { request.text.contains(" " + $0) }
+        }
+        let bill = session.recurring.items.first { named($0.name) }
+        let since = session.today.addingDays(-45)
+        let charge = session.transactions
+            .filter { row in
+                row.deletedAt == nil && row.kind == .expense && row.localDate >= since
+                    && (named(row.payeeName) || (bill.map { NameKey.make(row.payeeName ?? "").contains(NameKey.make($0.name)) } ?? false))
+            }
+            .max { $0.localDate < $1.localDate }
+        guard bill != nil || charge != nil else { return false }
+        let name = bill?.name ?? charge?.payeeName ?? "it"
+        let currency = charge?.amount.currency ?? bill?.amount.currency ?? session.ledger.base
+        guard let target = try? Money.fromMajor(request.amount.value, currency) else { return false }
+        var parts: [String] = []
+        if let charge {
+            let shown = Money(minorUnits: charge.amount.minorUnits.magnitudeClamped, currency: charge.amount.currency)
+            if shown.minorUnits == target.minorUnits {
+                parts.append("The \(DateText.short(charge.localDate)) charge already shows \(MoneyFormatter.string(target)).")
+            } else {
+                parts.append("The \(DateText.short(charge.localDate)) charge shows \(MoneyFormatter.string(shown)); I'll change it to \(MoneyFormatter.string(target)).")
+            }
+        }
+        if let bill {
+            parts.append(bill.amount.currency == currency
+                         ? "The bill will use \(MoneyFormatter.string(target)) from now on."
+                         : "The bill stays \(MoneyFormatter.string(bill.amount)) (it's in \(bill.amount.currency.code)).")
+        }
+        pendingPrice = (bill, charge, name, request.amount.value)
+        say("\(name): " + parts.joined(separator: " ") + " Say yes to save.")
+        return true
+    }
+
+    private func applyPrice(_ price: (bill: RecurringItem?, charge: MoneyTransaction?, name: String, value: Decimal)) {
+        var done: [String] = []
+        if let charge = price.charge, let target = try? Money.fromMajor(price.value, charge.amount.currency),
+           target.minorUnits != charge.amount.minorUnits.magnitudeClamped {
+            var draft = TransactionValidator.draft(from: charge)
+            draft.amount = target
+            if let built = try? TransactionValidator.build(draft, accounts: session.ledger.accounts, base: session.ledger.base, existing: charge),
+               session.save(built, isNew: false) {
+                done.append("the \(DateText.short(charge.localDate)) charge is \(MoneyFormatter.string(target))")
+            }
+        }
+        if var bill = price.bill, let target = try? Money.fromMajor(price.value, bill.amount.currency), target != bill.amount {
+            bill.amount = target
+            let from = RecurringModel(session: session).next(bill)?.scheduledDate
+            if session.perform("Couldn't update the bill.", { try session.recurringClient.save(bill, from) }) {
+                done.append("the bill is \(MoneyFormatter.string(target)) from now on")
+            }
+        }
+        say(done.isEmpty ? "Nothing needed changing for \(price.name)." : "Done. For \(price.name), " + done.joined(separator: ", and ") + ".")
     }
 
     // MARK: Recurring

@@ -576,3 +576,16 @@ struct RecurringNameTests {
         #expect(RecurringPhrase.name("Recurring mobile bill of Rs 1900 on 20th of every month", accounts: []) == "Mobile bill")
     }
 }
+
+@Suite("Correcting a bill's price by voice")
+struct PricePhraseTests {
+    @Test("The real amount of a charge")
+    func price() {
+        let said = PricePhrase.request("Today the actual subscription price of ChatGPT was 5000 but our record shows 4998")
+        #expect(said?.amount.value == 5000)
+        #expect(said?.text.contains(" chatgpt ") == true)
+        #expect(PricePhrase.request("Netflix actually charged 1,150 this month")?.amount.value == 1150)
+        #expect(PricePhrase.request("Spent 500 on fuel") == nil)
+        #expect(PricePhrase.request("Balance in my HBL account is actually 35771") == nil)
+    }
+}

@@ -7,42 +7,37 @@ struct UZeeVoiceView: View {
     @AppStorage(SmartClient.chosenVoiceKey) private var chosenVoice = ""
     @AppStorage(SmartClient.speedKey) private var speed = 0.98
     @State private var voices: [SmartClient.VoiceChoice] = []
-    @State private var showsBasic = false
 
     private var natural: [SmartClient.VoiceChoice] { voices.filter(\.isNatural) }
-    private var basic: [SmartClient.VoiceChoice] { voices.filter { !$0.isNatural } }
+    /// A short list, not 30 (owner, 2026-10-15): Gordon (the owner's favourite), then the natural voices, at most six.
+    private var shortList: [SmartClient.VoiceChoice] {
+        let gordon = voices.filter { $0.name.lowercased().hasPrefix("gordon") }
+        let picked = voices.filter { $0.id == chosenVoice }
+        var seen = Set<String>()
+        return (gordon + natural + picked).filter { seen.insert($0.id).inserted }.prefix(6).map { $0 }
+    }
     /// What UZee speaks with when nothing is picked: the first (best) voice.
     private var current: String { chosenVoice.isEmpty || !voices.contains { $0.id == chosenVoice } ? voices.first?.id ?? "" : chosenVoice }
 
     var body: some View {
         List {
-            if natural.isEmpty {
+            if !shortList.isEmpty {
                 Section {
-                    VStack(alignment: .leading, spacing: UZSpacing.s) {
-                        Label("Get a natural voice", systemImage: "sparkles").font(.headline)
-                        Text("The voices on this iPhone right now are the basic ones. Download a nicer one, then pick it here:")
-                            .font(.subheadline).foregroundStyle(UZColor.label2)
-                        Text("iPhone Settings › Accessibility › Read & Speak › Voices › English › tap a voice marked Premium or Enhanced (Ava, Zoe, Evan or Nathan).")
-                            .font(.subheadline.weight(.medium))
-                    }
-                    .padding(.vertical, UZSpacing.xs)
-                    .accessibilityIdentifier("voice.getNatural")
-                }
-            }
-            if !natural.isEmpty {
-                Section {
-                    ForEach(natural) { row($0) }
+                    ForEach(shortList) { row($0) }
                 } header: {
-                    Text("Natural voices")
+                    Text("Voices")
                 } footer: {
-                    Text("Tap a voice to hear it and use it. More: iPhone Settings › Accessibility › Read & Speak › Voices › English.")
+                    Text("Tap a voice to hear it and use it.")
                 }
             }
             Section {
-                DisclosureGroup("Basic voices (\(basic.count))", isExpanded: $showsBasic) {
-                    ForEach(basic) { row($0) }
+                VStack(alignment: .leading, spacing: UZSpacing.s) {
+                    Label(natural.count < 3 ? "Get better voices" : "More voices", systemImage: "sparkles").font(.headline)
+                    Text("Apps can't download voices themselves; iPhone does it, free. In iPhone Settings › Accessibility › Read & Speak › Voices › English, download a voice marked Premium (Ava, Zoe or Evan sound the most natural), then come back here. It shows up in this list.")
+                        .font(.subheadline).foregroundStyle(UZColor.label2)
                 }
-                .accessibilityIdentifier("voice.basic")
+                .padding(.vertical, UZSpacing.xs)
+                .accessibilityIdentifier("voice.getNatural")
             }
             Section {
                 VStack(alignment: .leading, spacing: UZSpacing.s) {
