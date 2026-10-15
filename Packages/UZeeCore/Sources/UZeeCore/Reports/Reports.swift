@@ -70,6 +70,35 @@ public enum ReportCalculator {
         return result
     }
 
+    /// Money that came into and went out of your accounts each month, oldest first (owner, 2026-10-15: "each month
+    /// I spend what I get"). Unlike income and spending it counts the whole amount you paid for a split, loans
+    /// given and taken, repayments and kameti, so the two bars meet when you spend everything you earn. Moves
+    /// between your own accounts and balance adjustments are neither.
+    public static func cashFlow(_ transactions: [MoneyTransaction], from first: LocalDate, through last: LocalDate,
+                                base: Currency, rates: [String: Decimal]) -> [MonthTotals] {
+        let start = first.firstOfMonth
+        let end = last.lastOfMonth
+        var moneyIn: [LocalDate: Int64] = [:]
+        var moneyOut: [LocalDate: Int64] = [:]
+        for transaction in transactions where transaction.isEffective && transaction.localDate >= start && transaction.localDate <= end
+            && transaction.kind != .transfer && transaction.kind != .adjustment {
+            let month = transaction.localDate.firstOfMonth
+            for leg in transaction.legs {
+                guard let amount = try? RateTable.toBase(leg.amount, base: base, rates: rates) else { continue }
+                if amount.minorUnits > 0 { moneyIn[month, default: 0] &+= amount.minorUnits }
+                else { moneyOut[month, default: 0] &-= amount.minorUnits }
+            }
+        }
+        var result: [MonthTotals] = []
+        var month = start
+        while month <= end {
+            result.append(MonthTotals(month: month, income: Money(minorUnits: moneyIn[month] ?? 0, currency: base),
+                                      spending: Money(minorUnits: moneyOut[month] ?? 0, currency: base)))
+            month = month.addingMonths(1)
+        }
+        return result
+    }
+
     /// Spending this month up to `today` against the same number of days last month ("Rs 9,800 less").
     public static func monthToDate(_ transactions: [MoneyTransaction], today: LocalDate, base: Currency,
                                    rates: [String: Decimal]) -> (now: Money, before: Money) {

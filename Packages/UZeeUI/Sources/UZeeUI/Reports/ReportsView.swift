@@ -173,12 +173,12 @@ struct ReportsView: View {
     // MARK: Six months
 
     private var incomeVsSpending: some View {
-        let months = ReportCalculator.months(session.transactions, from: today.firstOfMonth.addingMonths(-5),
-                                             through: today.firstOfMonth, base: base, rates: rates)
+        let months = ReportCalculator.cashFlow(session.transactions, from: today.firstOfMonth.addingMonths(-5),
+                                               through: today.firstOfMonth, base: base, rates: rates)
         let scale = Double(Money.scale(base.minorUnits)) * 1_000
         return VStack(alignment: .leading, spacing: UZSpacing.m) {
             HStack(alignment: .firstTextBaseline) {
-                SectionHeader("Income vs spending")
+                SectionHeader("Money in vs out")
                 Text("\(base.code), thousands").font(.subheadline).foregroundStyle(UZColor.label2).fixedSize()
             }
             UZCard {
@@ -186,20 +186,22 @@ struct ReportsView: View {
                     ForEach(months) { month in
                         let label = month.month.startDate(in: .current).formatted(.dateTime.month(.abbreviated))
                         BarMark(x: .value("Month", label), y: .value("Amount", Double(month.income.minorUnits) / scale))
-                            .foregroundStyle(by: .value("Type", "Income"))
-                            .position(by: .value("Type", "Income"))
+                            .foregroundStyle(by: .value("Type", "In"))
+                            .position(by: .value("Type", "In"))
                         BarMark(x: .value("Month", label), y: .value("Amount", Double(month.spending.minorUnits) / scale))
-                            .foregroundStyle(by: .value("Type", "Spending"))
-                            .position(by: .value("Type", "Spending"))
+                            .foregroundStyle(by: .value("Type", "Out"))
+                            .position(by: .value("Type", "Out"))
                     }
                 }
-                .chartForegroundStyleScale(["Income": UZColor.positive, "Spending": Color(uiColor: .systemOrange)])
+                .chartForegroundStyleScale(["In": UZColor.positive, "Out": Color(uiColor: .systemOrange)])
                 .frame(height: 200)
                 .accessibilityLabel(months.map {
                     "\($0.month.startDate(in: .current).formatted(.dateTime.month(.wide))): income \(MoneyFormatter.string($0.income)), spending \(MoneyFormatter.string($0.spending))"
                 }.joined(separator: ". "))
             }
             .accessibilityIdentifier("reports.months")
+            Text("Everything that came into and went out of your accounts, including loans and the full amount of splits. Moves between your own accounts aren't counted.")
+                .font(.footnote).foregroundStyle(UZColor.label2)
         }
     }
 

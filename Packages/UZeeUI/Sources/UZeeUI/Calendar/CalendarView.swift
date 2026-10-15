@@ -56,6 +56,7 @@ struct CalendarTabView: View {
     @State private var paying: Occurrence?
     @State private var editingEvent: UZeeCore.CalendarEvent?
     @State private var addingEvent = false
+    @State private var addingRecurring = false
 
     private static let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
 
@@ -70,6 +71,7 @@ struct CalendarTabView: View {
                 if first <= today && today <= first.lastOfMonth { salaryCard(model) }
                 if showsAgenda {
                     billsRow(model)
+                    addRecurringButton
                     agenda(events, model: model)
                 } else {
                     UZCard(padding: UZSpacing.l) {
@@ -80,6 +82,7 @@ struct CalendarTabView: View {
                         }
                     }
                     billsRow(model)
+                    addRecurringButton
                     dayList(events, model: model, first: first)
                 }
                 Text("Tap a row to open it. Pay marks it paid and records the transaction. " + session.usdRateNote + ".")
@@ -100,6 +103,8 @@ struct CalendarTabView: View {
                     .accessibilityIdentifier("calendar.today")
                     Button("Add reminder or event", systemImage: "calendar.badge.plus") { addingEvent = true }
                         .accessibilityIdentifier("calendar.addEvent")
+                    Button("Add bill or subscription", systemImage: "arrow.triangle.2.circlepath") { addingRecurring = true }
+                        .accessibilityIdentifier("calendar.addRecurring")
                     Button(showsAgenda ? "Month" : "Agenda list", systemImage: showsAgenda ? "calendar" : "list.bullet") {
                         withAnimation(.snappy) { showsAgenda.toggle() }
                     }
@@ -112,6 +117,7 @@ struct CalendarTabView: View {
         }
         .sheet(item: $paying) { MarkPaidSheet(session: session, occurrence: $0) }
         .sheet(item: $editingEvent) { EventFormSheet(session: session, editing: $0, date: $0.date) }
+        .sheet(isPresented: $addingRecurring) { RecurringFormSheet(session: session, item: nil) }
         .sheet(isPresented: $addingEvent) { EventFormSheet(session: session, editing: nil, date: selected ?? session.today) }
         .onChange(of: session.calendarFocus, initial: true) { _, focus in
             guard let focus else { return }
@@ -121,6 +127,16 @@ struct CalendarTabView: View {
             session.calendarFocus = nil
         }
         .accessibilityIdentifier("screen.calendar")
+    }
+
+    /// Adding a bill was only behind a + inside Bills & subscriptions, and the owner couldn't find it (2026-10-15).
+    private var addRecurringButton: some View {
+        Button { addingRecurring = true } label: {
+            Label("Add a bill or subscription", systemImage: "plus.circle.fill").font(.subheadline.weight(.semibold))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, UZSpacing.l)
+        .accessibilityIdentifier("calendar.addRecurringRow")
     }
 
     /// "Bills & subscriptions · 6 a month · Rs 14,065" under the month (round 3 mockup O).

@@ -14,6 +14,9 @@ struct SharedExpenseSheet: View {
     @State private var suggestedCategoryID: UUID?
     @State private var remembered: [String: UUID]?
     @State private var accountID: UUID?
+    /// The amount's currency, picked on the sign; your base currency to start. It never comes from an account
+    /// you can't see: someone else paying hid "Paid from" and a dollar account turned 50,000 into $50,000 (owner, 2026-10-15).
+    @State private var chosenCurrency: Currency
     @State private var date = Date()
     @State private var note = ""
     @State private var problem: String?
@@ -37,13 +40,16 @@ struct SharedExpenseSheet: View {
         _draft = State(initialValue: start)
         let active = session.ledger.activeAccounts
         let last = try? session.client.lastUsedAccountID()
-        _accountID = State(initialValue: active.first { $0.id == last }?.id ?? active.first?.id)
+        let base = session.ledger.base
+        let lastUsed = active.first { $0.id == last && $0.currency == base }
+        _accountID = State(initialValue: lastUsed?.id ?? active.first { $0.currency == base }?.id ?? active.first?.id)
+        _chosenCurrency = State(initialValue: base)
     }
 
     private var me: UUID { session.people.selfID }
     private var ledger: LedgerSnapshot { session.ledger }
     private var hasPeople: Bool { draft.members.contains { $0 != me } }
-    private var currency: Currency { ledger.account(accountID)?.currency ?? ledger.base }
+    private var currency: Currency { youPaid ? (ledger.account(accountID)?.currency ?? chosenCurrency) : chosenCurrency }
     private var total: Money { (try? AmountParser.parse(amountText, currency: currency)) ?? .zero(currency) }
     /// You paid some or all of it, so money left one of your accounts.
     private var youPaid: Bool { draft.payer == me || (draft.payer == nil && (draft.paidAmounts[me] ?? 0) > 0) }
@@ -70,10 +76,14 @@ struct SharedExpenseSheet: View {
                                 .accessibilityIdentifier("shared.what")
                         }
                         HStack(spacing: UZSpacing.l) {
-                            Text(currency.symbol)
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(UZColor.label2)
-                                .frame(width: 44)
+                            CurrencyMenu(ledger: ledger, currency: currency, size: 22) { choice in
+                                chosenCurrency = choice
+                                if ledger.account(accountID)?.currency != choice,
+                                   let match = ledger.activeAccounts.first(where: { $0.currency == choice }) {
+                                    accountID = match.id
+                                }
+                            }
+                            .frame(minWidth: 44)
                             TextField("0", text: $amountText)
                                 .font(.system(size: 34, weight: .bold, design: .rounded))
                                 .keyboardType(.decimalPad)
@@ -139,6 +149,7 @@ struct SharedExpenseSheet: View {
             }
             .onChange(of: hasPeople) { _, has in if has, what.isEmpty { focus = .what } }
             .onChange(of: draft) { problem = nil }
+            .onChange(of: accountID) { _, id in if youPaid, let picked = ledger.account(id) { chosenCurrency = picked.currency } }
         }
         .presentationDetents([.large])
         .presentationSizing(.form)
@@ -191,7 +202,7 @@ struct SharedExpenseSheet: View {
             return
         }
         // Someone else paid: no account moves, but the amount still needs a currency to be checked against.
-        let checkedAccountID = youPaid ? accountID : (accountID ?? ledger.activeAccounts.first { $0.currency == currency }?.id)
+        let checkedAccountID = youPaid ? accountID : ledger.activeAccounts.first { $0.currency == currency }?.id
         let transaction = TransactionDraft(
             kind: .expense, status: .posted, amount: amount, accountID: checkedAccountID, toAccountID: nil, receivedAmount: nil,
             categoryID: categoryID ?? fallbackCategory, payeeName: what.trimmingCharacters(in: .whitespaces), note: note,

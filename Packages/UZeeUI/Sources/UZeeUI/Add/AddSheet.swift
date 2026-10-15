@@ -19,6 +19,9 @@ struct AddSheet: View {
     /// What arrived, filled in from Wise's rate on the transfer's day; replaced while the user hasn't typed over it.
     @State private var wiseFill: (text: String, note: String)?
     @State private var accountID: UUID?
+    /// The currency picked on the amount when no account sets it (someone else paid), and the one an edited
+    /// transaction already has, so editing never changes it quietly (owner, 2026-10-15).
+    @State private var chosenCurrency: Currency?
     @State private var toAccountID: UUID?
     @State private var categoryID: UUID?
     @State private var payee = ""
@@ -52,7 +55,7 @@ struct AddSheet: View {
     private var ledger: LedgerSnapshot { session.ledger }
     private var account: Account? { ledger.account(accountID) }
     private var toAccount: Account? { ledger.account(toAccountID) }
-    private var currency: Currency { account?.currency ?? ledger.base }
+    private var currency: Currency { account?.currency ?? chosenCurrency ?? ledger.base }
     private var needsReceived: Bool {
         kind == .transfer && account != nil && toAccount != nil && account?.currency != toAccount?.currency
     }
@@ -184,9 +187,11 @@ struct AddSheet: View {
 
     private var amountField: some View {
         HStack(alignment: .firstTextBaseline, spacing: UZSpacing.s) {
-            Text(currency.symbol)
-                .font(.system(size: 30, weight: .semibold, design: .rounded))
-                .foregroundStyle(UZColor.label2)
+            CurrencyMenu(ledger: ledger, currency: currency) { choice in
+                chosenCurrency = choice
+                // Your account in that currency, or none when you have none (pick one, or someone else paid).
+                if account?.currency != choice { accountID = ledger.activeAccounts.first { $0.currency == choice }?.id }
+            }
             TextField("0", text: $amountText)
                 .font(.system(size: 52, weight: .bold, design: .rounded))
                 .keyboardType(.decimalPad)
@@ -659,6 +664,7 @@ struct AddSheet: View {
         kind = Self.kinds.contains(draft.kind) ? draft.kind : .expense
         amountText = draft.amount.map(plainNumber) ?? ""
         accountID = draft.accountID
+        chosenCurrency = draft.amount?.currency
         toAccountID = draft.toAccountID
         if let received = draft.receivedAmount, received.currency != draft.amount?.currency { receivedText = plainNumber(received) }
         categoryID = draft.categoryID

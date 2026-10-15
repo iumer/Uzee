@@ -518,3 +518,52 @@ struct BalancePhraseTests {
         #expect(VoiceRuleParser.parse("Spent 900 from easy paisa", vocabulary: VoiceVocabulary(accounts: ["Easypaisa"]), today: today).account == "Easypaisa")
     }
 }
+
+// Owner, 2026-10-15: "Recurring mobile bill of Rs 1900 on 20th of every month" saved a one-off expense, and a
+// yearly fee was saved as monthly.
+@Suite("Recurring bills by voice")
+struct RecurringPhraseTests {
+    private let names = VoiceVocabulary(people: ["Ammi"], accounts: ["HBL", "Meezan Bank", "Easypaisa"], categories: ["Mobile", "Streaming"])
+
+    @Test("A monthly bill on a day")
+    func monthly() throws {
+        let request = try #require(RecurringPhrase.request("Recurring mobile bill of Rs 1900 on 20th of every month", vocabulary: names, today: today))
+        #expect(request.amount.value == 1_900)
+        #expect(request.unit == .month)
+        #expect(request.interval == 1)
+        #expect(request.next == LocalDate(year: 2026, month: 10, day: 20))
+        #expect(request.name == "Mobile bill")
+        #expect(request.type == .bill)
+    }
+
+    @Test("Yearly stays yearly")
+    func yearly() throws {
+        let request = try #require(RecurringPhrase.request("Add rupees5779 as yearly recurring fees of golden debit card", vocabulary: names, today: today))
+        #expect(request.amount.value == 5_779)
+        #expect(request.unit == .year)
+        #expect(request.next == LocalDate(year: 2027, month: 10, day: 6))
+        #expect(request.name == "Golden debit card fees")
+        let other = try #require(RecurringPhrase.request("Golden debit card fee 5779 each year", vocabulary: names, today: today))
+        #expect(other.unit == .year)
+    }
+
+    @Test("Other periods, a day already gone this month, and an account")
+    func others() throws {
+        let quarterly = try #require(RecurringPhrase.request("Car insurance 12,000 every 3 months from HBL", vocabulary: names, today: today))
+        #expect(quarterly.unit == .month)
+        #expect(quarterly.interval == 3)
+        #expect(quarterly.account == "HBL")
+        #expect(quarterly.type == .insurance)
+        let past = try #require(RecurringPhrase.request("Internet bill 3000 on the 2nd of every month", vocabulary: names, today: today))
+        #expect(past.next == LocalDate(year: 2026, month: 11, day: 2))
+    }
+
+    @Test("One-off spending, questions and reminders aren't repeats")
+    func notRecurring() {
+        #expect(RecurringPhrase.request("Spent 2500 on groceries", vocabulary: names, today: today) == nil)
+        #expect(RecurringPhrase.request("How much did I spend this month?", vocabulary: names, today: today) == nil)
+        #expect(RecurringPhrase.request("What are my monthly subscriptions?", vocabulary: names, today: today) == nil)
+        #expect(RecurringPhrase.request("Remind me to pay 5000 every month", vocabulary: names, today: today) == nil)
+        #expect(RecurringPhrase.request("Paid 1000 for groceries this month", vocabulary: names, today: today) == nil)
+    }
+}

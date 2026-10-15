@@ -81,6 +81,8 @@ final class VoiceModel {
     /// "Set HBL to Rs 35,771?" waiting for yes or no; the account last talked about, for "update it".
     private var pendingBalance: (account: Account, target: Money)?
     private var lastBalanceAccount: UUID?
+    /// "Add Mobile bill, Rs 1,900 every month from Oct 20?" waiting for yes or no.
+    private var pendingRecurring: RecurringItem?
     private var need: VoiceDialog.Need?
     /// Counts the user's sentences, so the model can't show a card and save it in the same turn.
     private var turn = 0
@@ -266,6 +268,16 @@ final class VoiceModel {
         if let balance = pendingBalance, let intent = AssistantReply.intent(sentence) {
             pendingBalance = nil
             if intent == .confirm { setBalance(balance.account, to: balance.target) } else { say("OK, I left \(balance.account.name) as it is.") }
+            return
+        }
+        if let item = pendingRecurring, let intent = AssistantReply.intent(sentence) {
+            pendingRecurring = nil
+            if intent == .confirm { saveRecurring(item) } else { say("OK, I didn't add it.") }
+            return
+        }
+        if card == nil, pending == nil, let request = RecurringPhrase.request(sentence, vocabulary: vocabulary, today: session.today) {
+            pendingBalance = nil
+            offerRecurring(request)
             return
         }
         if card == nil, pending == nil, let request = BalancePhrase.request(sentence, vocabulary: vocabulary) {
@@ -582,6 +594,40 @@ final class VoiceModel {
             return
         }
         say("Done. \(account.name) is now \(MoneyFormatter.string(target)).")
+    }
+
+    // MARK: Recurring
+
+    /// "Recurring mobile bill of Rs 1,900 on the 20th of every month": a bill on the calendar, not a one-off expense;
+    /// "yearly" stays yearly (owner, 2026-10-15). Says what it will add and waits for yes.
+    private func offerRecurring(_ request: RecurringPhrase.Request) {
+        let ledger = session.ledger
+        let account = request.account.flatMap { name in ledger.activeAccounts.first { NameKey.make($0.name) == NameKey.make(name) } }
+        let currency = request.amount.currency ?? account?.currency ?? ledger.base
+        guard let amount = try? Money.fromMajor(request.amount.value, currency), amount.minorUnits > 0 else {
+            say("How much is it each time? Say it with the amount, like \"Netflix 1,100 every month\".")
+            return
+        }
+        let isMoneyIn = request.type == .income || request.type == .salary
+        let categoryID = request.category.flatMap { name in
+            ledger.categories.first { NameKey.make($0.name) == NameKey.make(name) && !$0.isHidden }?.id
+        }
+        let item = RecurringItem(name: request.name, type: request.type, amount: amount, accountID: account?.id, categoryID: categoryID,
+                                 rule: RecurrenceRule(unit: request.unit, interval: request.interval, anchor: request.next),
+                                 trackedFrom: request.next, colorHex: isMoneyIn ? "#34C759" : "#5E5CE6")
+        pendingRecurring = item
+        let how = RecurringPhrase.describe(request.unit, request.interval)
+        say("Add \(item.name), \(MoneyFormatter.string(amount)) \(how), next on \(DateText.short(request.next))"
+            + (account.map { " from \($0.name)" } ?? "") + "? It goes on your calendar with a reminder before each one. Say yes to add it.")
+    }
+
+    private func saveRecurring(_ item: RecurringItem) {
+        guard session.perform("Couldn't add it. Try again.", { try session.recurringClient.save(item, nil) }) else {
+            say("Couldn't add \(item.name). Add it in Plan › Calendar › Bills & subscriptions instead.")
+            return
+        }
+        session.rescheduleReminders()
+        say("Added \(item.name) to your bills, \(RecurringPhrase.describe(item.rule.unit, item.rule.interval)). You can change it in Plan › Calendar › Bills & subscriptions.")
     }
 
     // MARK: Card

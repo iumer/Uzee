@@ -68,7 +68,7 @@ struct TransactionDetailView: View {
                     Button("Edit") { session.openAdd(.edit(transaction)) }
                         .accessibilityIdentifier("detail.edit")
                     if transaction.kind == .expense || transaction.kind == .income {
-                        Button("Repeat every month…") { repeating = monthly(transaction) }
+                        Button("Repeat…") { repeating = monthly(transaction) }
                             .accessibilityIdentifier("detail.monthly")
                     }
                     Button("Add again today") { session.openAdd(.repeatOf(transaction)) }

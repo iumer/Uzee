@@ -192,7 +192,7 @@ struct OwnMoneyRows: View {
                         date: pair.out.date == pair.into.date ? DateText.short(pair.out.date)
                             : "\(DateText.short(pair.out.date)) → \(DateText.short(pair.into.date))",
                         lines: ["Out: \(pair.out.text)", "In: \(pair.into.text)"],
-                        warning: pair.isSure ? nil : "Only one side says it's yours. Tick it if it is.")
+                        warning: pair.isSure ? nil : "Only one side says it's yours. Select it if it is.")
                 }
             }
         }
@@ -205,7 +205,7 @@ struct OwnMoneyRows: View {
             } header: {
                 Text("Cash from ATMs")
             } footer: {
-                Text("Cash from the last month. Tick only cash you still have: it moves into your Cash account. Cash you spent stays as spending.")
+                Text("Cash from the last month. Select only cash you still have: it moves into your Cash account. Cash you spent stays as spending.")
             }
         }
         if !review.moves.isEmpty {
@@ -213,7 +213,7 @@ struct OwnMoneyRows: View {
                 ForEach(review.moves, id: \.entry.id) { move in
                     row(id: move.entry.id, title: "\(name(move.entry.accountID)) → \(move.toAccountID.map(name) ?? "your other account")",
                         amount: move.entry.amount, date: DateText.short(move.entry.date), lines: [move.entry.text],
-                        warning: move.isSure ? nil : "Doesn't name you. Tick it if this account is yours.")
+                        warning: move.isSure ? nil : "Doesn't name you. Select it if this account is yours.")
                 }
             } header: {
                 Text("To your other accounts")
@@ -279,16 +279,16 @@ struct OwnTransfersView: View {
                     .accessibilityIdentifier("transfers.none")
             } else if !review.isEmpty {
                 Section {
-                    Text("These were imported as spending or income, but the money stayed yours. Tick them and tap Make at the top. Balances stay the same; they leave your spending.")
+                    Text("These were imported as spending or income, but the money stayed yours. Select them and tap Make at the top. Balances stay the same; they leave your spending.")
                         .font(.footnote).foregroundStyle(UZColor.label2)
                 }
                 OwnMoneyRows(session: session, review: review, chosen: $chosen)
                 Section {
-                    Button(unticked == 1 ? "Keep the 1 unticked as spending" : "Keep the \(unticked) unticked as spending", action: keepRest)
+                    Button(unticked == 1 ? "Keep the 1 not selected as spending" : "Keep the \(unticked) not selected as spending", action: keepRest)
                         .disabled(unticked == 0)
                         .accessibilityIdentifier("transfers.keep")
                 } footer: {
-                    Text("Ticked rows wait for Make at the top. Unticked rows stay here until you make them or keep them.")
+                    Text("Selected rows wait for Make at the top. The rest stay here until you make them or keep them.")
                 }
             }
         }
@@ -329,7 +329,7 @@ struct OwnTransfersView: View {
         load()
         var text = rest.count == 1 ? "Kept 1 as spending or income." : "Kept \(rest.count) as spending or income."
         if !review.isEmpty {
-            text += review.count == 1 ? " 1 ticked row is left: tap Make at the top." : " \(review.count) ticked rows are left: tap Make at the top."
+            text += review.count == 1 ? " 1 selected row is left: tap Make at the top." : " \(review.count) selected rows are left: tap Make at the top."
         }
         done = text
     }

@@ -16,6 +16,7 @@ struct AddMoreView: View {
     let onRefund: @MainActor () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var photoItem: PhotosPickerItem?
+    @State private var addingRecurring = false
 
     var body: some View {
         Form {
@@ -70,6 +71,11 @@ struct AddMoreView: View {
                         kindRow("Refund", "Money back from a shop", systemImage: "arrow.uturn.backward")
                     }
                     .accessibilityIdentifier("add.more.refund")
+                    Button { addingRecurring = true } label: {
+                        kindRow("Bill or subscription", "Something you pay or get every month or year, with reminders",
+                                systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .accessibilityIdentifier("add.more.recurring")
                     NavigationLink {
                         FixBalanceList(session: session)
                     } label: {
@@ -83,6 +89,7 @@ struct AddMoreView: View {
         }
         .navigationTitle("More")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $addingRecurring) { RecurringFormSheet(session: session, item: nil) }
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             photoItem = nil

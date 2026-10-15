@@ -766,7 +766,7 @@ struct ImportStatementView: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: UZSpacing.m) {
                 Button(action: makeChosenTransfers) {
-                    Text(transferChosen.isEmpty ? "Tick the ones to change" : "Leave \(transferChosen.count) out of spending")
+                    Text(transferChosen.isEmpty ? "Select the ones to change" : "Leave \(transferChosen.count) out of spending")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, UZSpacing.s)
                 }
                 .buttonStyle(.glassProminent)
@@ -813,7 +813,7 @@ struct ImportStatementView: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: UZSpacing.m) {
                 Button { addChosen(then: count) } label: {
-                    Text(recurringChosen.isEmpty ? "Tick the ones to add" : "Add \(recurringChosen.count) with reminders")
+                    Text(recurringChosen.isEmpty ? "Select the ones to add" : "Add \(recurringChosen.count) with reminders")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, UZSpacing.s)
                 }
                 .buttonStyle(.glassProminent)
