@@ -65,11 +65,20 @@ final class LogoStore {
     ]
 
     func image(for name: String?) -> UIImage? {
-        guard let brand = Self.brand(name), let entry = entries[brand] else { return nil }
+        guard let brand = savedBrand(in: name), let entry = entries[brand] else { return nil }
         if let cached = cache[brand] { return cached }
         guard let data = try? Data(contentsOf: folder.appendingPathComponent(entry.file)), let image = UIImage(data: data) else { return nil }
         cache[brand] = image
         return image
+    }
+
+    /// The name's own brand when it has a logo, else the longest saved brand named inside it, so a bill the owner
+    /// called "Mom Ufone load" or "Zong 0316 20gb" shows the Ufone or Zong logo.
+    func savedBrand(in name: String?) -> String? {
+        if let brand = Self.brand(name), entries[brand] != nil { return brand }
+        guard let name else { return nil }
+        let padded = " " + NameKey.make(String(name.map { $0.isLetter || $0.isNumber ? $0 : " " })) + " "
+        return entries.keys.filter { padded.contains(" \($0) ") }.max { $0.count < $1.count }
     }
 
     func hasLogo(_ brand: String) -> Bool { entries[brand] != nil }

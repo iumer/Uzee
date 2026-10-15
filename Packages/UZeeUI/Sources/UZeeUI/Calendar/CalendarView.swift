@@ -441,7 +441,9 @@ struct CalendarTabView: View {
                         Text("\(event.date.day)").font(.headline).monospacedDigit()
                     }
                     .frame(width: 34)
-                    Image(systemName: event.glyph).font(.caption).foregroundStyle(event.color).frame(width: 14)
+                    BrandIcon(name: event.name, size: 26) {
+                        Image(systemName: event.glyph).font(.caption).foregroundStyle(event.color).frame(width: 26)
+                    }
                     VStack(alignment: .leading, spacing: UZSpacing.xxs) {
                         Text(event.name).foregroundStyle(UZColor.label).lineLimit(1)
                         Text(event.meta).font(.footnote).foregroundStyle(UZColor.label2).lineLimit(2)
