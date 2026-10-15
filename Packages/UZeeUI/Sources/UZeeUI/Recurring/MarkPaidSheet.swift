@@ -12,6 +12,8 @@ struct MarkPaidSheet: View {
     @State private var date = Date()
     @State private var problem: String?
     @State private var didLoad = false
+    /// Paid a different amount (exchange rate, tax, a new price): use it from now on (owner, 2026-10-15).
+    @State private var keepNewPrice = true
 
     private var model: RecurringModel { RecurringModel(session: session) }
     private var item: RecurringItem? { session.recurring.item(occurrence.itemID) }
@@ -47,8 +49,17 @@ struct MarkPaidSheet: View {
                                 .monospacedDigit()
                                 .accessibilityIdentifier("markPaid.amount")
                         }
+                        if let changed = changedAmount(item) {
+                            Toggle("Use \(MoneyFormatter.string(changed)) from now on", isOn: $keepNewPrice)
+                                .accessibilityIdentifier("markPaid.keepPrice")
+                        }
                     } header: {
                         Text(item.isEstimated ? "Amount · estimated, correct it if needed" : "Amount")
+                    } footer: {
+                        if changedAmount(item) != nil {
+                            Text(keepNewPrice ? "The next ones expect this amount. Earlier payments stay as they were."
+                                 : "Only this payment changes; the next ones stay \(MoneyFormatter.string(occurrence.amount)).")
+                        }
                     }
                     Section {
                         if let someoneElsePays {
@@ -141,6 +152,13 @@ struct MarkPaidSheet: View {
         return cents == 0 ? String(whole) : String(format: "%lld.%02lld", whole, cents)
     }
 
+    /// The typed amount when it's a real amount different from what was expected.
+    private func changedAmount(_ item: RecurringItem) -> Money? {
+        guard let money = try? AmountParser.parse(amountText, currency: occurrence.amount.currency), money.minorUnits > 0,
+              money != occurrence.amount, !item.type.isPlan else { return nil }
+        return money
+    }
+
     private func chargedNothing() {
         session.skip(occurrence)
         dismiss()
@@ -161,6 +179,13 @@ struct MarkPaidSheet: View {
             problem = "Choose the account it was paid from."
             return
         }
-        if session.markPaid(occurrence, amount: money, account: account, date: date) { dismiss() }
+        guard session.markPaid(occurrence, amount: money, account: account, date: date) else { return }
+        if keepNewPrice, money != occurrence.amount, var updated = item {
+            updated.amount = money
+            _ = session.perform("Saved the payment, but couldn't change the usual amount.", {
+                try session.recurringClient.save(updated, occurrence.scheduledDate)
+            })
+        }
+        dismiss()
     }
 }
