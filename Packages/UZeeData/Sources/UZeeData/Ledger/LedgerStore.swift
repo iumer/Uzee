@@ -225,8 +225,14 @@ extension LedgerStore {
         if let start { conditions.append("t.local_date >= ?"); arguments.append(start.description) }
         if let end { conditions.append("t.local_date <= ?"); arguments.append(end.description) }
         if let id { conditions.append("t.id = ?"); arguments.append(id.uuidString) }
+        // Loans, repayments and settle-ups show the person's current name, so a rename reaches Activity (owner, 2026-10-16).
         let rows = try Row.fetchAll(db, sql: """
-            SELECT t.*, p.name AS payee_name FROM txn t LEFT JOIN payee p ON p.id = t.payee_id
+            SELECT t.*,
+                   COALESCE(CASE WHEN t.kind IN ('loanOut', 'loanIn', 'repayment', 'settlement') THEN per.display_name END,
+                            p.name) AS payee_name
+            FROM txn t
+            LEFT JOIN payee p ON p.id = t.payee_id
+            LEFT JOIN person per ON per.id = t.counterparty_person_id
             WHERE \(conditions.joined(separator: " AND "))
             ORDER BY \(deleted ? "t.deleted_at DESC," : "") t.local_date DESC, t.occurred_at DESC
             """, arguments: StatementArguments(arguments))
@@ -349,6 +355,22 @@ extension LedgerStore {
             INSERT INTO payee (id, created_at, updated_at, is_sample, name, name_key, last_category_id, last_account_id, use_count)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
             """, arguments: [id, now, now, transaction.isSample, name, key, transaction.categoryID?.uuidString, account])
+        return id
+    }
+
+    /// The payee row for a name, added if missing; unlike `upsertPayee` it leaves use counts and category memory alone.
+    static func findOrInsertPayee(name: String, isSample: Bool, _ db: Database) throws -> String {
+        let key = NameKey.make(name)
+        if let existing = try String.fetchOne(db, sql: "SELECT id FROM payee WHERE name_key = ? AND is_sample = ? AND deleted_at IS NULL",
+                                              arguments: [key, isSample]) {
+            return existing
+        }
+        let id = UUID().uuidString
+        let now = Timestamp.now()
+        try db.execute(sql: """
+            INSERT INTO payee (id, created_at, updated_at, is_sample, name, name_key, use_count)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
+            """, arguments: [id, now, now, isSample, name, key])
         return id
     }
 }

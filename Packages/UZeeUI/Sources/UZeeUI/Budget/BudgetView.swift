@@ -314,23 +314,32 @@ struct BudgetLineRow: View {
     }
 }
 
-/// A category's budget: this period, last six periods and its transactions.
+
+/// A category's budget: this period, last six periods, its transactions and, for Subscriptions, what you track.
 struct BudgetCategoryView: View {
     @Bindable var session: AppSession
     let categoryID: UUID
     let periodStart: LocalDate
+    /// A subscription drafted from a payment by "Track" (owner, 2026-10-16).
+    @State private var repeating: RecurringItem?
 
     var body: some View {
         let model = BudgetModel(session: session)
         let period = BudgetPeriod.containing(periodStart, kind: model.kind)
         let category = session.ledger.category(categoryID)
         let ids = Set([categoryID] + session.ledger.categories.filter { $0.parentID == categoryID }.map(\.id))
-        let rows = session.transactions.filter { period.contains($0.localDate) && ($0.categoryID.map(ids.contains) ?? false) }
+        let inCategory = session.transactions.filter { $0.categoryID.map(ids.contains) ?? false }
+        let rows = inCategory.filter { period.contains($0.localDate) }
         let line = model.summary(for: period)?.lines.first { $0.categoryID == categoryID }
         let history = ([period] + (0..<5).reduce(into: [BudgetPeriod]()) { list, _ in list.append((list.last ?? period).previous) })
             .reversed()
             .map { p in (p, BudgetCalculator.spending(session.transactions, in: p, base: session.ledger.base, rates: session.ledger.rates)
                 .filter { ids.contains($0.key) }.values.reduce(Int64(0)) { $0 + $1.minorUnits }) }
+        let oldest = history.first?.0.start ?? period.start
+        // Re-categorised rows dated before this period count in their own period, so they're listed here (owner, 2026-10-16).
+        let earlier: [(BudgetPeriod, [MoneyTransaction])] = history.dropLast().reversed()
+            .map { item in (item.0, inCategory.filter { item.0.contains($0.localDate) }) }
+            .filter { !$0.1.isEmpty }
         List {
             if let line {
                 Section {
@@ -354,18 +363,103 @@ struct BudgetCategoryView: View {
                 .frame(height: 140)
                 .accessibilityLabel("\(category?.name ?? "") spending for the last six periods")
             }
-            Section("\(BudgetModel.title(period)) transactions") {
+            Section {
                 if rows.isEmpty {
                     Text("Nothing spent here yet this period.").foregroundStyle(UZColor.label2)
                 }
-                ForEach(rows) { transaction in
-                    NavigationLink(value: Route.transaction(transaction.id)) {
-                        TransactionRow(transaction: transaction, ledger: session.ledger)
+                ForEach(rows) { transaction in row(transaction) }
+            } header: {
+                Text("\(BudgetModel.title(period)) transactions")
+            } footer: {
+                Text("The total counts \(DatePresets.text(from: period.start, through: period.end)) only.")
+            }
+            if !earlier.isEmpty {
+                Section("Earlier") {
+                    ForEach(earlier, id: \.0.start) { group in
+                        Text(BudgetModel.title(group.0)).font(.footnote.weight(.semibold)).foregroundStyle(UZColor.label2)
+                            .accessibilityAddTraits(.isHeader)
+                        ForEach(group.1) { transaction in row(transaction) }
                     }
                 }
+            }
+            Section {
+                Button("See all in Activity") { session.openActivity(categoryID: categoryID, from: oldest, through: period.end) }
+                    .accessibilityIdentifier("budgetCategory.activity")
+            }
+            if category?.group == .subscriptions {
+                subscriptions(inCategory.filter { $0.localDate >= oldest && $0.localDate <= period.end })
             }
         }
         .navigationTitle(category?.name ?? "Category")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $repeating) { RecurringFormSheet(session: session, item: nil, draft: $0) }
+    }
+
+    private func row(_ transaction: MoneyTransaction) -> some View {
+        NavigationLink(value: Route.transaction(transaction.id)) {
+            VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                TransactionRow(transaction: transaction, ledger: session.ledger)
+                if let reason = uncountedReason(transaction) {
+                    Text(reason).font(.caption).foregroundStyle(UZColor.warning)
+                }
+            }
+        }
+    }
+
+    /// Why the spent total leaves a listed row out, so the list and the total agree (owner, 2026-10-16).
+    private func uncountedReason(_ transaction: MoneyTransaction) -> String? {
+        if transaction.status == .pending { return "Pending · not counted" }
+        if SpendingRules.spendingSign(transaction.kind) == 0 { return "\(transaction.kind.name) · not spending" }
+        if transaction.myShare.isZero { return "Your share is \(MoneyFormatter.string(transaction.myShare))" }
+        if (try? RateTable.toBase(transaction.myShare, base: session.ledger.base, rates: session.ledger.rates)) == nil {
+            return "No \(transaction.myShare.currency.code) rate · not counted"
+        }
+        return nil
+    }
+
+    /// Subscriptions you track, and payees in this category no bill covers yet (owner, 2026-10-16).
+    @ViewBuilder
+    private func subscriptions(_ recent: [MoneyTransaction]) -> some View {
+        let recurring = RecurringModel(session: session)
+        let tracked = recurring.active.filter { recurring.isSubscription($0) && $0.groupID == nil }
+        let untracked = untrackedPayments(recent, recurring: recurring)
+        if !tracked.isEmpty {
+            Section("Subscriptions you track · \(MoneyFormatter.string(recurring.monthlyTotal(tracked))) / month") {
+                ForEach(tracked) { item in
+                    NavigationLink(value: Route.recurring(item.id)) { RecurringRow(model: recurring, item: item) }
+                        .accessibilityIdentifier("budgetCategory.tracked.\(item.name)")
+                }
+            }
+        }
+        if !untracked.isEmpty {
+            Section {
+                ForEach(untracked) { transaction in
+                    HStack(spacing: UZSpacing.l) {
+                        VStack(alignment: .leading, spacing: UZSpacing.xxs) {
+                            Text(RecurringFinder.displayName(transaction.payeeName ?? "")).lineLimit(1)
+                            Text("\(MoneyFormatter.string(transaction.amount)) · \(DateText.short(transaction.localDate))")
+                                .font(.footnote).foregroundStyle(UZColor.label2).monospacedDigit()
+                        }
+                        Spacer(minLength: UZSpacing.m)
+                        Button("Track") { repeating = RecurringModel(session: session).draft(from: transaction) }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("budgetCategory.track.\(transaction.payeeName ?? "")")
+                    }
+                }
+            } header: {
+                Text("Not tracked yet")
+            } footer: {
+                Text("Track a payment to get reminders and see it with your subscriptions.")
+            }
+        }
+    }
+
+    /// The latest payment per payee that no bill covers yet, newest first.
+    private func untrackedPayments(_ transactions: [MoneyTransaction], recurring: RecurringModel) -> [MoneyTransaction] {
+        var seen = Set<String>()
+        return transactions.sorted { $0.localDate > $1.localDate }.filter { transaction in
+            guard transaction.kind == .expense, let payee = transaction.payeeName, !recurring.isTracked(transaction) else { return false }
+            return seen.insert(NameKey.make(RecurringFinder.displayName(payee))).inserted
+        }
     }
 }

@@ -9,7 +9,7 @@ struct MigrationTests {
     @Test("Empty database gets every migration")
     func baseline() throws {
         let db = try AppDatabase.inMemory()
-        #expect(try db.appliedMigrations() == ["v1_baseline", "v2_device_settings", "v3_money", "v4_activity", "v5_budget", "v6_people", "v7_recurring", "v8_sample_account_names", "v9_calendar_events", "v10_settle_up_loans", "v11_loan_notes", "v12_payment_todos", "v13_todo_due_reminder", "v14_todo_direction"])
+        #expect(try db.appliedMigrations() == ["v1_baseline", "v2_device_settings", "v3_money", "v4_activity", "v5_budget", "v6_people", "v7_recurring", "v8_sample_account_names", "v9_calendar_events", "v10_settle_up_loans", "v11_loan_notes", "v12_payment_todos", "v13_todo_due_reminder", "v14_todo_direction", "v15_person_name_resync"])
         #expect(try db.isUpToDate())
         let hasSettings = try db.writer.read { try $0.tableExists("settings") }
         #expect(hasSettings)
@@ -28,9 +28,50 @@ struct MigrationTests {
             }
         }
         let second = try AppDatabase(DatabaseQueue(path: path))
-        #expect(try second.appliedMigrations() == ["v1_baseline", "v2_device_settings", "v3_money", "v4_activity", "v5_budget", "v6_people", "v7_recurring", "v8_sample_account_names", "v9_calendar_events", "v10_settle_up_loans", "v11_loan_notes", "v12_payment_todos", "v13_todo_due_reminder", "v14_todo_direction"])
+        #expect(try second.appliedMigrations() == ["v1_baseline", "v2_device_settings", "v3_money", "v4_activity", "v5_budget", "v6_people", "v7_recurring", "v8_sample_account_names", "v9_calendar_events", "v10_settle_up_loans", "v11_loan_notes", "v12_payment_todos", "v13_todo_due_reminder", "v14_todo_direction", "v15_person_name_resync"])
         let count = try second.writer.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM settings") }
         #expect(count == 1)
+    }
+
+    // A person renamed before v15 gets the new name in generated notes and payee; everything else is left alone.
+    @Test("v15 brings a renamed person's loan rows up to date")
+    func personNameResync() throws {
+        let queue = try DatabaseQueue()
+        try AppDatabase.migrator.migrate(queue, upTo: "v14_todo_direction")
+        let person = UUID().uuidString, oldPayee = UUID().uuidString
+        let loan = UUID().uuidString, ownNote = UUID().uuidString, expense = UUID().uuidString
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO person (id, created_at, updated_at, display_name, name_key) VALUES (?, 1, 1, 'Test User', 'test user')
+                """, arguments: [person])
+            try db.execute(sql: """
+                INSERT INTO payee (id, created_at, updated_at, name, name_key, use_count) VALUES (?, 1, 1, 'Tset User', 'tset user', 3)
+                """, arguments: [oldPayee])
+            let insert = """
+                INSERT INTO txn (id, created_at, updated_at, kind, occurred_at, local_date, time_zone_id, amount_minor, currency_code,
+                    my_share_minor, payee_id, note, counterparty_person_id)
+                VALUES (?, 1, 1, ?, 1, '2026-10-01', 'Asia/Karachi', 500000, 'PKR', 500000, ?, ?, ?)
+                """
+            try db.execute(sql: insert, arguments: [loan, "loanOut", oldPayee, "Lent to Tset User", person])
+            try db.execute(sql: insert, arguments: [ownNote, "repayment", oldPayee, "Cash for rent", person])
+            try db.execute(sql: insert, arguments: [expense, "expense", oldPayee, "Lent to Tset User", nil])
+        }
+        _ = try AppDatabase(queue)
+        try queue.read { db in
+            func note(_ id: String) throws -> String? { try String.fetchOne(db, sql: "SELECT note FROM txn WHERE id = ?", arguments: [id]) }
+            func payee(_ id: String) throws -> String? {
+                try String.fetchOne(db, sql: "SELECT p.name FROM txn t JOIN payee p ON p.id = t.payee_id WHERE t.id = ?", arguments: [id])
+            }
+            #expect(try note(loan) == "Lent to Test User")
+            #expect(try payee(loan) == "Test User")
+            #expect(try note(ownNote) == "Cash for rent")
+            #expect(try payee(ownNote) == "Test User")
+            #expect(try note(expense) == "Lent to Tset User")
+            #expect(try payee(expense) == "Tset User")
+            #expect(try String.fetchOne(db, sql: "SELECT name_key FROM payee WHERE name = 'Test User'") == "test user")
+            #expect(try Int.fetchOne(db, sql: "SELECT use_count FROM payee WHERE name = 'Test User'") == 0)
+            #expect(try Int.fetchOne(db, sql: "SELECT use_count FROM payee WHERE id = ?", arguments: [oldPayee]) == 3)
+        }
     }
 
     // DATA-05: an older database gets a safety copy before the update migrates it; a new or current one doesn't.

@@ -183,9 +183,10 @@ final class VoiceModel {
             return
         }
         liveText = ""
-        session.smart.setSpeechHints(vocabulary.accounts + vocabulary.people + ["HBL", "Meezan", "NayaPay", "SadaPay", "Easypaisa",
-                                                                               "JazzCash", "Wise", "Raast", "lakh", "crore"]
-                                     + vocabulary.categories)
+        session.smart.setSpeechHints(VoiceHints.make(people: vocabulary.people, accounts: vocabulary.accounts,
+                                                     extra: ["HBL", "Meezan", "NayaPay", "SadaPay", "Easypaisa", "JazzCash", "Wise",
+                                                             "Raast", "lakh", "crore"],
+                                                     categories: vocabulary.categories))
         do {
             try session.smart.startListening { text, isFinal in
                 Task { @MainActor in self.heard(text, isFinal: isFinal) }
@@ -457,6 +458,8 @@ final class VoiceModel {
         }
         var term: String?
         for lead in ["search for ", "search ", "find ", "look up ", "show me "] where t.hasPrefix(lead) {
+            // "Show me my subscriptions": a question the rules answer, not a search (owner, 2026-10-16).
+            if lead == "show me ", VoiceRuleParser.parse(sentence, vocabulary: vocabulary, today: session.today).question != nil { return nil }
             term = String(t.dropFirst(lead.count))
             break
         }
@@ -745,8 +748,18 @@ final class VoiceModel {
 
         var personID: UUID?
         var newPerson: String?
+        var guessed: String?
         if let name = command.person {
-            if let person = VoiceAnswerer(session: session).person(named: name) { personID = person.id } else { newPerson = name }
+            if let person = VoiceAnswerer(session: session).person(named: name) {
+                personID = person.id
+            } else if let person = NameMatch.closest(to: name, among: session.people.others, name: { $0.name }) {
+                // Probably misheard: pick them, and keep what was heard as the "(new)" choice on the card.
+                personID = person.id
+                newPerson = name
+                guessed = person.name
+            } else {
+                newPerson = name
+            }
         }
 
         var categoryID: UUID?
@@ -780,7 +793,8 @@ final class VoiceModel {
         }
         cardTurn = turn
         var intro = "Here's the \(VoiceCard.noun(command.action))" + (card?.repeats != nil ? ", repeating" : "") + ". Change anything, then save."
-        if let newPerson { intro = "\(newPerson) is new. I'll add them to People when you save. " + intro }
+        if let guessed, let newPerson { intro = "Did you mean \(guessed)? If not, choose \(newPerson) (new) under Person. " + intro }
+        else if let newPerson { intro = "\(newPerson) is new. I'll add them to People when you save. " + intro }
         else if let personID, command.action == .lend || command.action == .borrow {
             let net = session.balances.net(of: personID)
             let name = session.people.person(personID)?.name ?? ""

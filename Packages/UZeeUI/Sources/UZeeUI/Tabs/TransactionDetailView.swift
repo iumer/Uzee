@@ -71,8 +71,13 @@ struct TransactionDetailView: View {
                     Button("Edit") { session.openAdd(.edit(transaction)) }
                         .accessibilityIdentifier("detail.edit")
                     if transaction.kind == .expense || transaction.kind == .income {
-                        Button("Repeat…") { repeating = monthly(transaction) }
+                        Button("Repeat…") { repeating = RecurringModel(session: session).draft(from: transaction) }
                             .accessibilityIdentifier("detail.monthly")
+                    }
+                    // Filing a payment under Subscriptions doesn't add it to the subscriptions list, so offer it here (owner, 2026-10-16).
+                    if canTrack(transaction) {
+                        Button("Track as subscription") { repeating = RecurringModel(session: session).draft(from: transaction) }
+                            .accessibilityIdentifier("detail.trackSubscription")
                     }
                     Button("Add again today") { session.openAdd(.repeatOf(transaction)) }
                         .accessibilityIdentifier("detail.repeat")
@@ -128,16 +133,8 @@ struct TransactionDetailView: View {
         }
     }
 
-    private func monthly(_ transaction: MoneyTransaction) -> RecurringItem {
-        let isIncome = transaction.kind == .income
-        let payee = transaction.payeeName ?? transaction.kind.name
-        let amount = transaction.amount.isNegative ? ((try? transaction.amount.negated()) ?? transaction.amount) : transaction.amount
-        let next = RecurrenceRule.nextMonthly(day: transaction.localDate.day, onOrAfter: session.today.addingDays(1))
-        return RecurringItem(name: RecurringFinder.displayName(payee), type: RecurringFinder.suggestedType(payee, isMoneyIn: isIncome),
-                             amount: amount, accountID: transaction.legs.first?.accountID, categoryID: transaction.categoryID,
-                             // A split bill stays split with the same group, so only your share counts toward the budget.
-                             groupID: transaction.groupID,
-                             rule: RecurrenceRule(anchor: next), trackedFrom: next, startedOn: transaction.localDate,
-                             colorHex: isIncome ? "#34C759" : "#5E5CE6")
+    private func canTrack(_ transaction: MoneyTransaction) -> Bool {
+        transaction.kind == .expense && session.ledger.category(transaction.categoryID)?.group == .subscriptions
+            && !RecurringModel(session: session).isTracked(transaction)
     }
 }

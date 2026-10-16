@@ -61,7 +61,7 @@ final class SmartSmokeTests: XCTestCase {
     func testVOX004_subscriptionsAnswer() {
         openVoice()
         ask("How much are my subscriptions?")
-        XCTAssertTrue(text(containing: "subscriptions cost").waitForExistence(timeout: 30), "No subscriptions answer")
+        XCTAssertTrue(text(containing: "a month (").waitForExistence(timeout: 30), "No subscriptions answer")
     }
 
     func testVOX007_lendToFriendCard() {

@@ -176,7 +176,7 @@ struct BillsHubView: View {
 
     @ViewBuilder
     private func subscriptions(_ model: RecurringModel) -> some View {
-        let items = model.active.filter { $0.type == .subscription && $0.groupID == nil }
+        let items = model.active.filter { model.isSubscription($0) && $0.groupID == nil }
         if !items.isEmpty {
             let monthly = model.monthlyTotal(items)
             section("Subscriptions", right: "\(items.count) active · \(MoneyFormatter.string(monthly)) / month", id: "bills.subscriptions",

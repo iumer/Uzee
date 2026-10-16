@@ -88,7 +88,7 @@ struct RecurringFormSheet: View {
                         ForEach(session.ledger.activeAccounts) { Text($0.name).tag(UUID?.some($0.id)) }
                     }
                     NavigationLink {
-                        CategoryPicker(categories: session.ledger.categories, type: type.isIncome ? .income : .expense, selection: $categoryID)
+                        CategoryPicker(categories: session.ledger.categories, type: type.isIncome ? .income : .expense, selection: pickedCategory)
                     } label: {
                         LabeledContent("Category", value: session.ledger.categoryPath(categoryID) ?? "Choose")
                     }
@@ -165,6 +165,14 @@ struct RecurringFormSheet: View {
             guard let option = repeatOptions.first(where: { $0.key == key }) else { return }
             unit = option.unit
             interval = option.interval
+        })
+    }
+
+    /// Picking a Subscriptions category makes a bill a subscription, so it lists there (owner, 2026-10-16). Loading an item doesn't.
+    private var pickedCategory: Binding<UUID?> {
+        Binding(get: { categoryID }, set: { id in
+            categoryID = id
+            if session.ledger.category(id)?.group == .subscriptions, type == .bill || type == .other { type = .subscription }
         })
     }
 

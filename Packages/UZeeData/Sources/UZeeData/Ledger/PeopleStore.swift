@@ -43,12 +43,15 @@ public struct PeopleStore: Sendable {
     public func updatePerson(_ person: Person) throws {
         try database.writer.write { db in
             let name = try Person.validateName(person.name)
+            let oldName = try String.fetchOne(db, sql: "SELECT display_name FROM person WHERE id = ? AND deleted_at IS NULL",
+                                              arguments: [person.id.uuidString])
             try db.execute(sql: """
                 UPDATE person SET display_name = ?, name_key = ?, phone = ?, notes = ?, archived_at = ?, updated_at = ?
                 WHERE id = ? AND deleted_at IS NULL
                 """, arguments: [name, NameKey.make(name), person.phone, person.notes, person.archivedAt.map(Timestamp.from),
                                  Timestamp.now(), person.id.uuidString])
             guard db.changesCount == 1 else { throw Problem.notFound }
+            if let oldName, oldName != name { try Self.renameLinkedRows(person.id, from: oldName, to: name, db) }
         }
     }
 
@@ -295,6 +298,41 @@ extension PeopleStore {
         guard let name = try String.fetchOne(db, sql: "SELECT display_name FROM person WHERE id = ?", arguments: [id.uuidString])
         else { throw Problem.notFound }
         return name
+    }
+
+    /// A rename reaches the person's loans, repayments and settle-ups, Recently Deleted included: generated notes
+    /// take the new name and rows move to a payee with it. The old payee row is never renamed (owner, 2026-10-16).
+    static func renameLinkedRows(_ id: UUID, from old: String, to new: String, _ db: Database) throws {
+        let oldKey = NameKey.make(old)
+        let movesPayee = NameKey.make(new) != oldKey
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT t.id, t.is_sample, t.note, p.name_key AS payee_key
+            FROM txn t LEFT JOIN payee p ON p.id = t.payee_id
+            WHERE t.counterparty_person_id = ? AND t.kind IN ('loanOut', 'loanIn', 'repayment', 'settlement')
+            """, arguments: [id.uuidString])
+        var payeeBySample: [Bool: String] = [:]
+        let now = Timestamp.now()
+        for row in rows {
+            let txnID: String = row["id"]
+            let isSample: Bool = row["is_sample"]
+            let payeeKey: String? = row["payee_key"]
+            if movesPayee, payeeKey == oldKey {
+                let payeeID = try payeeBySample[isSample] ?? LedgerStore.findOrInsertPayee(name: new, isSample: isSample, db)
+                payeeBySample[isSample] = payeeID
+                try db.execute(sql: "UPDATE txn SET payee_id = ?, updated_at = ? WHERE id = ?", arguments: [payeeID, now, txnID])
+            }
+            let note: String? = row["note"]
+            if let note, let renamed = renamedGeneratedNote(note, old: old, new: new) {
+                try db.execute(sql: "UPDATE txn SET note = ?, updated_at = ? WHERE id = ?", arguments: [renamed, now, txnID])
+            }
+        }
+    }
+
+    /// Rewrites only the notes the app wrote for a loan, repayment or settle-up, never the user's own.
+    static func renamedGeneratedNote(_ note: String, old: String, new: String) -> String? {
+        let templates: [(String) -> String] = [{ "Lent to \($0)" }, { "Borrowed from \($0)" }, { "\($0) repaid" },
+                                               { "Repaid \($0)" }, { "You paid \($0)" }, { "\($0) paid you" }]
+        return templates.first { note == $0(old) }.map { $0(new) }
     }
 
     static func isSamplePerson(_ id: UUID, _ db: Database) throws -> Bool {

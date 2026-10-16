@@ -33,6 +33,8 @@ public enum VoiceQuestion: Equatable, Sendable {
     case balance(account: String?)
     case dueBeforeSalary
     case upcoming
+    /// "What do I have to pay this month?": bills and subscriptions falling due in the calendar month (owner, 2026-10-16).
+    case dueThisMonth
     /// "Can I afford a 30,000 phone?" (nil amount = what's left to spend).
     case afford(amount: SpokenAmount?)
     /// "What's my biggest expense this month?", "where did I spend the most?" (owner, 2026-10-15).
@@ -128,7 +130,8 @@ public enum VoiceRuleParser {
         let category = longestMatch(vocabulary.categories, in: t, allowPlural: true)
         let date = findDate(t, original: original, today: today)
 
-        if isQuestion(t, original: original) {
+        if isQuestion(t, original: original)
+            || asksSoftly(t, original: original, amount: amount, person: person, account: accounts.first?.name, category: category) {
             var question = classifyQuestion(t, person: person, account: accounts.first?.name, category: category)
             if question == nil, has(t, [" afford ", " enough money ", " enough for ", " can i buy ", " should i buy "]) {
                 question = .afford(amount: amount)
@@ -501,6 +504,24 @@ public enum VoiceRuleParser {
         return false
     }
 
+    static let softStarts = ["calculate", "can you", "could you", "would you", "give me", "i want to know", "i'd like to know",
+                             "id like to know", "breakdown", "break down", "total ", "sum "]
+
+    /// "Calculate my subscriptions", "Can you give me a breakdown of my subscriptions? …" (owner, 2026-10-16):
+    /// a question only when there's no amount, no request to change something, and it names something UZee can answer.
+    static func asksSoftly(_ t: String, original: String, amount: SpokenAmount?, person: String?, account: String?,
+                           category: String?) -> Bool {
+        guard amount == nil, !has(t, [" add ", " log ", " record ", " save ", " create ", " set up ", " new ", " remind", " mark ",
+                                      " change ", " update ", " edit ", " delete ", " remove ", " cancel ", " move ", " transfer",
+                                      " send ", " lend ", " borrow"]) else { return false }
+        let start = String(t.dropFirst())
+        guard softStarts.contains(where: { start.hasPrefix($0) }) || original.contains("?"),
+              let question = classifyQuestion(t, person: person, account: account, category: category) else { return false }
+        // An account named in a request ("Can you pay the bill from HBL") isn't a balance question.
+        if case .balance = question { return has(t, [" balance", " how much", " left in ", " have in "]) }
+        return true
+    }
+
     static func classifyQuestion(_ t: String, person: String?, account: String?, category: String?) -> VoiceQuestion? {
         if t.contains(" owe") {
             if has(t, [" owe me ", " owes me ", " owe us ", " owed to me ", " owe me?"]) || t.contains("who owes") { return .owesMe(person: person) }
@@ -520,6 +541,8 @@ public enum VoiceRuleParser {
         if t.contains(" subscription") { return .subscriptions }
         if t.contains(" salary"), has(t, [" before ", " until ", " till ", " due ", " bills "]) { return .dueBeforeSalary }
         if t.contains(" next "), has(t, [" bill", " payment", " due", " pay ", " installment", " renewal"]) { return .nextBill }
+        if has(t, [" this month", " in one month", " a single month", " in a month"]),
+           has(t, [" have to pay", " need to pay", " due", " bills"]), !has(t, [" spend", " spent", " spending"]) { return .dueThisMonth }
         if has(t, [" upcoming ", " bills ", " due ", " what do i have to pay ", " what's due ", " coming up "]) { return .upcoming }
         if has(t, [" balance", " how much money", " how much do i have", " have in ", " left in ", " in my "]) || account != nil {
             if !has(t, [" spend", " spent", " spending"]) { return .balance(account: account) }

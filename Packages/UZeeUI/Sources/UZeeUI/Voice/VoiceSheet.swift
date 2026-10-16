@@ -376,6 +376,14 @@ struct VoiceCardView: View {
                 ForEach(session.people.others) { Text($0.name).tag(UUID?.some($0.id)) }
             }
             .accessibilityIdentifier("voiceCard.person")
+            // A misheard new name can be fixed before it's added to People (owner, 2026-10-16).
+            if card.wrappedValue.personID == nil, card.wrappedValue.newPersonName != nil {
+                TextField("New person's name", text: Binding(get: { card.wrappedValue.newPersonName ?? "" },
+                                                             set: { card.wrappedValue.newPersonName = $0 }))
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("voiceCard.newPerson")
+            }
         }
         accountPicker(action == .transfer ? "From" : action == .income || action == .repaidToMe || action == .borrow ? "Into" : "From",
                       selection: card.accountID, identifier: "voiceCard.account",

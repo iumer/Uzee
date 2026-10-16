@@ -210,4 +210,54 @@ struct PeopleStoreTests {
         #expect(ledger.balance(of: friend.id).shared.total(in: .pkr, rates: [:]) == rs(-2_000))
         #expect(ledger.net(of: friend.id) == rs(-2_000))
     }
+
+    @Test("Renaming a person renames their loans, repayments and settle-ups in Activity, and nothing else")
+    func renameReachesActivity() throws {
+        let world = try empty()
+        let person = try world.people.createPerson(name: "Tset User")
+        let cash = try world.ledger.createAccount(name: "Cash", kind: .cash, currency: .pkr, openingBalance: rs(100_000), openingDate: day(9, 1))
+        let lent = try world.people.recordLoan(direction: .lent, personID: person.id, amount: rs(5_000), accountID: cash.id, on: day(10, 1))
+        let borrowed = try world.people.recordLoan(direction: .borrowed, personID: person.id, amount: rs(2_000), accountID: cash.id,
+                                                   on: day(10, 2), note: "Cash for rent")
+        let repaid = try world.people.recordRepayment(loanID: lent.id, amount: rs(1_000), accountID: cash.id, on: day(10, 3))!
+        let paid = try world.people.settle(personID: person.id, groupID: nil, amount: rs(500), iPaid: true, accountID: cash.id, on: day(10, 4))
+        let gotPaid = try world.people.settle(personID: person.id, groupID: nil, amount: rs(500), iPaid: false, accountID: cash.id, on: day(10, 4))
+        let expense = MoneyTransaction(kind: .expense, occurredAt: Date(), localDate: day(10, 5), timeZoneID: "Asia/Karachi", amount: rs(300),
+                                       payeeName: "Tset User", legs: [TransactionLeg(accountID: cash.id, amount: rs(-300), role: .main)])
+        try world.ledger.save(expense)
+        try world.ledger.delete(transactionID: gotPaid.id)
+        #expect(try world.ledger.transaction(id: lent.transactionID!)?.note == "Lent to Tset User")
+
+        var renamed = person
+        renamed.name = "Test User"
+        try world.people.updatePerson(renamed)
+
+        func saved(_ id: UUID) throws -> MoneyTransaction { try world.ledger.transaction(id: id)! }
+        func storedPayee(_ id: UUID) throws -> String? {
+            try world.database.writer.read { db in
+                try String.fetchOne(db, sql: "SELECT p.name FROM txn t JOIN payee p ON p.id = t.payee_id WHERE t.id = ?",
+                                    arguments: [id.uuidString])
+            }
+        }
+        #expect(try saved(lent.transactionID!).payeeName == "Test User")
+        #expect(try saved(lent.transactionID!).note == "Lent to Test User")
+        #expect(try storedPayee(lent.transactionID!) == "Test User")
+        #expect(try saved(borrowed.transactionID!).payeeName == "Test User")
+        #expect(try saved(borrowed.transactionID!).note == "Cash for rent")
+        #expect(try saved(repaid.id).note == "Test User repaid")
+        #expect(try saved(paid.id).note == "You paid Test User")
+        let deleted = try world.ledger.deletedTransactions().first { $0.id == gotPaid.id }
+        #expect(deleted?.payeeName == "Test User")
+        #expect(deleted?.note == "Test User paid you")
+        #expect(try saved(expense.id).payeeName == "Tset User")
+        #expect(try storedPayee(expense.id) == "Tset User")
+    }
+
+    @Test("A rename only rewrites notes the app wrote")
+    func generatedNotes() {
+        #expect(PeopleStore.renamedGeneratedNote("Borrowed from Tset User", old: "Tset User", new: "Test User") == "Borrowed from Test User")
+        #expect(PeopleStore.renamedGeneratedNote("Repaid Tset User", old: "Tset User", new: "Test User") == "Repaid Test User")
+        #expect(PeopleStore.renamedGeneratedNote("Lent to Tset User for rent", old: "Tset User", new: "Test User") == nil)
+        #expect(PeopleStore.renamedGeneratedNote("Lent to Other Person", old: "Tset User", new: "Test User") == nil)
+    }
 }

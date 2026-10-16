@@ -252,7 +252,7 @@ struct ReportsView: View {
     @ViewBuilder
     private var commitments: some View {
         let model = RecurringModel(session: session)
-        let subscriptions = model.active.filter { $0.type == .subscription && $0.groupID == nil }
+        let subscriptions = model.active.filter { model.isSubscription($0) && $0.groupID == nil }
         if !subscriptions.isEmpty {
             let monthly = model.monthlyTotal(subscriptions)
             NavigationLink(value: Route.bills) {

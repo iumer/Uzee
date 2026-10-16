@@ -31,7 +31,10 @@ public enum VoiceUnderstanding {
 
     public static func understand(_ text: String, vocabulary: VoiceVocabulary, today: LocalDate) async -> VoiceCommand {
         let rules = VoiceRuleParser.parse(text, vocabulary: vocabulary, today: today)
-        let understood = rules.action != .unknown && !(rules.action == .question && rules.question == nil)
+        // An expense or income with no amount is usually a question the rules missed ("… subscriptions I have to pay"),
+        // so the model gets a look before UZee asks "How much was it?" (owner, 2026-10-16).
+        let entryWithoutAmount = (rules.action == .expense || rules.action == .income) && rules.amount == nil
+        let understood = rules.action != .unknown && !(rules.action == .question && rules.question == nil) && !entryWithoutAmount
         if understood || modelProblem() != nil { return rules }
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, *), let fromModel = await ModelParser.parse(text, vocabulary: vocabulary, today: today) {
@@ -60,7 +63,7 @@ struct GeneratedVoiceCommand {
     var category: String
     @Guide(description: "The shop, company or payer. Empty if none.")
     var payee: String
-    @Guide(description: "For questions only, one of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming, afford, biggest, compare. Empty otherwise.")
+    @Guide(description: "For questions only, one of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions (each saved subscription and the monthly total; also for a breakdown or list), balance, dueBeforeSalary, upcoming, dueThisMonth (bills and subscriptions due this calendar month), afford, biggest, compare. Empty otherwise.")
     var question: String
     @Guide(description: "For spending questions: today, thisWeek, thisMonth or lastMonth. Empty otherwise.")
     var period: String
@@ -79,7 +82,8 @@ enum ModelParser {
 
     static func parse(_ text: String, vocabulary: VoiceVocabulary, today: LocalDate) async -> VoiceCommand? {
         let session = LanguageModelSession(instructions: instructions)
-        guard let generated = try? await session.respond(to: text, generating: GeneratedVoiceCommand.self).content else { return nil }
+        guard let generated = try? await session.respond(to: text, generating: GeneratedVoiceCommand.self,
+                                                         options: GenerationOptions(sampling: .greedy)).content else { return nil }
         let fields = Fields(action: generated.action, amount: generated.amount, person: generated.person, account: generated.account,
                             toAccount: generated.toAccount, category: generated.category, payee: generated.payee,
                             question: generated.question, period: generated.period)
@@ -140,6 +144,7 @@ enum ModelParser {
         case "balance": .balance(account: account)
         case "dueBeforeSalary": .dueBeforeSalary
         case "upcoming": .upcoming
+        case "dueThisMonth": .dueThisMonth
         case "afford": .afford(amount: amount)
         case "biggest": .biggest(period: period)
         case "compare": .compare

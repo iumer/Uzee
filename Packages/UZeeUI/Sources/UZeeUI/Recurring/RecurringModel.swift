@@ -122,8 +122,23 @@ struct RecurringModel {
     func bucket(_ item: RecurringItem) -> Bucket {
         if let group = item.groupID, session.people.group(group) != nil { return .group(group) }
         if item.type.isPlan { return .plans }
-        if item.type == .subscription { return .subscriptions }
+        if isSubscription(item) { return .subscriptions }
         return .bills
+    }
+
+    /// A subscription by type, or a bill filed under the Subscriptions category (owner, 2026-10-16).
+    func isSubscription(_ item: RecurringItem) -> Bool {
+        SubscriptionRules.isSubscription(item, category: session.ledger.category(item.categoryID))
+    }
+
+    /// A bill already covers this payment, by a paid occurrence or the payee's name.
+    func isTracked(_ transaction: MoneyTransaction) -> Bool {
+        SubscriptionRules.isTracked(transaction, items: snapshot.items, records: snapshot.records)
+    }
+
+    /// A new monthly item prefilled from a payment ("Repeat…", "Track as subscription").
+    func draft(from transaction: MoneyTransaction) -> RecurringItem {
+        SubscriptionRules.draft(from: transaction, category: session.ledger.category(transaction.categoryID), today: today)
     }
 
     func bucketName(_ bucket: Bucket) -> String {

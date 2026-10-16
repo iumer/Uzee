@@ -156,6 +156,32 @@ struct VoiceRuleParserTests {
         #expect(parse("What's my HBL balance").question == .balance(account: "HBL"))
         #expect(parse("What's due before salary?").question == .dueBeforeSalary)
         #expect(parse("How much do I owe my mother?").action == .question)
+        #expect(parse("What do I have to pay this month?").question == .dueThisMonth)
+        #expect(parse("What bills are due this month?").question == .dueThisMonth)
+        #expect(parse("anything due this week").question == .upcoming)
+    }
+
+    @Test("Asked without a question word (owner, 2026-10-16)")
+    func softQuestions() {
+        #expect(parse("Calculate total amount of subscriptions I have to pay in one month").question == .subscriptions)
+        #expect(parse("Can you give me breakdown of all the subscriptions? I have to pay in a single month").question == .subscriptions)
+        #expect(parse("List my subscriptions").question == .subscriptions)
+        #expect(parse("Could you tell me my subscriptions").question == .subscriptions)
+        #expect(parse("Give me a breakdown of my budget").question == .budgetLeft)
+        #expect(parse("Can you tell me how much I spent on food").question == .spent(category: "Food", period: .thisMonth))
+    }
+
+    @Test("Requests to add or change something stay requests")
+    func softQuestionGuards() {
+        #expect(parse("Can you add my Netflix subscription").action != .question)
+        #expect(parse("Could you mark my Netflix subscription as paid").action != .question)
+        #expect(parse("Netflix subscription renewed").action != .question)
+        let fuel = parse("Can you add 500 for fuel")
+        #expect(fuel.action == .expense)
+        #expect(fuel.amount?.value == 500)
+        #expect(parse("Can you help me").action == .unknown)
+        #expect(parse("Can you pay the bill from HBL").action == .expense)
+        #expect(parse("Could you lend Usama some money").action != .question)
     }
 
     @Test("Nothing understood")
@@ -457,7 +483,10 @@ struct VoiceRoutingTests {
 
     @Test("Sentences the rules act on without the model", arguments: [
         "Spent 2500 on groceries", "Lent Usama 10,000", "How much is in HBL?", "Remind me tomorrow at 9 to call the bank",
-        "How am I doing this month?", "Find Careem", "Can I afford a 30,000 phone?"
+        "How am I doing this month?", "Find Careem", "Can I afford a 30,000 phone?",
+        "Calculate total amount of subscriptions I have to pay in one month",
+        "Can you give me breakdown of all the subscriptions? I have to pay in a single month",
+        "What do I have to pay this month?", "Show me my subscriptions"
     ])
     func rulesFirst(_ sentence: String) {
         #expect(VoiceRuleParser.understandsOnItsOwn(sentence, vocabulary: names, today: today))
@@ -609,5 +638,81 @@ struct BiggestQuestionTests {
         #expect(VoiceRuleParser.parse("Am I spending more than last month?", vocabulary: names, today: today).question == .compare)
         #expect(VoiceRuleParser.parse("How much did I spend on food this month?", vocabulary: names, today: today).question
                 == .spent(category: "Food", period: .thisMonth))
+    }
+}
+
+@Suite("Voice name matching")
+struct NameMatchTests {
+    @Test("Edit distance")
+    func distance() {
+        #expect(NameMatch.distance("", "abc") == 3)
+        #expect(NameMatch.distance("abc", "abc") == 0)
+        #expect(NameMatch.distance("abc", "abd") == 1)
+        #expect(NameMatch.distance("abc", "abcd") == 1)
+        #expect(NameMatch.distance("tset user", "test user") == 2)
+    }
+
+    @Test("Short names allow one edit, longer names two")
+    func thresholds() {
+        #expect(NameMatch.isClose("abd", "abcd"))
+        #expect(!NameMatch.isClose("aed", "abcd"))
+        #expect(NameMatch.isClose("Tset User", "Test User"))
+        #expect(NameMatch.isClose("TEST  USER", "Test User"))
+        #expect(!NameMatch.isClose("Tset Usr", "Test User"))
+        #expect(!NameMatch.isClose("Other Person", "Test User"))
+        #expect(!NameMatch.isClose("", "Test User"))
+    }
+
+    @Test("A misheard name finds the one person it is close to, never one of several")
+    func closest() {
+        let people = [Person(name: "Test User"), Person(name: "Other Person")]
+        #expect(NameMatch.closest(to: "Tset User", among: people, name: { $0.name })?.name == "Test User")
+        #expect(NameMatch.closest(to: "Someone New", among: people, name: { $0.name }) == nil)
+        let twins = people + [Person(name: "Test Users")]
+        #expect(NameMatch.closest(to: "Test Use", among: twins, name: { $0.name }) == nil)
+    }
+
+    @Test("Speech hints put people first and drop categories first")
+    func hints() {
+        let hints = VoiceHints.make(people: ["Test User", "Other Person"], accounts: ["Cash", "cash"], extra: ["lakh"],
+                                    categories: ["Groceries", "Fuel"], cap: 5)
+        #expect(hints == ["Test User", "Other Person", "Cash", "lakh", "Groceries"])
+        #expect(VoiceHints.make(people: ["Test User"], accounts: ["Cash"], extra: [], categories: ["Fuel"], cap: 1) == ["Test User"])
+    }
+}
+
+@Suite("Loan-looking payments")
+struct LoanWordsTests {
+    @Test("Loan words as whole words; interest and fees are real costs")
+    func words() {
+        #expect(LoanWords.looksLikeLoan("Loan", nil))
+        #expect(LoanWords.looksLikeLoan("Qarz Test User", nil))
+        #expect(LoanWords.looksLikeLoan("Test User", "Loan repayment."))
+        #expect(LoanWords.looksLikeLoan(nil, "udhaar returned"))
+        #expect(!LoanWords.looksLikeLoan("Loan interest", nil))
+        #expect(!LoanWords.looksLikeLoan("Car loan", "processing fee"))
+        #expect(!LoanWords.looksLikeLoan("Loanstar Pizza", nil))
+        #expect(!LoanWords.looksLikeLoan("Other Person", nil))
+        #expect(!LoanWords.looksLikeLoan(nil, nil))
+    }
+}
+
+@Suite("Numbers in the helper's reply")
+struct ReplyNumbersTests {
+    @Test("Digit runs with thousands commas joined")
+    func numbers() {
+        #expect(ReplyNumbers.numbers(in: "Rs 15,509 a month, about Rs 186,108 a year.") == ["15509", "186108"])
+        #expect(ReplyNumbers.numbers(in: "3 items, 1,2 and 12.50") == ["3", "12", "12", "50"])
+        #expect(ReplyNumbers.numbers(in: "none") == [])
+    }
+
+    @Test("A total the tools never gave is unsupported")
+    func unsupported() {
+        let tool = "You have 3 subscriptions, Rs 15,509 a month (Rs 186,108 a year): Test Rs 9,000, Other Rs 6,509."
+        #expect(!ReplyNumbers.unsupported(reply: "Your subscriptions cost Rs 15,509 a month.", sources: [tool]))
+        #expect(!ReplyNumbers.unsupported(reply: "You have 3 subscriptions, Rs 15509 in all.", sources: [tool]))
+        #expect(ReplyNumbers.unsupported(reply: "You have three subscriptions totaling Rs 9,570.", sources: [tool]))
+        #expect(ReplyNumbers.unsupported(reply: "That's Rs 15,509.", sources: []))
+        #expect(!ReplyNumbers.unsupported(reply: "Try to cut 10 percent.", sources: []))
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import os
 import UZeeCore
 #if canImport(FoundationModels)
 import FoundationModels
@@ -29,19 +30,21 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
     private let lock = NSLock()
     /// What the user said so far, so the tools can drop details the model made up.
     private let heard = Heard()
+    /// What the read-only tools answered this turn, spoken as is so the numbers match the screens.
+    private let answers = ToolAnswers()
 
     init(actions: AssistantActions, vocabulary: VoiceVocabulary, today: LocalDate) {
         self.actions = actions
         self.vocabulary = vocabulary
         self.today = today
-        session = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today, heard: heard)
+        session = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today, heard: heard, answers: answers)
     }
 
     static func instructions(vocabulary: VoiceVocabulary, today: LocalDate) -> String {
         """
         You are UZee, a friendly money helper inside a personal finance app in Pakistan. You talk with the user by \
-        voice, so answer in one or two short spoken sentences, without lists, markdown or emoji. Amounts are in \
-        Pakistani rupees unless the user says another currency. Write rupees as Rs (for example Rs 5,000), never ₹ or INR. Today is \(today.year)-\(today.month)-\(today.day).
+        voice, so answer in short spoken sentences, without markdown or emoji; when a tool gives a list, keep every \
+        name and amount. Amounts are in Pakistani rupees unless the user says another currency. Write rupees as Rs (for example Rs 5,000), never ₹ or INR. Today is \(today.year)-\(today.month)-\(today.day).
 
         Use the tools for anything about the user's money; never guess numbers. To log something (spent, received, \
         transferred, lent, borrowed, paid back, or a debt such as "I owe my mom 250000" = borrow and "Ali owes me 5000" = \
@@ -52,8 +55,10 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
         If they want a change, call prepareEntry again with the corrected details. If prepareEntry says something is \
         missing, ask the user for it. For a question about one number (an account's balance, budget left, spending, \
         bills, subscriptions, who owes whom) call answerQuestion with the matching kind; use overview only for "how am \
-        I doing", and findTransactions to look up a shop or word. Only say numbers a tool gave you, and never log \
-        anything when the user asks a question. A line in brackets at the start describes the card already on screen. To be reminded \
+        I doing". For subscriptions (a total or a breakdown) call answerQuestion with subscriptions, and for what \
+        falls due this month use dueThisMonth. Use findTransactions only to look up a shop, person or word, never for \
+        subscriptions, bills, budgets or totals. Only say numbers a tool gave you, and never log anything when the \
+        user asks a question. A line in brackets at the start describes the card already on screen. To be reminded \
         of something later ("remind me to pay the plumber on Friday"), call addReminder.
 
         The user's people: \(vocabulary.people.prefix(30).joined(separator: ", ")).
@@ -62,33 +67,75 @@ final class ModelChat: AssistantChat, @unchecked Sendable {
         """
     }
 
-    static func makeSession(actions: AssistantActions, vocabulary: VoiceVocabulary, today: LocalDate, heard: Heard) -> LanguageModelSession {
+    static func makeSession(actions: AssistantActions, vocabulary: VoiceVocabulary, today: LocalDate, heard: Heard,
+                            answers: ToolAnswers) -> LanguageModelSession {
         let tools: [any Tool] = [
-            PrepareEntryTool(actions: actions, vocabulary: vocabulary, today: today, heard: heard),
-            ConfirmEntryTool(actions: actions),
-            CancelEntryTool(actions: actions),
-            AnswerQuestionTool(actions: actions, vocabulary: vocabulary),
-            FindTransactionsTool(actions: actions),
-            OverviewTool(actions: actions),
-            AddReminderTool(actions: actions, today: today)
+            PrepareEntryTool(actions: actions, vocabulary: vocabulary, today: today, heard: heard, answers: answers),
+            ConfirmEntryTool(actions: actions, answers: answers),
+            CancelEntryTool(actions: actions, answers: answers),
+            AnswerQuestionTool(actions: actions, vocabulary: vocabulary, answers: answers),
+            FindTransactionsTool(actions: actions, answers: answers),
+            OverviewTool(actions: actions, answers: answers),
+            AddReminderTool(actions: actions, today: today, answers: answers)
         ]
         return LanguageModelSession(tools: tools, instructions: instructions(vocabulary: vocabulary, today: today))
     }
 
     func reply(to text: String) async -> String? {
         heard.add(text)
+        answers.reset()
         let current = lock.withLock { session }
+        // Greedy sampling: the same question gets the same answer every time (owner, 2026-10-16).
+        let options = GenerationOptions(sampling: .greedy)
         do {
-            return try await current.respond(to: text).content
+            let content = try await current.respond(to: text, options: options).content
+            return spoken(content, asked: text)
         } catch let error as LanguageModelSession.GenerationError where error.isTooLong {
             // A long conversation can outgrow the model's memory: start a fresh one and try once more.
-            let fresh = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today, heard: heard)
+            let fresh = Self.makeSession(actions: actions, vocabulary: vocabulary, today: today, heard: heard, answers: answers)
             lock.withLock { session = fresh }
-            return try? await fresh.respond(to: text).content
+            answers.reset()
+            guard let content = try? await fresh.respond(to: text, options: options).content else { return nil }
+            return spoken(content, asked: text)
         } catch {
             // Anything else (guardrails, busy, unsupported language): the app's own rules answer instead,
             // and the conversation so far is kept.
             return nil
+        }
+    }
+
+    /// The tools' own text after a read-only answer, so the model can't drop or change a number; its own words only
+    /// for advice, or when a card changed (owner, 2026-10-16).
+    private func spoken(_ reply: String, asked: String) -> String {
+        guard let exact = answers.spoken else { return reply }
+        if Self.asksAdvice(asked), !ReplyNumbers.unsupported(reply: reply, sources: answers.all) { return reply }
+        Log.system.info("voice tools answered: \(exact, privacy: .private)")
+        return exact
+    }
+
+    /// "Any tips?", "What should I do?": the user wants the model's advice, not just the number.
+    static func asksAdvice(_ text: String) -> Bool {
+        let t = " " + text.lowercased() + " "
+        return [" tip", " advice", " should i", " suggest", " help me", " how can i save", " how do i save"].contains { t.contains($0) }
+    }
+}
+
+/// What the tools answered in one turn of the conversation.
+final class ToolAnswers: @unchecked Sendable {
+    private let lock = NSLock()
+    private var texts: [String] = []
+    private var changedCard = false
+
+    func reset() { lock.withLock { texts = []; changedCard = false } }
+    func add(_ text: String) { lock.withLock { texts.append(text) } }
+    func touchedCard() { lock.withLock { changedCard = true } }
+    var all: [String] { lock.withLock { texts } }
+    /// The exact tool text to speak, or nil when the model must word it (a card was prepared, saved or cancelled).
+    var spoken: String? {
+        lock.withLock { () -> String? in
+            guard !changedCard, !texts.isEmpty else { return nil }
+            var seen = Set<String>()
+            return texts.filter { seen.insert($0).inserted }.joined(separator: " ")
         }
     }
 }
@@ -109,6 +156,7 @@ struct PrepareEntryTool: Tool {
     let vocabulary: VoiceVocabulary
     let today: LocalDate
     let heard: Heard
+    let answers: ToolAnswers
     let name = "prepareEntry"
     let description = "Shows a card to log an expense, income, transfer, loan or repayment. Nothing is saved until confirmEntry."
 
@@ -135,6 +183,7 @@ struct PrepareEntryTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
+        answers.touchedCard()
         let generated = ModelParser.Fields(action: arguments.action, amount: arguments.amount, person: arguments.person,
                                               account: arguments.account, toAccount: arguments.toAccount,
                                               category: arguments.category, payee: arguments.payee, question: "", period: "")
@@ -152,37 +201,46 @@ struct PrepareEntryTool: Tool {
 @available(iOS 26.0, macOS 26.0, *)
 struct ConfirmEntryTool: Tool {
     let actions: AssistantActions
+    let answers: ToolAnswers
     let name = "confirmEntry"
     let description = "Saves the card on screen. Call only after the user agrees."
 
     @Generable
     struct Arguments {}
 
-    func call(arguments: Arguments) async throws -> String { await actions.confirm() }
+    func call(arguments: Arguments) async throws -> String {
+        answers.touchedCard()
+        return await actions.confirm()
+    }
 }
 
 @available(iOS 26.0, macOS 26.0, *)
 struct CancelEntryTool: Tool {
     let actions: AssistantActions
+    let answers: ToolAnswers
     let name = "cancelEntry"
     let description = "Throws away the card on screen without saving."
 
     @Generable
     struct Arguments {}
 
-    func call(arguments: Arguments) async throws -> String { await actions.cancel() }
+    func call(arguments: Arguments) async throws -> String {
+        answers.touchedCard()
+        return await actions.cancel()
+    }
 }
 
 @available(iOS 26.0, macOS 26.0, *)
 struct AnswerQuestionTool: Tool {
     let actions: AssistantActions
     let vocabulary: VoiceVocabulary
+    let answers: ToolAnswers
     let name = "answerQuestion"
     let description = "Answers a question about the user's money from their own data."
 
     @Generable
     struct Arguments {
-        @Guide(description: "One of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions, balance, dueBeforeSalary, upcoming, afford (can the user afford a purchase), biggest (biggest expenses or where the money went; set period), compare (this month vs last month)")
+        @Guide(description: "One of: iOwe, owesMe, budgetLeft, spent, nextBill, subscriptions (each saved subscription and the monthly total; also for a breakdown or list), balance, dueBeforeSalary, upcoming, dueThisMonth (bills and subscriptions due this calendar month), afford (can the user afford a purchase), biggest (biggest expenses or where the money went; set period), compare (this month vs last month)")
         var question: String
         @Guide(description: "The person, for iOwe or owesMe. Empty for everyone.")
         var person: String
@@ -206,15 +264,18 @@ struct AnswerQuestionTool: Tool {
                                                   amount: AmountPhrase.find(in: arguments.amount)) else {
             return "UZee can't answer that kind of question yet."
         }
-        return await actions.answer(question)
+        let result = await actions.answer(question)
+        answers.add(result)
+        return result
     }
 }
 
 @available(iOS 26.0, macOS 26.0, *)
 struct FindTransactionsTool: Tool {
     let actions: AssistantActions
+    let answers: ToolAnswers
     let name = "findTransactions"
-    let description = "Finds the user's transactions by shop, person, category, note or amount, and totals them."
+    let description = "Looks up the user's transactions by shop, person, note or amount. Not for subscriptions, bills or budget totals."
 
     @Generable
     struct Arguments {
@@ -225,7 +286,9 @@ struct FindTransactionsTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        await actions.search(arguments.text, VoicePeriod(rawValue: arguments.period))
+        let result = await actions.search(arguments.text, VoicePeriod(rawValue: arguments.period))
+        answers.add(result)
+        return result
     }
 }
 
@@ -233,6 +296,7 @@ struct FindTransactionsTool: Tool {
 struct AddReminderTool: Tool {
     let actions: AssistantActions
     let today: LocalDate
+    let answers: ToolAnswers
     let name = "addReminder"
     let description = "Adds a reminder to the user's UZee calendar for a future day, optionally at a time and with an amount."
 
@@ -253,7 +317,9 @@ struct AddReminderTool: Tool {
             return "The day isn't clear. Ask the user which day."
         }
         let amount = AmountPhrase.find(in: arguments.amount).flatMap { try? Money.fromMajor($0.value, $0.currency ?? .pkr) }
-        return await actions.remind(arguments.title, date, ReminderPhrase.minuteOfDay(arguments.time + " " + arguments.when), amount)
+        let result = await actions.remind(arguments.title, date, ReminderPhrase.minuteOfDay(arguments.time + " " + arguments.when), amount)
+        answers.add(result)
+        return result
     }
 }
 
@@ -268,12 +334,17 @@ extension LanguageModelSession.GenerationError {
 @available(iOS 26.0, macOS 26.0, *)
 struct OverviewTool: Tool {
     let actions: AssistantActions
+    let answers: ToolAnswers
     let name = "overview"
     let description = "The user's total balance, this month's spending, budget left and next bill."
 
     @Generable
     struct Arguments {}
 
-    func call(arguments: Arguments) async throws -> String { await actions.overview() }
+    func call(arguments: Arguments) async throws -> String {
+        let result = await actions.overview()
+        answers.add(result)
+        return result
+    }
 }
 #endif

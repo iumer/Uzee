@@ -90,6 +90,44 @@ public final class AppDatabase: Sendable {
                 t.add(column: "direction", .text).notNull().defaults(to: "pay")
             }
         }
+        // Renaming a person left their loans, repayments and settle-ups on the old name: generated notes and the
+        // payee get the current name. Self-contained SQL, so later code changes can't change it (owner, 2026-10-16).
+        migrator.registerMigration("v15_person_name_resync") { db in
+            let now = Int64((Date().timeIntervalSince1970 * 1000).rounded())
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT t.id, t.note, t.is_sample, p.name AS old_name, p.name_key AS old_key,
+                       per.display_name AS new_name, per.name_key AS new_key
+                FROM txn t JOIN payee p ON p.id = t.payee_id JOIN person per ON per.id = t.counterparty_person_id
+                WHERE t.kind IN ('loanOut', 'loanIn', 'repayment', 'settlement') AND p.name <> per.display_name
+                """)
+            for row in rows {
+                let id: String = row["id"]
+                let old: String = row["old_name"]
+                let new: String = row["new_name"]
+                let oldKey: String = row["old_key"]
+                let newKey: String = row["new_key"]
+                let isSample: Bool = row["is_sample"]
+                let pairs = [("Lent to \(old)", "Lent to \(new)"), ("Borrowed from \(old)", "Borrowed from \(new)"),
+                             ("\(old) repaid", "\(new) repaid"), ("Repaid \(old)", "Repaid \(new)"),
+                             ("You paid \(old)", "You paid \(new)"), ("\(old) paid you", "\(new) paid you")]
+                let note: String? = row["note"]
+                if let note, let hit = pairs.first(where: { $0.0 == note }) {
+                    try db.execute(sql: "UPDATE txn SET note = ?, updated_at = ? WHERE id = ?", arguments: [hit.1, now, id])
+                }
+                guard oldKey != newKey else { continue }
+                var payeeID = try String.fetchOne(db, sql: """
+                    SELECT id FROM payee WHERE name_key = ? AND is_sample = ? AND deleted_at IS NULL
+                    """, arguments: [newKey, isSample])
+                if payeeID == nil {
+                    let newID = UUID().uuidString
+                    try db.execute(sql: """
+                        INSERT INTO payee (id, created_at, updated_at, is_sample, name, name_key, use_count) VALUES (?, ?, ?, ?, ?, ?, 0)
+                        """, arguments: [newID, now, now, isSample, new, newKey])
+                    payeeID = newID
+                }
+                try db.execute(sql: "UPDATE txn SET payee_id = ?, updated_at = ? WHERE id = ?", arguments: [payeeID, now, id])
+            }
+        }
         return migrator
     }
 

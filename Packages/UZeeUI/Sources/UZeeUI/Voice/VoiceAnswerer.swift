@@ -20,6 +20,7 @@ struct VoiceAnswerer {
         case .balance(let account): return balance(account)
         case .dueBeforeSalary: return dueBeforeSalary()
         case .upcoming: return upcoming()
+        case .dueThisMonth: return dueThisMonth()
         case .afford(let amount): return afford(amount)
         case .biggest(let period): return biggest(period)
         case .compare: return compare()
@@ -51,7 +52,7 @@ struct VoiceAnswerer {
             : "Not right now. Your accounts have \(MoneyFormatter.string(available)), less than \(money(price))."
     }
 
-    /// "4 transactions for Foodpanda this month, Rs 6,200 in all. Latest: …" (UZee helper's search).
+    /// "4 transactions for Foodpanda this month, Rs 6,200 spent. Latest: …" (UZee helper's search).
     func search(_ text: String, period: VoicePeriod?) -> String {
         var filter = ActivityFilter(text: text)
         if let period { (filter.from, filter.through) = range(period) }
@@ -68,15 +69,26 @@ struct VoiceAnswerer {
         }
         let when = period.map { " " + $0.name } ?? ""
         guard !found.isEmpty else { return "No transactions for \(text)\(when)." }
-        let totals = Dictionary(grouping: found, by: { $0.amount.currency }).compactMap { currency, rows -> String? in
-            let sum = rows.reduce(Int64(0)) { $0 + $1.amount.minorUnits.magnitudeClamped }
-            return money(Money(minorUnits: sum, currency: currency))
+        // Only spending counts toward the total, my share in base, as on the Budget and Reports screens (owner, 2026-10-16).
+        let spending = found.filter { $0.isEffective && SpendingRules.spendingSign($0.kind) != 0 }
+        let spent = spending.reduce(Int64(0)) { $0 + SpendingRules.spendingSign($1.kind) * baseShare($1) }
+        var reply = "\(found.count) transaction\(found.count == 1 ? "" : "s") for \(text)\(when)"
+        if spending.isEmpty {
+            let received = found.filter { $0.isEffective && SpendingRules.countsAsIncome($0.kind) }.reduce(Int64(0)) { $0 + baseShare($1) }
+            reply += received != 0 ? ", \(money(Money(minorUnits: received, currency: base))) received." : ", none of it spending."
+        } else {
+            reply += ", \(money(Money(minorUnits: spent, currency: base))) \(spent < 0 ? "refunded" : "spent")"
+            reply += spending.count < found.count ? " (transfers, loans and pending ones aren't counted)." : "."
         }
-        let latest = found.prefix(3).map { row in
+        let latest = found.prefix(5).map { row in
             "\(row.payeeName ?? session.ledger.categoryPath(row.categoryID) ?? "a transaction") \(money(row.amount)) on \(DateText.short(row.localDate))"
         }
-        return "\(found.count) transaction\(found.count == 1 ? "" : "s") for \(text)\(when), \(totals.joined(separator: " and ")) in all. Latest: "
-            + latest.joined(separator: "; ") + "."
+        return reply + " Latest: " + latest.joined(separator: "; ") + "."
+    }
+
+    /// My share of a transaction in base minor units; 0 when there's no rate, as the totals skip it.
+    private func baseShare(_ transaction: MoneyTransaction) -> Int64 {
+        (try? RateTable.toBase(transaction.myShare, base: base, rates: session.ledger.rates))?.minorUnits ?? 0
     }
 
     /// Total balance, this month's spending, budget left and the next bill, in one breath.
@@ -184,17 +196,35 @@ struct VoiceAnswerer {
         var parts = ["Your biggest expense \(period.name) is \(name(top.categoryID)), \(money(top.amount)) (\(top.percent)% of your spending)."]
         let next = shares.dropFirst().prefix(2).map { "\(name($0.categoryID)) \(money($0.amount))" }
         if !next.isEmpty { parts.append("Then " + ListFormatter.localizedString(byJoining: next) + ".") }
-        let rows = session.transactions.filter { $0.isEffective && $0.kind == .expense && $0.localDate >= start && $0.localDate <= end }
-        let largest = rows.max { a, b in
-            ((try? RateTable.toBase(a.myShare, base: base, rates: session.ledger.rates))?.minorUnits ?? 0)
-                < ((try? RateTable.toBase(b.myShare, base: base, rates: session.ledger.rates))?.minorUnits ?? 0)
+        // Every kind that counts as spending, my share in base, so the payment matches the totals (owner, 2026-10-16).
+        let rows = session.transactions.filter {
+            $0.isEffective && SpendingRules.spendingSign($0.kind) > 0 && $0.localDate >= start && $0.localDate <= end
         }
+        let largest = rows.max { baseShare($0) < baseShare($1) }
         if let largest {
             let what = largest.payeeName ?? session.ledger.categoryPath(largest.categoryID) ?? "a payment"
-            parts.append("The largest single payment was \(what), \(money(largest.amount)) on \(DateText.short(largest.localDate)).")
+            let share = (try? RateTable.toBase(largest.myShare, base: base, rates: session.ledger.rates)) ?? largest.myShare
+            parts.append("The largest single payment was \(what), \(money(share)) on \(DateText.short(largest.localDate)).")
+            if LoanWords.looksLikeLoan(largest.payeeName, largest.note) {
+                parts.append("\(largest.payeeName ?? "That payment") is saved as spending. If it was a loan or a repayment, "
+                    + "change it so it stops counting as spending.")
+            }
         }
         if name(top.categoryID) == "Other", top.percent >= 40 {
-            parts.append("Most of it has no category yet, so giving those payments a category would make this clearer.")
+            // "Other" is a real category: spending with no category isn't counted at all.
+            let ids = Set([top.categoryID] + session.ledger.categories.filter { $0.parentID == top.categoryID }.map(\.id))
+            var byPayee: [String: Int64] = [:]
+            for row in rows where row.categoryID.map({ ids.contains($0) }) ?? false {
+                byPayee[row.payeeName ?? "no name", default: 0] += baseShare(row)
+            }
+            let payees: [String] = byPayee.sorted { $0.value > $1.value }.prefix(3)
+                .map { "\($0.key) \(money(Money(minorUnits: $0.value, currency: base)))" }
+            if payees.isEmpty {
+                parts.append("Moving payments out of Other into a real category would make this clearer.")
+            } else {
+                parts.append("Most of it is filed under Other, mainly " + ListFormatter.localizedString(byJoining: payees)
+                    + ". Moving those to a real category would make this clearer.")
+            }
         }
         return parts.joined(separator: " ")
     }
@@ -232,12 +262,64 @@ struct VoiceAnswerer {
         return parts.joined(separator: " ")
     }
 
-    private func subscriptions() -> String {
+    /// The total and every subscription in one answer, so "how much" and "breakdown" can never disagree; the same items
+    /// as the Bills hub (owner, 2026-10-16).
+    func subscriptions() -> String {
         let model = RecurringModel(session: session)
-        let items = model.active.filter { $0.type == .subscription && $0.groupID == nil }
-        guard !items.isEmpty else { return "You have no active subscriptions." }
+        let items = model.active.filter { model.isSubscription($0) && $0.groupID == nil }
+        let extra = untrackedSubscriptionPayments(model)
+        guard !items.isEmpty else {
+            return "You have no active subscriptions." + (extra.isEmpty ? "" : " " + untrackedText(extra))
+        }
         let monthly = model.monthlyTotal(items)
-        return "Your \(items.count) subscriptions cost \(money(monthly)) a month, about \(money(model.yearly(fromMonthly: monthly))) a year."
+        let sorted = items.sorted { a, b in
+            let x = model.monthly(a).minorUnits, y = model.monthly(b).minorUnits
+            return x != y ? x > y : a.name < b.name
+        }
+        let named: [String] = sorted.map { item in
+            let perMonth = money(model.monthly(item))
+            guard item.rule.unit != .month || item.rule.interval != 1 else { return "\(item.name) \(perMonth)" }
+            return "\(item.name) \(perMonth) a month (\(money(item.amount)) \(item.rule.text.lowercased()))"
+        }
+        var text = "You have \(items.count) subscription\(items.count == 1 ? "" : "s"), \(money(monthly)) a month "
+            + "(\(money(model.yearly(fromMonthly: monthly))) a year): " + ListFormatter.localizedString(byJoining: named) + "."
+        if !extra.isEmpty { text += " " + untrackedText(extra) }
+        return text
+    }
+
+    /// This month's payments filed under Subscriptions that no saved bill covers, so the Budget line can differ.
+    private func untrackedSubscriptionPayments(_ model: RecurringModel) -> [MoneyTransaction] {
+        session.transactions.filter { transaction in
+            transaction.isEffective && SpendingRules.spendingSign(transaction.kind) > 0
+                && transaction.localDate >= today.firstOfMonth && transaction.localDate <= today
+                && session.ledger.category(transaction.categoryID)?.group == .subscriptions && !model.isTracked(transaction)
+        }
+    }
+
+    private func untrackedText(_ payments: [MoneyTransaction]) -> String {
+        let shown = payments.prefix(3).map { payment in
+            "\(payment.payeeName ?? session.ledger.categoryPath(payment.categoryID) ?? "a payment") "
+                + money(Money(minorUnits: baseShare(payment), currency: base))
+        }
+        return "Also filed under Subscriptions this month but not saved as a subscription: "
+            + ListFormatter.localizedString(byJoining: Array(shown)) + (payments.count > 3 ? " and \(payments.count - 3) more." : ".")
+    }
+
+    /// Bills and subscriptions falling due this calendar month (and any still overdue), paid and still to pay.
+    func dueThisMonth() -> String {
+        let model = RecurringModel(session: session)
+        // Skipped bills were never paid, so they count neither as due nor as paid.
+        let rows = model.due(from: today.firstOfMonth, through: today.lastOfMonth, includeOverdue: true)
+            .filter { !$0.item.type.isIncome && $0.occurrence.state != .skipped }
+        guard !rows.isEmpty else { return "Nothing is due this month." }
+        let open = rows.filter { !$0.occurrence.isResolved }
+        let paid = rows.filter { $0.occurrence.state == .paid }
+        guard !open.isEmpty else { return "Everything due this month is paid: \(money(model.total(rows)))." }
+        let named = open.map { "\($0.item.name) \(money(model.baseShare($0.item, $0.occurrence.amount))) \(DateText.short($0.occurrence.dueDate))" }
+        var text = "\(money(model.total(rows))) of bills and subscriptions fall due this month. "
+        if !paid.isEmpty { text += "\(money(model.total(paid))) is paid and " }
+        text += "\(money(model.total(open))) is still to pay: " + ListFormatter.localizedString(byJoining: named) + "."
+        return text
     }
 
     private func dueBeforeSalary() -> String {
