@@ -41,6 +41,10 @@ struct EventStoreTests {
         try store.deletePaymentTodo(fuel.id)
         #expect(try store.paymentTodos().map(\.name) == ["Kameti"])
         #expect(throws: PaymentTodo.Problem.emptyName) { try store.save(PaymentTodo(name: "", amount: Money(major: 1, .pkr))) }
+        let salary = PaymentTodo(direction: .receive, name: "Salary", amount: Money(major: 150_000, .pkr))
+        try store.save(salary)
+        #expect(try store.paymentTodos().first { $0.id == salary.id }?.direction == .receive)
+        #expect(try store.paymentTodos().first { $0.id == kameti.id }?.direction == .pay)
     }
 
     @Test("CAL-004 reminder settings default to a day before at 10:00 and persist")

@@ -32,4 +32,19 @@ struct PaymentTodoTests {
         #expect(result.left == rs(100_000 - 111_000))
         #expect(throws: PaymentTodo.Problem.emptyName) { try PaymentTodo(name: " ", amount: rs(1)).validate() }
     }
+
+    @Test("To receive adds to what you have; done ones don't count")
+    func totalsWithIncoming() {
+        let todos = [
+            PaymentTodo(name: "Rent", amount: rs(30_000)),
+            PaymentTodo(direction: .receive, name: "Salary", amount: rs(150_000)),
+            PaymentTodo(direction: .receive, name: "Ali owes", amount: rs(10_000), paid: rs(4_000)),
+            PaymentTodo(direction: .receive, name: "Old refund", amount: rs(5_000), doneAt: Date()),
+        ]
+        let result = PaymentTodo.totals(todos, have: rs(20_000), rates: [:])
+        #expect(result.toPay == rs(30_000))
+        #expect(result.toReceive == rs(156_000))
+        #expect(result.left == rs(20_000 + 156_000 - 30_000))
+        #expect(PaymentTodo.summary(todos, have: rs(20_000), rates: [:]).left == result.left)
+    }
 }

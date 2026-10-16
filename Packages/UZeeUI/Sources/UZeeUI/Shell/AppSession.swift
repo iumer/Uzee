@@ -232,7 +232,7 @@ public final class AppSession {
             let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
             return PlannedReminder(id: "\(PlannedReminder.idPrefix)todo.\(todo.id.uuidString)", kind: .todo,
                                    fireDate: local, minuteOfDay: minute,
-                                   title: todo.name, body: "\(MoneyFormatter.string(todo.remaining)) still to pay")
+                                   title: todo.name, body: "\(MoneyFormatter.string(todo.remaining)) still to \(todo.direction == .receive ? "receive" : "pay")")
         }
         let money = todoReminders
             + TopUpCheck.reminders(topUpWarnings, settings: reminderSettings, today: today, minuteNow: Self.minuteNow(),

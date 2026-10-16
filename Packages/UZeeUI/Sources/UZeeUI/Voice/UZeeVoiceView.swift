@@ -25,9 +25,20 @@ struct UZeeVoiceView: View {
                 Section {
                     ForEach(shortList) { row($0) }
                 } header: {
-                    Text("Voices")
+                    Text("Favourites")
                 } footer: {
                     Text("Tap a voice to hear it and use it.")
+                }
+            }
+            // Every English voice on this iPhone, the ones downloaded in iPhone Settings included (owner, 2026-10-16).
+            ForEach(["Premium", "Enhanced", "Standard"], id: \.self) { quality in
+                let group = voices.filter { $0.quality == quality }
+                if !group.isEmpty {
+                    Section {
+                        ForEach(group) { row($0) }
+                    } header: {
+                        Text("\(quality) · \(group.count)")
+                    }
                 }
             }
             Section {

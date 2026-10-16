@@ -84,6 +84,12 @@ public final class AppDatabase: Sendable {
                 t.add(column: "reminder_at", .integer)
             }
         }
+        // 0.15.4: Plan › To receive, money coming in on the same list (owner, 2026-10-16).
+        migrator.registerMigration("v14_todo_direction") { db in
+            try db.alter(table: "payment_todo") { t in
+                t.add(column: "direction", .text).notNull().defaults(to: "pay")
+            }
+        }
         return migrator
     }
 

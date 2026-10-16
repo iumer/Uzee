@@ -2,8 +2,15 @@ import Foundation
 
 /// A payment still to make, on Plan › To pay (owner, 2026-10-15): "Kameti, Rs 20,000", paid in one go or in parts
 /// ("paid 10k, 10k left"). Not tied to a month or a date: it stays on the list until it's paid.
+/// Plan › To receive (owner, 2026-10-16) uses the same list for money coming in: next salary, what Ali owes.
 public struct PaymentTodo: Hashable, Sendable, Identifiable {
+    public enum Direction: String, Hashable, Sendable, CaseIterable {
+        case pay, receive
+    }
+
     public var id: UUID
+    /// Paying it out, or receiving it.
+    public var direction: Direction
     public var name: String
     public var amount: Money
     /// Paid so far, in the same currency.
@@ -16,8 +23,10 @@ public struct PaymentTodo: Hashable, Sendable, Identifiable {
     /// If set, a local notification fires at this exact time.
     public var reminderAt: Date?
 
-    public init(id: UUID = UUID(), name: String, amount: Money, paid: Money? = nil, createdAt: Date = Date(), doneAt: Date? = nil, dueDate: Date? = nil, reminderAt: Date? = nil) {
+    public init(id: UUID = UUID(), direction: Direction = .pay, name: String, amount: Money, paid: Money? = nil, createdAt: Date = Date(),
+                doneAt: Date? = nil, dueDate: Date? = nil, reminderAt: Date? = nil) {
         self.id = id
+        self.direction = direction
         self.name = name
         self.amount = amount
         self.paid = paid ?? .zero(amount.currency)
@@ -57,11 +66,22 @@ public struct PaymentTodo: Hashable, Sendable, Identifiable {
 
     /// What you have, what's still to pay on the open items (in base), and what's left after paying them all.
     public static func summary(_ todos: [PaymentTodo], have: Money, rates: [String: Decimal]) -> (toPay: Money, left: Money) {
-        var toPay = Money.zero(have.currency)
+        let totals = totals(todos, have: have, rates: rates)
+        return (totals.toPay, totals.left)
+    }
+
+    /// What you have, plus what's still to come in, minus what's still to pay: what's left once it all happens.
+    public static func totals(_ todos: [PaymentTodo], have: Money, rates: [String: Decimal]) -> (toPay: Money, toReceive: Money, left: Money) {
+        var toPay: Int64 = 0
+        var toReceive: Int64 = 0
         for todo in todos where !todo.isDone {
             guard let inBase = try? RateTable.toBase(todo.remaining, base: have.currency, rates: rates) else { continue }
-            toPay = Money(minorUnits: toPay.minorUnits + inBase.minorUnits, currency: have.currency)
+            switch todo.direction {
+            case .pay: toPay += inBase.minorUnits
+            case .receive: toReceive += inBase.minorUnits
+            }
         }
-        return (toPay, Money(minorUnits: have.minorUnits - toPay.minorUnits, currency: have.currency))
+        return (Money(minorUnits: toPay, currency: have.currency), Money(minorUnits: toReceive, currency: have.currency),
+                Money(minorUnits: have.minorUnits + toReceive - toPay, currency: have.currency))
     }
 }
