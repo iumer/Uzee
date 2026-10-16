@@ -57,21 +57,21 @@ struct MigrationTests {
             try db.execute(sql: insert, arguments: [expense, "expense", oldPayee, "Lent to Tset User", nil])
         }
         _ = try AppDatabase(queue)
-        try queue.read { db in
+        let (rows, payees, newKey, newUse, oldUse) = try queue.read { db in
             func note(_ id: String) throws -> String? { try String.fetchOne(db, sql: "SELECT note FROM txn WHERE id = ?", arguments: [id]) }
             func payee(_ id: String) throws -> String? {
                 try String.fetchOne(db, sql: "SELECT p.name FROM txn t JOIN payee p ON p.id = t.payee_id WHERE t.id = ?", arguments: [id])
             }
-            #expect(try note(loan) == "Lent to Test User")
-            #expect(try payee(loan) == "Test User")
-            #expect(try note(ownNote) == "Cash for rent")
-            #expect(try payee(ownNote) == "Test User")
-            #expect(try note(expense) == "Lent to Tset User")
-            #expect(try payee(expense) == "Tset User")
-            #expect(try String.fetchOne(db, sql: "SELECT name_key FROM payee WHERE name = 'Test User'") == "test user")
-            #expect(try Int.fetchOne(db, sql: "SELECT use_count FROM payee WHERE name = 'Test User'") == 0)
-            #expect(try Int.fetchOne(db, sql: "SELECT use_count FROM payee WHERE id = ?", arguments: [oldPayee]) == 3)
+            return ([try note(loan), try note(ownNote), try note(expense)], [try payee(loan), try payee(ownNote), try payee(expense)],
+                    try String.fetchOne(db, sql: "SELECT name_key FROM payee WHERE name = 'Test User'"),
+                    try Int.fetchOne(db, sql: "SELECT use_count FROM payee WHERE name = 'Test User'"),
+                    try Int.fetchOne(db, sql: "SELECT use_count FROM payee WHERE id = ?", arguments: [oldPayee]))
         }
+        #expect(rows == ["Lent to Test User", "Cash for rent", "Lent to Tset User"])
+        #expect(payees == ["Test User", "Test User", "Tset User"])
+        #expect(newKey == "test user")
+        #expect(newUse == 0)
+        #expect(oldUse == 3)
     }
 
     // DATA-05: an older database gets a safety copy before the update migrates it; a new or current one doesn't.
