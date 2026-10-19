@@ -155,9 +155,9 @@ struct RecurringDetailView: View {
 
     private func billing(_ item: RecurringItem) -> String {
         if item.rule.unit == .month {
-            return "\(item.rule.text) on the \(DateText.ordinal(item.rule.anchor.day))"
+            return "\(item.rule.text) on the \(DateText.ordinal(item.rule.currentAnchor.day))"
         }
-        return "\(item.rule.text) from \(DateText.long(item.rule.anchor))"
+        return "\(item.rule.text) from \(DateText.long(item.rule.currentAnchor))"
     }
 
     private func nextLine(_ item: RecurringItem, _ next: Occurrence, model: RecurringModel) -> String {

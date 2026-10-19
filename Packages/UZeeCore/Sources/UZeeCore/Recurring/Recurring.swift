@@ -14,32 +14,93 @@ public struct RecurrenceRule: Hashable, Sendable {
     public var anchor: LocalDate
     public var end: LocalDate?
     public var limit: Int?
+    /// Paid early and counting from that day (owner, 2026-10-19): occurrence `index` falls on `date`, and the
+    /// ones after it follow from there. Earlier dates stay exactly as they were. Sorted by index.
+    public var restarts: [Restart]
 
-    public init(unit: RecurrenceUnit = .month, interval: Int = 1, anchor: LocalDate, end: LocalDate? = nil, limit: Int? = nil) {
+    public struct Restart: Hashable, Sendable {
+        public var index: Int
+        public var date: LocalDate
+
+        public init(index: Int, date: LocalDate) {
+            self.index = index
+            self.date = date
+        }
+    }
+
+    /// Stored as "9:2026-10-19;10:2026-11-15".
+    public var restartsText: String? {
+        restarts.isEmpty ? nil : restarts.map { "\($0.index):\($0.date.description)" }.joined(separator: ";")
+    }
+
+    public static func restarts(from text: String?) -> [Restart] {
+        guard let text else { return [] }
+        return text.split(separator: ";").compactMap { part in
+            let pieces = part.split(separator: ":")
+            guard pieces.count == 2, let index = Int(pieces[0]), let date = LocalDate(String(pieces[1])) else { return nil }
+            return Restart(index: index, date: date)
+        }
+    }
+
+    public init(unit: RecurrenceUnit = .month, interval: Int = 1, anchor: LocalDate, end: LocalDate? = nil, limit: Int? = nil,
+                restarts: [Restart] = []) {
         self.unit = unit
         self.interval = max(1, interval)
         self.anchor = anchor
         self.end = end
         self.limit = limit
+        self.restarts = restarts.sorted { $0.index < $1.index }
     }
 
     /// The date of occurrence `index` (0 = the anchor), or nil past the end or limit.
     public func date(at index: Int) -> LocalDate? {
         guard index >= 0 else { return nil }
         if let limit, index >= limit { return nil }
-        let date: LocalDate
-        switch unit {
-        case .day: date = anchor.addingDays(index * interval)
-        case .week: date = anchor.addingDays(index * interval * 7)
-        case .month: date = anchor.addingMonths(index * interval)
-        case .year: date = anchor.addingMonths(index * interval * 12)
-        }
+        // The last restart at or before this index, else the anchor.
+        let start = restarts.last { $0.index <= index }
+        let date = Self.step(from: start?.date ?? anchor, by: index - (start?.index ?? 0), unit: unit, interval: interval)
         if let end, date > end { return nil }
         return date
     }
 
+    private static func step(from base: LocalDate, by count: Int, unit: RecurrenceUnit, interval: Int) -> LocalDate {
+        switch unit {
+        case .day: base.addingDays(count * interval)
+        case .week: base.addingDays(count * interval * 7)
+        case .month: base.addingMonths(count * interval)
+        case .year: base.addingMonths(count * interval * 12)
+        }
+    }
+
+    /// The date later occurrences count from: the last restart, else the anchor ("every month on the 20th").
+    public var currentAnchor: LocalDate { restarts.last?.date ?? anchor }
+
+    /// The same rule with occurrence `index` moved to `date` and the later ones counted from there. Nil when
+    /// it would put the dates out of order (on or before the occurrence before it).
+    public func restarting(at index: Int, on date: LocalDate) -> RecurrenceRule? {
+        guard index >= 0, self.date(at: index) != nil else { return nil }
+        if index > 0, let previous = self.date(at: index - 1), date <= previous { return nil }
+        var rule = self
+        if index == 0 {
+            rule.anchor = date
+            rule.restarts = []
+        } else {
+            rule.restarts = restarts.filter { $0.index < index } + [Restart(index: index, date: date)]
+        }
+        return rule
+    }
+
     /// The index of the first occurrence on or after `date`.
     public func firstIndex(onOrAfter date: LocalDate) -> Int {
+        guard !restarts.isEmpty else { return Self(unit: unit, interval: interval, anchor: anchor).plainFirstIndex(onOrAfter: date) }
+        // Dates rise with the index, so walk on from the last restart before `date`.
+        var index = 0
+        if let last = restarts.last(where: { $0.date <= date }) { index = last.index }
+        while let candidate = self.date(at: index), candidate < date { index += 1 }
+        return index
+    }
+
+    private func plainFirstIndex(onOrAfter date: LocalDate) -> Int {
         guard date > anchor else { return 0 }
         var guess: Int
         switch unit {

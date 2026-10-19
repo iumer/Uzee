@@ -40,6 +40,42 @@ struct LedgerSessionTests {
         #expect(session.transactions.isEmpty)
     }
 
+    @Test("Paid early, counting from today: the dates move, and Undo puts them back and removes the payment")
+    func paidEarlyUndo() {
+        final class Calls: @unchecked Sendable { var moved: [LocalDate] = []; var undone: [RecurrenceRule] = []; var reopened: [LocalDate] = [] }
+        let calls = Calls()
+        let fake = FakeLedger()
+        let today = LocalDate(Date(), in: .current)
+        let due = today.addingDays(3)
+        let rule = RecurrenceRule(unit: .month, anchor: due.addingMonths(-2))
+        let item = RecurringItem(name: "Mobile", type: .bill, amount: Money(major: 1_500, .pkr), rule: rule, trackedFrom: due)
+        let paymentID = UUID()
+        let recurring = RecurringClient(
+            snapshot: { RecurringSnapshot(items: [item], records: []) }, save: { _, _ in }, delete: { _ in }, setStatus: { _, _ in },
+            markPaid: { _, _, _, _, _ in paymentID }, skip: { _, _ in }, snooze: { _, _, _ in },
+            reopen: { _, scheduled in calls.reopened.append(scheduled) }, recordPayout: { _, _, _ in },
+            countFromPayment: { _, _, paidOn in calls.moved.append(paidOn); return rule },
+            undoCountFromPayment: { _, before, _, _ in calls.undone.append(before) })
+        let client = LedgerClient(
+            snapshot: { .empty() }, transactions: { Array(fake.saved.values) }, lastUsedAccountID: { nil },
+            save: { fake.saved[$0.id] = $0 }, delete: { _ in }, discard: { fake.discarded.append($0) },
+            createAccount: { _ in throw CoreError.notFound }, updateAccount: { _ in }, setArchived: { _, _ in },
+            deleteAccount: { _ in }, hasTransactions: { _ in false }, setRate: { _, _ in })
+        let session = AppSession(info: AppInfo(marketingVersion: "0.2.0", buildNumber: "3"), isDatabaseReady: true,
+                                 sampleData: .unavailable, ledger: client, recurring: recurring)
+        guard let occurrence = OccurrenceGenerator.next(item, records: [], today: today) else { Issue.record("no occurrence"); return }
+        #expect(occurrence.scheduledDate == due)
+        #expect(session.markPaid(occurrence, amount: item.amount, account: UUID(), date: Date(), countFromPayment: true))
+        #expect(calls.moved == [today])
+        session.toasts.performUndo()
+        #expect(calls.undone == [rule])
+        #expect(calls.reopened == [due])
+        #expect(fake.discarded == [paymentID])
+        // Keeping the dates: nothing moves.
+        #expect(session.markPaid(occurrence, amount: item.amount, account: UUID(), date: Date(), countFromPayment: false))
+        #expect(calls.moved.count == 1)
+    }
+
     @Test("Undo after an edit restores the previous version")
     func undoEdit() {
         let fake = FakeLedger()

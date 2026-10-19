@@ -14,6 +14,9 @@ public struct RecurringClient: Sendable {
     public var snooze: @Sendable (_ item: UUID, _ scheduled: LocalDate, _ until: LocalDate) throws -> Void
     public var reopen: @Sendable (_ item: UUID, _ scheduled: LocalDate) throws -> Void
     public var recordPayout: @Sendable (_ payout: UUID, _ account: UUID, _ date: Date) throws -> Void
+    /// Paid early: later dates count from the payment day; returns the rule before, for Undo (owner, 2026-10-19).
+    public var countFromPayment: @Sendable (_ item: UUID, _ scheduled: LocalDate, _ paidOn: LocalDate) throws -> RecurrenceRule
+    public var undoCountFromPayment: @Sendable (_ item: UUID, _ rule: RecurrenceRule, _ scheduled: LocalDate, _ paidOn: LocalDate) throws -> Void
 
     public init(snapshot: @escaping @Sendable () throws -> RecurringSnapshot,
                 save: @escaping @Sendable (RecurringItem, LocalDate?) throws -> Void,
@@ -23,7 +26,11 @@ public struct RecurringClient: Sendable {
                 skip: @escaping @Sendable (UUID, LocalDate) throws -> Void,
                 snooze: @escaping @Sendable (UUID, LocalDate, LocalDate) throws -> Void,
                 reopen: @escaping @Sendable (UUID, LocalDate) throws -> Void,
-                recordPayout: @escaping @Sendable (UUID, UUID, Date) throws -> Void) {
+                recordPayout: @escaping @Sendable (UUID, UUID, Date) throws -> Void,
+                countFromPayment: @escaping @Sendable (UUID, LocalDate, LocalDate) throws -> RecurrenceRule = { _, _, _ in throw CoreError.notFound },
+                undoCountFromPayment: @escaping @Sendable (UUID, RecurrenceRule, LocalDate, LocalDate) throws -> Void = { _, _, _, _ in
+                    throw CoreError.notFound
+                }) {
         self.snapshot = snapshot
         self.save = save
         self.delete = delete
@@ -33,6 +40,8 @@ public struct RecurringClient: Sendable {
         self.snooze = snooze
         self.reopen = reopen
         self.recordPayout = recordPayout
+        self.countFromPayment = countFromPayment
+        self.undoCountFromPayment = undoCountFromPayment
     }
 
     public static let unavailable = RecurringClient(

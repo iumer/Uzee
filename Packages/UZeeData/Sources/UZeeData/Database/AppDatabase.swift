@@ -137,6 +137,12 @@ public final class AppDatabase: Sendable {
             }
             try db.execute(sql: "CREATE INDEX entry_note_txn ON entry_note(txn_id)")
         }
+        // 0.15.9: paid early, the dates after it count from that day (owner, 2026-10-19).
+        migrator.registerMigration("v17_rule_restarts") { db in
+            try db.alter(table: "recurring_item") { t in
+                t.add(column: "rule_restarts", .text)
+            }
+        }
         return migrator
     }
 

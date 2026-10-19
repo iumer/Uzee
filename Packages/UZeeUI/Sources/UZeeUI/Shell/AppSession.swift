@@ -436,8 +436,9 @@ public final class AppSession {
 
     /// Mark paid (REC-02): posts the payment once, then offers Undo, which removes it and makes the bill due again.
     @discardableResult
-    public func markPaid(_ occurrence: Occurrence, amount: Money, account: UUID?, date: Date) -> Bool {
+    public func markPaid(_ occurrence: Occurrence, amount: Money, account: UUID?, date: Date, countFromPayment: Bool = false) -> Bool {
         let item = occurrence.itemID, scheduled = occurrence.scheduledDate
+        let paidOn = LocalDate(date, in: .current)
         let transactionID: UUID
         do {
             transactionID = try recurringClient.markPaid(item, scheduled, amount, account, date)
@@ -445,10 +446,24 @@ public final class AppSession {
             errorMessage = "Couldn't mark it paid. Nothing was changed. Try again."
             return false
         }
+        // Paid early and the next ones count from today (owner, 2026-10-19).
+        var before: RecurrenceRule?
+        if countFromPayment, paidOn < scheduled {
+            do {
+                before = try recurringClient.countFromPayment(item, scheduled, paidOn)
+            } catch {
+                errorMessage = "Saved the payment, but couldn't move the next dates. They stay as they were."
+            }
+        }
         reload()
-        toasts.show("Marked paid") { [weak self] in
+        let next = recurring.item(item).flatMap { recurring.next($0, today: today) }
+        let message = before != nil ? "Marked paid · next on \(next.map { DateText.short($0.dueDate) } ?? "—")" : "Marked paid"
+        toasts.show(message) { [weak self] in
             guard let self else { return }
             do {
+                if let before {
+                    try self.recurringClient.undoCountFromPayment(item, before, scheduled, paidOn)
+                }
                 try self.recurringClient.reopen(item, scheduled)
                 try self.client.discard(transactionID)
             } catch {

@@ -292,7 +292,11 @@ final class AppContainer {
             skip: { item, scheduled in try store.skip(itemID: item, scheduledDate: scheduled) },
             snooze: { item, scheduled, until in try store.snooze(itemID: item, scheduledDate: scheduled, until: until) },
             reopen: { item, scheduled in try store.reopen(itemID: item, scheduledDate: scheduled) },
-            recordPayout: { payout, account, date in try store.recordPayout(payoutID: payout, accountID: account, on: day(date), at: date) }
+            recordPayout: { payout, account, date in try store.recordPayout(payoutID: payout, accountID: account, on: day(date), at: date) },
+            countFromPayment: { item, scheduled, paidOn in try store.countFromPayment(itemID: item, scheduledDate: scheduled, paidOn: paidOn) },
+            undoCountFromPayment: { item, rule, scheduled, paidOn in
+                try store.undoCountFromPayment(itemID: item, rule: rule, scheduledDate: scheduled, paidOn: paidOn)
+            }
         )
     }
 

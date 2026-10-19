@@ -14,6 +14,8 @@ struct MarkPaidSheet: View {
     @State private var didLoad = false
     /// Paid a different amount (exchange rate, tax, a new price): use it from now on (owner, 2026-10-15).
     @State private var keepNewPrice = true
+    /// Paid early: keep the next dates, or count them from the day it was paid (owner, 2026-10-19).
+    @State private var countFromPayment: Bool?
 
     private var model: RecurringModel { RecurringModel(session: session) }
     private var item: RecurringItem? { session.recurring.item(occurrence.itemID) }
@@ -75,8 +77,28 @@ struct MarkPaidSheet: View {
                             .accessibilityIdentifier("markPaid.account")
                         }
                         DatePicker(item.type.isIncome ? "Date received" : "Date paid", selection: $date, displayedComponents: .date)
+                            .accessibilityIdentifier("markPaid.date")
                     } footer: {
                         Text(footer(item))
+                    }
+                    if let early = earlyChoice(item) {
+                        Section {
+                            choiceRow(title: "Keep the dates as they are",
+                                      detail: "Next due \(DateText.short(early.keep)), reminders as now", selected: countFromPayment == false) {
+                                countFromPayment = false
+                            }
+                            .accessibilityIdentifier("markPaid.keepDates")
+                            choiceRow(title: "Count from \(DateText.short(early.paid))",
+                                      detail: "Next due \(DateText.short(early.moved)), and every later date and reminder moves too",
+                                      selected: countFromPayment == true) {
+                                countFromPayment = true
+                            }
+                            .accessibilityIdentifier("markPaid.moveDates")
+                        } header: {
+                            Text("Paid \(early.days) \(early.days == 1 ? "day" : "days") early")
+                        } footer: {
+                            if countFromPayment == nil { Text("Choose one to save.").foregroundStyle(UZColor.warning) }
+                        }
                     }
                     if let problem {
                         Section { Label(problem, systemImage: "exclamationmark.circle.fill").foregroundStyle(UZColor.negative) }
@@ -107,8 +129,42 @@ struct MarkPaidSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
             .onAppear(perform: load)
+            .onChange(of: countFromPayment) { problem = nil }
         }
         .accessibilityIdentifier("sheet.markPaid")
+    }
+
+    /// When the date paid is before the due date: the next due date both ways. Nil when paid on time or late, or
+    /// when the dates can't move (an earlier one still unpaid, or before the one before it).
+    private func earlyChoice(_ item: RecurringItem) -> (paid: LocalDate, keep: LocalDate, moved: LocalDate, days: Int)? {
+        let paid = LocalDate(date, in: .current)
+        guard !item.type.isIncome, paid < occurrence.scheduledDate else { return nil }
+        let index = item.rule.firstIndex(onOrAfter: occurrence.scheduledDate)
+        guard item.rule.date(at: index) == occurrence.scheduledDate,
+              let moved = item.rule.restarting(at: index, on: paid), let movedNext = moved.date(at: index + 1),
+              let keepNext = item.rule.date(at: index + 1) else { return nil }
+        // Something earlier still to pay: pay that first, so the dates aren't moved past it.
+        let earlierOpen = OccurrenceGenerator.occurrences(item, records: model.records(item), from: occurrence.scheduledDate,
+                                                          through: occurrence.scheduledDate, today: session.today, includeOverdue: true)
+            .contains { $0.scheduledDate < occurrence.scheduledDate && !$0.isResolved }
+        guard !earlierOpen else { return nil }
+        return (paid, keepNext, movedNext, paid.days(to: occurrence.scheduledDate))
+    }
+
+    private func choiceRow(title: String, detail: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: UZSpacing.m) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3).foregroundStyle(selected ? UZColor.tint : UZColor.label3)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundStyle(UZColor.label)
+                    Text(detail).font(.footnote).foregroundStyle(UZColor.label2)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func note(_ item: RecurringItem) -> String {
@@ -140,6 +196,7 @@ struct MarkPaidSheet: View {
         didLoad = true
         amountText = Self.plain(occurrence.amount)
         accountID = item.accountID ?? session.ledger.activeAccounts.first?.id
+        // Paying before it's due: today, so paying early is the default (owner, 2026-10-19).
         let due = occurrence.dueDate.startDate(in: .current)
         date = due > Date() ? Date() : due
         if occurrence.dueDate < session.today { date = Date() }
@@ -174,12 +231,17 @@ struct MarkPaidSheet: View {
             problem = ProblemText.message(error)
             return
         }
+        if let item, earlyChoice(item) != nil, countFromPayment == nil {
+            problem = "Paid early: choose whether the next dates stay or count from the day you paid."
+            return
+        }
         let account = someoneElsePays == nil ? accountID : nil
         if someoneElsePays == nil && account == nil {
             problem = "Choose the account it was paid from."
             return
         }
-        guard session.markPaid(occurrence, amount: money, account: account, date: date) else { return }
+        let moving = item.map { earlyChoice($0) != nil } == true && countFromPayment == true
+        guard session.markPaid(occurrence, amount: money, account: account, date: date, countFromPayment: moving) else { return }
         if keepNewPrice, money != occurrence.amount, var updated = item {
             updated.amount = money
             _ = session.perform("Saved the payment, but couldn't change the usual amount.", {

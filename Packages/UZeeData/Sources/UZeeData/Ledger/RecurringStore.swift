@@ -96,6 +96,40 @@ public struct RecurringStore: Sendable {
         }
     }
 
+    /// Paid early and counting from that day (owner, 2026-10-19): the paid occurrence moves to the payment
+    /// date and every later date follows from it. Earlier dates and records stay as they were.
+    /// Returns the rule before the move, for Undo.
+    @discardableResult
+    public func countFromPayment(itemID: UUID, scheduledDate: LocalDate, paidOn: LocalDate) throws -> RecurrenceRule {
+        try database.writer.write { db in
+            guard var item = try Self.fetchItems(db, id: itemID).first else { throw Problem.notFound }
+            let before = item.rule
+            let index = item.rule.firstIndex(onOrAfter: scheduledDate)
+            guard item.rule.date(at: index) == scheduledDate, paidOn < scheduledDate,
+                  let moved = item.rule.restarting(at: index, on: paidOn) else { throw Problem.notFound }
+            item.rule = moved
+            if paidOn < item.trackedFrom { item.trackedFrom = paidOn }
+            try Self.write(item, db)
+            let now = Timestamp.now()
+            try db.execute(sql: "DELETE FROM occurrence WHERE recurring_item_id = ? AND scheduled_date = ?",
+                           arguments: [itemID.uuidString, paidOn.description])
+            try db.execute(sql: "UPDATE occurrence SET scheduled_date = ?, updated_at = ? WHERE recurring_item_id = ? AND scheduled_date = ?",
+                           arguments: [paidOn.description, now, itemID.uuidString, scheduledDate.description])
+            return before
+        }
+    }
+
+    /// Undo for `countFromPayment`: the dates go back and the payment record returns to its old date.
+    public func undoCountFromPayment(itemID: UUID, rule: RecurrenceRule, scheduledDate: LocalDate, paidOn: LocalDate) throws {
+        try database.writer.write { db in
+            guard var item = try Self.fetchItems(db, id: itemID).first else { throw Problem.notFound }
+            item.rule = rule
+            try Self.write(item, db)
+            try db.execute(sql: "UPDATE occurrence SET scheduled_date = ?, updated_at = ? WHERE recurring_item_id = ? AND scheduled_date = ?",
+                           arguments: [scheduledDate.description, Timestamp.now(), itemID.uuidString, paidOn.description])
+        }
+    }
+
     /// Skip this time (REC-08): no transaction, the next date comes up.
     public func skip(itemID: UUID, scheduledDate: LocalDate) throws {
         try database.writer.write { db in
@@ -192,8 +226,10 @@ extension RecurringStore {
             let changed: String? = row["status_changed_on"]
             let started: String? = row["started_on"]
             let key: String = row["id"]
+            let restarts: String? = row["rule_restarts"]
             let rule = RecurrenceRule(unit: RecurrenceUnit(rawValue: row["rule_unit"]) ?? .month, interval: row["rule_interval"], anchor: anchor,
-                                      end: end.flatMap(LocalDate.init), limit: row["occurrence_limit"])
+                                      end: end.flatMap(LocalDate.init), limit: row["occurrence_limit"],
+                                      restarts: RecurrenceRule.restarts(from: restarts))
             return RecurringItem(id: id, name: row["name"], type: RecurringType(rawValue: row["item_type"]) ?? .other,
                                  amount: Money(minorUnits: row["amount_minor"], currency: currency), isEstimated: row["is_estimated"],
                                  accountID: account.flatMap(UUID.init(uuidString:)), categoryID: category.flatMap(UUID.init(uuidString:)),
@@ -245,8 +281,8 @@ extension RecurringStore {
         try db.execute(sql: """
             INSERT INTO recurring_item (id, created_at, updated_at, is_sample, name, item_type, amount_minor, is_estimated, currency_code,
                 account_id, category_id, group_id, paid_by_person_id, rule_unit, rule_interval, anchor_date, end_date, occurrence_limit,
-                tracked_from, paid_before_tracking, subscription_status, status_changed_on, started_on, color_hex, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tracked_from, paid_before_tracking, subscription_status, status_changed_on, started_on, color_hex, notes, rule_restarts)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, item_type = excluded.item_type,
                 amount_minor = excluded.amount_minor, is_estimated = excluded.is_estimated, currency_code = excluded.currency_code,
                 account_id = excluded.account_id, category_id = excluded.category_id, group_id = excluded.group_id,
@@ -254,13 +290,14 @@ extension RecurringStore {
                 anchor_date = excluded.anchor_date, end_date = excluded.end_date, occurrence_limit = excluded.occurrence_limit,
                 tracked_from = excluded.tracked_from, paid_before_tracking = excluded.paid_before_tracking,
                 subscription_status = excluded.subscription_status, status_changed_on = excluded.status_changed_on,
-                started_on = excluded.started_on, color_hex = excluded.color_hex, notes = excluded.notes
+                started_on = excluded.started_on, color_hex = excluded.color_hex, notes = excluded.notes,
+                rule_restarts = excluded.rule_restarts
             """, arguments: [item.id.uuidString, now, now, item.isSample, item.name.trimmingCharacters(in: .whitespaces), item.type.rawValue,
                              item.amount.minorUnits, item.isEstimated, item.amount.currency.code, item.accountID?.uuidString,
                              item.categoryID?.uuidString, item.groupID?.uuidString, item.paidByID?.uuidString, item.rule.unit.rawValue,
                              item.rule.interval, item.rule.anchor.description, item.rule.end?.description, item.rule.limit,
                              item.trackedFrom.description, item.paidBeforeTracking, item.status.rawValue, item.statusChangedAt?.description,
-                             item.startedOn?.description, item.colorHex, item.notes])
+                             item.startedOn?.description, item.colorHex, item.notes, item.rule.restartsText])
         for payout in item.payouts {
             try db.execute(sql: """
                 INSERT INTO kameti_payout (id, created_at, updated_at, is_sample, recurring_item_id, expected_date, amount_minor, currency_code, txn_id)

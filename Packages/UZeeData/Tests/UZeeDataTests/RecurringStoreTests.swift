@@ -67,6 +67,26 @@ struct RecurringStoreTests {
         #expect(next?.scheduledDate == day(11, 8))
     }
 
+    @Test("Paid early, counting from that day: next due moves, saved and read back; Undo puts it back")
+    func paidEarlyMovesDates() throws {
+        let world = try sample()
+        let internet = item("Internet · Nayatel", try world.recurring.snapshot())
+        let hbl = try account("HBL", world)
+        try world.recurring.markPaid(itemID: internet.id, scheduledDate: day(10, 8), amount: rs(6_500), accountID: hbl, on: day(10, 6))
+        let before = try world.recurring.countFromPayment(itemID: internet.id, scheduledDate: day(10, 8), paidOn: day(10, 6))
+        var snapshot = try world.recurring.snapshot()
+        var moved = item("Internet · Nayatel", snapshot)
+        #expect(snapshot.next(moved, today: day(10, 6))?.scheduledDate == day(11, 6))
+        #expect(snapshot.records(for: moved.id).contains { $0.scheduledDate == day(10, 6) && $0.status == .paid })
+        #expect(!snapshot.records(for: moved.id).contains { $0.scheduledDate == day(10, 8) })
+        try world.recurring.undoCountFromPayment(itemID: internet.id, rule: before, scheduledDate: day(10, 8), paidOn: day(10, 6))
+        snapshot = try world.recurring.snapshot()
+        moved = item("Internet · Nayatel", snapshot)
+        #expect(moved.rule.restarts.isEmpty)
+        #expect(snapshot.next(moved, today: day(10, 6))?.scheduledDate == day(11, 8))
+        #expect(snapshot.records(for: moved.id).contains { $0.scheduledDate == day(10, 8) && $0.status == .paid })
+    }
+
     @Test("REC-012 deleting the paid transaction makes the bill due again")
     func deletedPayment() throws {
         let world = try sample()

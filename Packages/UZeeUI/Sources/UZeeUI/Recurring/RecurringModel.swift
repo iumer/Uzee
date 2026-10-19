@@ -204,7 +204,7 @@ struct RecurringModel {
     func meta(_ item: RecurringItem) -> String {
         var parts: [String] = []
         switch item.rule.unit {
-        case .month where item.rule.interval == 1: parts.append(DateText.ordinal(item.rule.anchor.day))
+        case .month where item.rule.interval == 1: parts.append(DateText.ordinal(item.rule.currentAnchor.day))
         default: parts.append(item.rule.text)
         }
         if let payer = item.paidByID, payer != session.people.selfID, let name = session.people.person(payer)?.name {

@@ -231,9 +231,11 @@ struct RecurringFormSheet: View {
            RecurringModel(session: session).next(item)?.scheduledDate == first {
             anchor = item.rule.anchor
         }
+        // Dates moved by a payment made early stay moved, unless the schedule itself was changed here.
+        let keepsMoves = item.map { $0.rule.anchor == anchor && $0.rule.unit == unit && $0.rule.interval == interval } ?? false
         let rule = RecurrenceRule(unit: unit, interval: interval, anchor: anchor,
                                   end: !type.isPlan && hasEnd ? LocalDate(endDate, in: .current) : nil,
-                                  limit: type.isPlan ? count : nil)
+                                  limit: type.isPlan ? count : nil, restarts: keepsMoves ? item?.rule.restarts ?? [] : [])
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         var updated = item ?? RecurringItem(name: name, type: type, amount: money, rule: rule, trackedFrom: type.isPlan ? session.today : first,
                                             startedOn: first)
