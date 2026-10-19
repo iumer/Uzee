@@ -6,12 +6,13 @@ import UZeeCore
 /// income vs spending, budget kept, subscriptions, people balances and account balances. My shares only.
 struct ReportsView: View {
     @Bindable var session: AppSession
-    @State private var choice: Choice = .lastMonth
+    @State private var choice: Choice = .thisMonth
     @State private var pdf: SharedFile?
 
     enum Choice: String, CaseIterable, Identifiable {
-        case thisMonth = "This month"
+        // Last month, this month, last 6 months, left to right (owner, 2026-10-19).
         case lastMonth = "Last month"
+        case thisMonth = "This month"
         case sixMonths = "Last 6 months"
         var id: String { rawValue }
     }

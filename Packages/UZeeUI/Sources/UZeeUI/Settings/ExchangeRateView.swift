@@ -22,14 +22,6 @@ struct ExchangeRateView: View {
 
     private var base: Currency { session.ledger.base }
 
-    /// The currencies UZee converts for totals: every foreign account currency, USD at least.
-    private var totalCurrencies: [Currency] {
-        var set = Set(session.ledger.activeAccounts.map(\.currency))
-        set.insert(.usd)
-        set.remove(base)
-        return set.sorted { $0 == .usd ? true : $1 == .usd ? false : $0.code < $1.code }
-    }
-
     var body: some View {
         List {
             Section {
@@ -63,17 +55,34 @@ struct ExchangeRateView: View {
                 if deleting { Text("Tap the red button next to a service or a currency pair to delete it.") }
             }
             Section {
-                ForEach(totalCurrencies, id: \.code) { currency in
-                    LabeledContent(one(currency), value: totalRate(currency)).monospacedDigit()
-                        .accessibilityIdentifier("rate.value.\(currency.code)")
+                ForEach(pairs) { pair in
+                    HStack {
+                        if deleting {
+                            Button { delete(pair) } label: {
+                                Image(systemName: "minus.circle.fill").foregroundStyle(UZColor.negative)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Delete \(pair.from) to \(pair.to)")
+                            .accessibilityIdentifier("rate.deletePair.\(pair.id)")
+                        }
+                        Text("\(pair.from) → \(pair.to)")
+                    }
                 }
             } header: {
-                Text("Used for your totals · Wise")
+                Text("Currency pairs")
+            } footer: {
+                Text("Each service below shows these pairs. Add one with Add › Add a currency pair, like SAR → PKR or EUR → USD.")
+            }
+            // Wise's live rate, the one UZee uses for totals, shown per pair like the services below.
+            Section {
+                ForEach(pairs) { pair in row(Self.wise, pair) }
+            } header: {
+                Text("Wise")
             } footer: {
                 Text((updated.map { "Updated \($0.formatted(date: .abbreviated, time: .shortened)). " } ?? "")
                      + "Wise's live rate, refreshed when you open UZee. Entries for past days use that day's rate.")
             }
-            ForEach(services) { service in
+            ForEach(services.filter { $0.source != .wise }) { service in
                 Section {
                     ForEach(pairs) { pair in row(service, pair) }
                 } header: {
@@ -91,25 +100,6 @@ struct ExchangeRateView: View {
                 } footer: {
                     Text(footer(service))
                 }
-            }
-            Section {
-                ForEach(pairs) { pair in
-                    HStack {
-                        if deleting {
-                            Button { delete(pair) } label: {
-                                Image(systemName: "minus.circle.fill").foregroundStyle(UZColor.negative)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Delete \(pair.from) to \(pair.to)")
-                            .accessibilityIdentifier("rate.deletePair.\(pair.id)")
-                        }
-                        Text("\(pair.from) → \(pair.to)")
-                    }
-                }
-            } header: {
-                Text("Currency pairs")
-            } footer: {
-                Text("Every service shows these. Add one with Add › Add a currency pair, like SAR → PKR or EUR → USD.")
             }
             if let problem {
                 Section { Text(problem).foregroundStyle(UZColor.negative).accessibilityIdentifier("rate.problem") }
@@ -153,19 +143,26 @@ struct ExchangeRateView: View {
     private func row(_ service: RateService, _ pair: RatePair) -> some View {
         let label = "\(pair.from) 1 → \(pair.to)"
         if service.source == .typed {
+            // Plain text like the other rows (owner, 2026-10-19: no blue links); tap the row to type a rate.
             Button {
                 typing = TypedRate(serviceID: service.id, serviceName: service.name, pair: pair,
                                    text: service.typed[pair.id].map(ExchangeRate.storageString) ?? "")
             } label: {
-                LabeledContent(label) {
-                    if let rate = service.typed[pair.id] {
-                        Text(display(rate, pair)).monospacedDigit().foregroundStyle(UZColor.label)
-                    } else {
-                        // Nothing typed yet: Google's rate, said plainly, so the row is never empty.
-                        Text(googleText(pair) + " (Google)").monospacedDigit().foregroundStyle(UZColor.label2)
+                LabeledContent {
+                    HStack(spacing: UZSpacing.s) {
+                        if let rate = service.typed[pair.id] {
+                            Text(display(rate, pair)).monospacedDigit().foregroundStyle(UZColor.label)
+                        } else {
+                            // Nothing typed yet: Google's rate, said plainly, so the row is never empty.
+                            Text(googleText(pair) + " (Google)").monospacedDigit().foregroundStyle(UZColor.label2)
+                        }
+                        Image(systemName: "pencil").font(.caption).foregroundStyle(UZColor.label3)
                     }
+                } label: {
+                    Text(label).foregroundStyle(UZColor.label)
                 }
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("rate.\(service.name).\(pair.id)")
         } else {
             LabeledContent(label) {
@@ -197,6 +194,7 @@ struct ExchangeRateView: View {
     }
 
     private static let google = RateService(id: "google", name: "Google", source: .market)
+    private static let wise = RateService(id: "wise", name: "Wise", source: .wise)
 
     private func googleText(_ pair: RatePair) -> String {
         let google = services.first { $0.source == .market } ?? Self.google
@@ -208,17 +206,12 @@ struct ExchangeRateView: View {
         currency.symbol + (currency.symbolNeedsSpace ? " " : "") + "1"
     }
 
-    private func totalRate(_ currency: Currency) -> String {
-        guard let rate = session.ledger.rates[currency.code] else { return "No rate yet" }
-        return "\(base.symbol) " + ExchangeRate.display(rate)
-    }
-
     /// Live rates for every service and pair; Google's are always fetched so typed services can fall back to them.
     private func loadRates() async {
         guard !loading else { return }
         loading = true
         values = [:]
-        var targets = services.filter { $0.source != .typed }
+        var targets = services.filter { $0.source != .typed && $0.source != .wise } + [Self.wise]
         if !targets.contains(where: { $0.source == .market }) { targets.append(Self.google) }
         for service in targets {
             for pair in pairs {

@@ -22,14 +22,23 @@ struct TransactionDetailView: View {
         let ledger = session.ledger
         return List {
             Section {
-                VStack(spacing: UZSpacing.s) {
-                    AmountText(transaction.amount, style: .plain, font: .system(.largeTitle, weight: .bold),
-                               base: ledger.base, rate: ledger.rate(for: transaction.amount.currency))
-                        .accessibilityIdentifier("detail.amount")
-                    Text(transaction.kind.name + (SpendingRules.isNeutral(transaction.kind) ? " · not spending" : ""))
-                        .font(.subheadline).foregroundStyle(UZColor.label2)
+                // The logo sits left of the amount (owner, 2026-10-19); tap it to add one.
+                HStack(spacing: UZSpacing.l) {
+                    if let payee = transaction.payeeName, transaction.kind == .expense || transaction.kind == .income
+                        || transaction.kind == .refund {
+                        LogoBadge(name: payee) { CategoryTile(group(transaction), size: 64) }
+                    } else {
+                        CategoryTile(group(transaction), size: 64).clipShape(.circle)
+                    }
+                    VStack(alignment: .leading, spacing: UZSpacing.xs) {
+                        AmountText(transaction.amount, style: .plain, font: .system(.largeTitle, weight: .bold),
+                                   base: ledger.base, rate: ledger.rate(for: transaction.amount.currency))
+                            .accessibilityIdentifier("detail.amount")
+                        Text(transaction.kind.name + (SpendingRules.isNeutral(transaction.kind) ? " · not spending" : ""))
+                            .font(.subheadline).foregroundStyle(UZColor.label2)
+                    }
+                    Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity)
                 .padding(.vertical, UZSpacing.m)
             }
             Section {
@@ -72,9 +81,6 @@ struct TransactionDetailView: View {
             }
             TagsSection(session: session, transactionID: transaction.id)
             ReceiptsSection(session: session, transactionID: transaction.id)
-            if let payee = transaction.payeeName, transaction.kind == .expense || transaction.kind == .income {
-                LogoSection(name: payee, note: "Used for every transaction and bill from \(payee), past and future.")
-            }
             Section {
                 if AddSheet.kinds.contains(transaction.kind) {
                     Button("Edit") { session.openAdd(.edit(transaction)) }
@@ -132,6 +138,15 @@ struct TransactionDetailView: View {
             Text("Split \(split.method.name.lowercased())")
         }
         .accessibilityIdentifier("detail.split")
+    }
+
+    /// The same icon as the row in Activity.
+    private func group(_ transaction: MoneyTransaction) -> CategoryKind {
+        switch transaction.kind {
+        case .transfer: .transfer
+        case .loanOut, .loanIn, .repayment, .settlement: .people
+        default: session.ledger.category(transaction.categoryID)?.group ?? .other
+        }
     }
 
     private func label(for role: LegRole) -> String {
