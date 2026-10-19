@@ -74,6 +74,12 @@ public struct RootView: View {
             if case .shared(let group, let person) = session.addRequest {
                 SharedExpenseSheet(session: session, group: group, person: person).sessionErrors(session)
                     .interactiveDismissDisabled()
+            } else if case .editShared(let transaction) = session.addRequest {
+                SharedExpenseSheet(session: session, editing: transaction).sessionErrors(session)
+                    .interactiveDismissDisabled()
+            } else if case .repeatShared(let transaction) = session.addRequest {
+                SharedExpenseSheet(session: session, copying: transaction).sessionErrors(session)
+                    .interactiveDismissDisabled()
             } else {
                 // Cancel or Save closes it; a stray swipe no longer loses what you typed (owner, 2026-10-14).
                 AddSheet(session: session).sessionErrors(session)

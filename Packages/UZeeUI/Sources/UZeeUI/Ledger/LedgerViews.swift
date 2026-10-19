@@ -140,6 +140,9 @@ struct TransactionRow: View {
         if transaction.myShare != transaction.amount, let detail = ActivityText.detail(transaction) {
             // "You paid Rs 60,000 · your share Rs 30,000" (TXN-021).
             parts.append(detail)
+        } else if transaction.legs.isEmpty, transaction.kind == .expense {
+            // Someone else paid all of it and you owe them: no account moved, so say so (owner, 2026-10-19).
+            parts.append("Someone else paid · you owe it")
         }
         if transaction.status == .pending { parts.append("Pending") }
         if accountID == nil, transaction.kind != .transfer,

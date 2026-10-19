@@ -36,6 +36,8 @@ struct AddSheet: View {
     @State private var problem: String?
     /// Split with people or a group (SPL-03); nil = not split.
     @State private var splitDraft: SplitDraft?
+    /// Set once saved, so a second tap while the sheet closes can't add it twice.
+    @State private var didSave = false
     @State private var reviewSplit: Split?
     /// The edited transaction had a split, so saving without one removes it.
     @State private var hadSplit = false
@@ -643,14 +645,14 @@ struct AddSheet: View {
             kind = .transfer
             accountID = defaultAccountID()
             amountFocused = true
-        case .edit(let transaction):
+        case .edit(let transaction), .editShared(let transaction):
             editing = transaction
             fill(from: transaction, keepDate: true)
             tagIDs = session.tagMap[transaction.id] ?? []
             tagsBefore = tagIDs
             splitDraft = session.people.split(for: transaction.id).map { SplitDraft($0) }
             hadSplit = splitDraft != nil
-        case .repeatOf(let transaction):
+        case .repeatOf(let transaction), .repeatShared(let transaction):
             fill(from: transaction, keepDate: false)
             splitDraft = session.people.split(for: transaction.id).map { SplitDraft($0) }
         case .shared(let group, let person):
@@ -736,10 +738,12 @@ struct AddSheet: View {
 
     /// Saves straight away; the toast's Undo takes it back (no second "Save this?" step).
     private func commit(_ transaction: MoneyTransaction) {
+        guard !didSave else { return }
         let saved = reviewSplit != nil || hadSplit
             ? session.save(transaction, split: reviewSplit, isNew: editing == nil)
             : session.save(transaction, isNew: editing == nil)
         if saved {
+            didSave = true
             attachReceipt(to: transaction.id)
             applyTags(to: transaction.id)
             session.isAddPresented = false

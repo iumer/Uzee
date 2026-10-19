@@ -351,8 +351,18 @@ public final class AppSession {
     }
 
     public func openAdd(_ request: AddRequest) {
+        var request = request
+        // Every Edit of a shared expense, from any list, reopens the People form so the split stays editable.
+        if case .edit(let transaction) = request, isSharedExpense(transaction) { request = .editShared(transaction) }
+        if case .repeatOf(let transaction) = request, isSharedExpense(transaction) { request = .repeatShared(transaction) }
         addRequest = request
         isAddPresented = true
+    }
+
+    /// An expense split with at least one other person: made and edited on the People form.
+    public func isSharedExpense(_ transaction: MoneyTransaction) -> Bool {
+        guard transaction.kind == .expense, let split = people.split(for: transaction.id) else { return false }
+        return split.people.contains { $0 != people.selfID }
     }
 
     /// Saves a new or edited transaction, then offers Undo for 5 seconds (AUD-13, TXN-013).
@@ -607,6 +617,10 @@ public enum AddRequest: Equatable, Sendable {
     case new
     case transfer
     case edit(MoneyTransaction)
+    /// Editing an expense shared with people: the People form it was made with, not Add (owner, 2026-10-19).
+    case editShared(MoneyTransaction)
+    /// "Add again today" on a shared expense, on the People form.
+    case repeatShared(MoneyTransaction)
     /// "Repeat this": same details, today's date, a new transaction (TXN-014).
     case repeatOf(MoneyTransaction)
     /// "Add shared expense" from People: an expense split with a group or a person (SPL-03).

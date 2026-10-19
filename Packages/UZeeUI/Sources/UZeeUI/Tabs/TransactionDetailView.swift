@@ -56,10 +56,19 @@ struct TransactionDetailView: View {
             if let person = session.people.person(transaction.counterpartyID) {
                 Section {
                     NavigationLink(value: Route.person(person.id)) { LabeledContent("Person", value: person.name) }
+                    // A lend or borrow opened from Activity leads to its loan page, where payments and notes are.
+                    if let loan = loanID(for: transaction) {
+                        NavigationLink(value: Route.loan(loan)) { Text("Open the loan") }
+                            .accessibilityIdentifier("detail.openLoan")
+                    }
                     if let group = session.people.group(transaction.groupID) {
                         NavigationLink(value: Route.group(group.id)) { LabeledContent("Group", value: group.name) }
                     }
                 }
+            }
+            // A loan's notes live on its loan page ("Open the loan"), so a lend, borrow or repayment doesn't get a second set.
+            if withPeople(transaction), loanID(for: transaction) == nil {
+                EntryNotesSection(session: session, transactionID: transaction.id)
             }
             TagsSection(session: session, transactionID: transaction.id)
             ReceiptsSection(session: session, transactionID: transaction.id)
@@ -131,6 +140,18 @@ struct TransactionDetailView: View {
         case .transferOut: "From"
         case .transferIn: "To"
         }
+    }
+
+    /// Shared with someone, or money between you and a person: these get notes, like a loan (owner, 2026-10-19).
+    private func withPeople(_ transaction: MoneyTransaction) -> Bool {
+        transaction.counterpartyID != nil || session.isSharedExpense(transaction)
+            || (session.people.split(for: transaction.id)?.people.contains { $0 != session.people.selfID } ?? false)
+    }
+
+    private func loanID(for transaction: MoneyTransaction) -> UUID? {
+        session.people.loans.first { loan in
+            loan.transactionID == transaction.id || loan.payments.contains { $0.transactionID == transaction.id }
+        }?.id
     }
 
     private func canTrack(_ transaction: MoneyTransaction) -> Bool {

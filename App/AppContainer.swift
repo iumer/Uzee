@@ -259,7 +259,10 @@ final class AppContainer {
                 try store.settle(personID: person, groupID: group, amount: amount, iPaid: iPaid, accountID: account, on: day(date), at: date)
             },
             addLoanNote: { text, loan in _ = try store.addNote(text, loanID: loan) },
-            deleteLoanNote: { try store.deleteNote($0) }
+            deleteLoanNote: { try store.deleteNote($0) },
+            entryNotes: { try store.entryNotes(transactionID: $0) },
+            addEntryNote: { text, transaction in _ = try store.addEntryNote(text, transactionID: transaction) },
+            deleteEntryNote: { try store.deleteEntryNote($0) }
         )
     }
 

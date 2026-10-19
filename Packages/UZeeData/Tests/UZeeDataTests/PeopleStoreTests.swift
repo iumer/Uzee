@@ -105,6 +105,27 @@ struct PeopleStoreTests {
         #expect(try balances(world).0.net(of: usama.id) == rs(15_000))
     }
 
+    @Test("Notes on a shared expense: add, list oldest first, delete; empty refused")
+    func entryNotes() throws {
+        let world = try empty()
+        let cash = try world.ledger.createAccount(name: "Cash", kind: .cash, currency: .pkr, openingBalance: rs(60_000), openingDate: day(10, 1))
+        let friend = try world.people.createPerson(name: "Test Friend")
+        let me = try world.people.selfID()
+        let expense = MoneyTransaction(kind: .expense, occurredAt: Date(), localDate: day(10, 5), timeZoneID: "Asia/Karachi",
+                                       amount: rs(50_000), payeeName: "Car repair",
+                                       legs: [TransactionLeg(accountID: cash.id, amount: rs(-50_000), role: .main)])
+        let split = Split(transactionID: expense.id, method: .equal, payers: [SplitPayer(personID: me, amount: rs(50_000))],
+                          shares: [SplitShare(personID: me, share: rs(25_000)), SplitShare(personID: friend.id, share: rs(25_000))])
+        try world.people.save(expense, split: split)
+        let first = try world.people.addEntryNote("Paid at the workshop", transactionID: expense.id, at: Date(timeIntervalSince1970: 1_790_000_000))
+        try world.people.addEntryNote("Half back next week", transactionID: expense.id, at: Date(timeIntervalSince1970: 1_790_000_100))
+        #expect(try world.people.entryNotes(transactionID: expense.id).map(\.text) == ["Paid at the workshop", "Half back next week"])
+        try world.people.deleteEntryNote(first.id)
+        #expect(try world.people.entryNotes(transactionID: expense.id).map(\.text) == ["Half back next week"])
+        #expect(throws: PeopleStore.Problem.emptyNote) { try world.people.addEntryNote("  ", transactionID: expense.id) }
+        #expect(throws: PeopleStore.Problem.notFound) { try world.people.addEntryNote("x", transactionID: UUID()) }
+    }
+
     @Test("LOAN-009 a debt kept as a record: I owe Ammi Rs 150,000, pay Rs 50,000 outside my accounts, Rs 100,000 left")
     func debtPaidDownWithoutAccount() throws {
         let world = try empty()

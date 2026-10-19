@@ -210,6 +210,40 @@ public struct PeopleStore: Sendable {
         return note
     }
 
+    /// Notes on a shared expense, settle-up or repayment (owner, 2026-10-19), oldest first, like a loan's.
+    public func entryNotes(transactionID: UUID) throws -> [LoanNote] {
+        try database.writer.read { db in
+            try Row.fetchAll(db, sql: "SELECT * FROM entry_note WHERE txn_id = ? AND deleted_at IS NULL ORDER BY created_at",
+                             arguments: [transactionID.uuidString]).compactMap { row in
+                guard let id = UUID(uuidString: row["id"]) else { return nil }
+                return LoanNote(id: id, text: row["body"], createdAt: Timestamp.date(row["created_at"]))
+            }
+        }
+    }
+
+    @discardableResult
+    public func addEntryNote(_ text: String, transactionID: UUID, at time: Date = Date()) throws -> LoanNote {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { throw Problem.emptyNote }
+        let note = LoanNote(text: body, createdAt: time)
+        try database.writer.write { db in
+            guard let sample = try Bool.fetchOne(db, sql: "SELECT is_sample FROM txn WHERE id = ? AND deleted_at IS NULL",
+                                                 arguments: [transactionID.uuidString]) else { throw Problem.notFound }
+            let stamp = Timestamp.from(time)
+            try db.execute(sql: "INSERT INTO entry_note (id, created_at, updated_at, is_sample, txn_id, body) VALUES (?, ?, ?, ?, ?, ?)",
+                           arguments: [note.id.uuidString, stamp, stamp, sample, transactionID.uuidString, body])
+        }
+        return note
+    }
+
+    public func deleteEntryNote(_ noteID: UUID) throws {
+        try database.writer.write { db in
+            try db.execute(sql: "UPDATE entry_note SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+                           arguments: [Timestamp.now(), Timestamp.now(), noteID.uuidString])
+            guard db.changesCount == 1 else { throw Problem.notFound }
+        }
+    }
+
     public func deleteNote(_ noteID: UUID) throws {
         try database.writer.write { db in
             try db.execute(sql: "UPDATE loan_note SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",

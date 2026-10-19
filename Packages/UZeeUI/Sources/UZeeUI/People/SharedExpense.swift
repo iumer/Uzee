@@ -21,6 +21,10 @@ struct SharedExpenseSheet: View {
     @State private var note = ""
     @State private var problem: String?
     @FocusState private var focus: Field?
+    /// The shared expense being edited; saving changes it instead of adding another (owner, 2026-10-19).
+    private var editing: MoneyTransaction?
+    /// Set once saved, so a second tap while the sheet closes can't add it twice.
+    @State private var didSave = false
 
     private enum Field { case what, amount }
 
@@ -44,6 +48,27 @@ struct SharedExpenseSheet: View {
         let lastUsed = active.first { $0.id == last && $0.currency == base }
         _accountID = State(initialValue: lastUsed?.id ?? active.first { $0.currency == base }?.id ?? active.first?.id)
         _chosenCurrency = State(initialValue: base)
+    }
+
+    /// Edit a shared expense with the form it was made on: same people, amount and split, which can all change.
+    init(session: AppSession, editing transaction: MoneyTransaction) {
+        self.init(session: session, group: transaction.groupID, person: nil)
+        editing = transaction
+        if let split = session.people.split(for: transaction.id) { _draft = State(initialValue: SplitDraft(split)) }
+        _what = State(initialValue: transaction.payeeName ?? "")
+        _amountText = State(initialValue: MarkPaidSheet.plain(transaction.amount))
+        _categoryID = State(initialValue: transaction.categoryID)
+        _chosenCurrency = State(initialValue: transaction.amount.currency)
+        _date = State(initialValue: transaction.occurredAt)
+        _note = State(initialValue: transaction.note ?? "")
+        if let account = transaction.legs.first(where: { $0.role == .main })?.accountID { _accountID = State(initialValue: account) }
+    }
+
+    /// "Add again today" on a shared expense: the same people, split and amount as a new expense, dated today.
+    init(session: AppSession, copying transaction: MoneyTransaction) {
+        self.init(session: session, editing: transaction)
+        editing = nil
+        _date = State(initialValue: Date())
     }
 
     private var me: UUID { session.people.selfID }
@@ -137,7 +162,7 @@ struct SharedExpenseSheet: View {
                     }
                 }
             }
-            .navigationTitle("Add an expense")
+            .navigationTitle(editing == nil ? "Add an expense" : "Edit expense")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -237,6 +262,7 @@ struct SharedExpenseSheet: View {
     }
 
     private func save() {
+        guard !didSave else { return }
         problem = nil
         let amount: Money
         do {
@@ -256,9 +282,10 @@ struct SharedExpenseSheet: View {
         let transaction = TransactionDraft(
             kind: .expense, status: .posted, amount: amount, accountID: checkedAccountID, toAccountID: nil, receivedAmount: nil,
             categoryID: categoryID ?? fallbackCategory, payeeName: what.trimmingCharacters(in: .whitespaces), note: note,
-            occurredAt: date, timeZone: .current, source: .manual)
+            occurredAt: date, timeZone: editing.flatMap { TimeZone(identifier: $0.timeZoneID) } ?? .current,
+            source: editing?.source ?? .manual)
         do {
-            let built = try TransactionValidator.build(transaction, accounts: ledger.accounts, base: ledger.base, existing: nil)
+            let built = try TransactionValidator.build(transaction, accounts: ledger.accounts, base: ledger.base, existing: editing)
             let split: Split
             do {
                 split = try draft.build(total: built.amount, transactionID: built.id)
@@ -266,7 +293,10 @@ struct SharedExpenseSheet: View {
                 problem = SplitText.problem(error)
                 return
             }
-            if session.save(built, split: split, isNew: true) { close() }
+            if session.save(built, split: split, isNew: editing == nil) {
+                didSave = true
+                close()
+            }
         } catch {
             problem = ProblemText.message(error)
         }

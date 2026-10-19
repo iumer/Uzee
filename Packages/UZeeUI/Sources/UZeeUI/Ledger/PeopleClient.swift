@@ -22,6 +22,10 @@ public struct PeopleClient: Sendable {
     /// Dated notes on a loan, like a chat (owner, 2026-10-15).
     public var addLoanNote: @Sendable (_ text: String, _ loan: UUID) throws -> Void
     public var deleteLoanNote: @Sendable (_ note: UUID) throws -> Void
+    /// The same notes on a shared expense or any entry with a person (owner, 2026-10-19).
+    public var entryNotes: @Sendable (_ transaction: UUID) throws -> [LoanNote]
+    public var addEntryNote: @Sendable (_ text: String, _ transaction: UUID) throws -> Void
+    public var deleteEntryNote: @Sendable (_ note: UUID) throws -> Void
 
     public init(snapshot: @escaping @Sendable () throws -> PeopleSnapshot,
                 createPerson: @escaping @Sendable (String, String?) throws -> Person,
@@ -36,7 +40,10 @@ public struct PeopleClient: Sendable {
                 addExistingBalances: @escaping @Sendable ([BalanceRow]) throws -> Void,
                 settle: @escaping @Sendable (UUID, UUID?, Money, Bool, UUID, Date) throws -> Void,
                 addLoanNote: @escaping @Sendable (String, UUID) throws -> Void = { _, _ in throw CoreError.notFound },
-                deleteLoanNote: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound }) {
+                deleteLoanNote: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
+                entryNotes: @escaping @Sendable (UUID) throws -> [LoanNote] = { _ in [] },
+                addEntryNote: @escaping @Sendable (String, UUID) throws -> Void = { _, _ in throw CoreError.notFound },
+                deleteEntryNote: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound }) {
         self.snapshot = snapshot
         self.createPerson = createPerson
         self.updatePerson = updatePerson
@@ -51,6 +58,9 @@ public struct PeopleClient: Sendable {
         self.settle = settle
         self.addLoanNote = addLoanNote
         self.deleteLoanNote = deleteLoanNote
+        self.entryNotes = entryNotes
+        self.addEntryNote = addEntryNote
+        self.deleteEntryNote = deleteEntryNote
     }
 
     public static let unavailable = PeopleClient(

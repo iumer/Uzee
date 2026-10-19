@@ -128,6 +128,15 @@ public final class AppDatabase: Sendable {
                 try db.execute(sql: "UPDATE txn SET payee_id = ?, updated_at = ? WHERE id = ?", arguments: [payeeID, now, id])
             }
         }
+        // 0.15.6: notes on a shared expense or any entry with a person, like a loan's (owner, 2026-10-19).
+        migrator.registerMigration("v16_entry_notes") { db in
+            try db.create(table: "entry_note") { t in
+                MoneySchema.standardColumns(t)
+                t.column("txn_id", .text).notNull().references("txn", onDelete: .cascade)
+                t.column("body", .text).notNull()
+            }
+            try db.execute(sql: "CREATE INDEX entry_note_txn ON entry_note(txn_id)")
+        }
         return migrator
     }
 
