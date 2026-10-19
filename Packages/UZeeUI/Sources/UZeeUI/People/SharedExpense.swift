@@ -64,6 +64,22 @@ struct SharedExpenseSheet: View {
         if let account = transaction.legs.first(where: { $0.role == .main })?.accountID { _accountID = State(initialValue: account) }
     }
 
+    /// Split tapped on the Add sheet: carries over what was typed there.
+    init(session: AppSession, prefill: SharedPrefill) {
+        if let editing = prefill.editing {
+            self.init(session: session, editing: editing)
+        } else {
+            self.init(session: session, group: nil, person: nil)
+        }
+        _what = State(initialValue: prefill.what)
+        _amountText = State(initialValue: prefill.amountText)
+        if let currency = prefill.currency { _chosenCurrency = State(initialValue: currency) }
+        if let category = prefill.categoryID { _categoryID = State(initialValue: category) }
+        _date = State(initialValue: prefill.date)
+        _note = State(initialValue: prefill.note)
+        if let account = prefill.accountID { _accountID = State(initialValue: account) }
+    }
+
     /// "Add again today" on a shared expense: the same people, split and amount as a new expense, dated today.
     init(session: AppSession, copying transaction: MoneyTransaction) {
         self.init(session: session, editing: transaction)
@@ -170,7 +186,7 @@ struct SharedExpenseSheet: View {
                         .accessibilityIdentifier("shared.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
+                    Button("Save") { afterTyping(save) }
                         .fontWeight(.semibold)
                         .disabled(!hasPeople || total.minorUnits <= 0)
                         .accessibilityIdentifier("shared.save")
@@ -375,7 +391,7 @@ struct WithPeopleField: View {
     private var matchingPeople: [Person] {
         Array(session.people.others
             .filter { $0.archivedAt == nil && !chosen.contains($0.id) && (trimmed.isEmpty || $0.name.localizedCaseInsensitiveContains(trimmed)) }
-            .prefix(trimmed.isEmpty ? 6 : 8))
+            .prefix(50))
     }
 
     private var matchingGroups: [SplitGroup] {

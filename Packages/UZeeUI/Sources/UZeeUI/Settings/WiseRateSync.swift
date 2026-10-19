@@ -76,4 +76,40 @@ extension AppSession {
         defaults.set(added.sorted(), forKey: Self.providersAddedKey)
         defaults.set(removed.sorted(), forKey: Self.providersRemovedKey)
     }
+
+    // MARK: Services and currency pairs (owner, 2026-10-19)
+
+    static let rateServicesKey = "uzee.rate.services"
+    static let ratePairsKey = "uzee.rate.pairs"
+
+    /// The services on Settings › Exchange rate, in order. The first time, Google and the services shown before.
+    var rateServices: [RateService] {
+        get {
+            if let data = UserDefaults.standard.data(forKey: Self.rateServicesKey),
+               let list = try? JSONDecoder().decode([RateService].self, from: data) { return list }
+            return RateService.starting(with: rateProviders)
+        }
+        set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: Self.rateServicesKey) }
+    }
+
+    /// The currency pairs shown for every service. The first time, each foreign account currency into the base.
+    var ratePairs: [RatePair] {
+        get {
+            if let data = UserDefaults.standard.data(forKey: Self.ratePairsKey),
+               let list = try? JSONDecoder().decode([RatePair].self, from: data) { return list }
+            return RatePair.defaults(accountCurrencies: ledger.activeAccounts.map(\.currency), base: ledger.base)
+        }
+        set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: Self.ratePairsKey) }
+    }
+
+    /// A service's live rate for one pair, or nil when it can't be read (typed services return their typed rate).
+    func liveRate(_ service: RateService, _ pair: RatePair) async -> Decimal? {
+        guard let from = pair.fromCurrency, let to = pair.toCurrency else { return nil }
+        switch service.source {
+        case .market: return await smart.marketRate(from, to)
+        case .wise: return await smart.wiseRate(from, to, nil)
+        case .westernUnion: return await smart.providerRate(.westernUnion, from, to)
+        case .typed: return service.typed[pair.id]
+        }
+    }
 }

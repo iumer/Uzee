@@ -127,7 +127,7 @@ struct RecurringFormSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save).fontWeight(.semibold).accessibilityIdentifier("recurringForm.save")
+                    Button("Save") { afterTyping(save) }.fontWeight(.semibold).accessibilityIdentifier("recurringForm.save")
                 }
             }
             .onAppear(perform: load)

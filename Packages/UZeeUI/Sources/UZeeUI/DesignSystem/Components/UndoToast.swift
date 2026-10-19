@@ -112,3 +112,25 @@ extension View {
         modifier(ToastOverlay(center: center))
     }
 }
+
+/// Closes the keyboard, then runs `work` on the next turn, so the last digit typed reaches the form before it
+/// saves (owner, 2026-10-19: typing fast and tapping Save could drop it, 4567 → 456).
+/// A second tap while one is waiting is ignored, so a double tap can't save twice.
+@MainActor
+func afterTyping(_ work: @escaping @MainActor () -> Void) {
+    guard !TypingGate.waiting else { return }
+    TypingGate.waiting = true
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(150))
+        work()
+        // Keep ignoring taps a moment longer, while the sheet closes.
+        try? await Task.sleep(for: .milliseconds(350))
+        TypingGate.waiting = false
+    }
+}
+
+@MainActor
+enum TypingGate {
+    static var waiting = false
+}

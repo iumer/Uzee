@@ -262,7 +262,16 @@ final class AppContainer {
             deleteLoanNote: { try store.deleteNote($0) },
             entryNotes: { try store.entryNotes(transactionID: $0) },
             addEntryNote: { text, transaction in _ = try store.addEntryNote(text, transactionID: transaction) },
-            deleteEntryNote: { try store.deleteEntryNote($0) }
+            deleteEntryNote: { try store.deleteEntryNote($0) },
+            updateLoan: { loan, amount, date, account, note in
+                try store.updateLoan(loan, principal: amount, date: day(date), accountID: account, note: note, at: date)
+            },
+            deleteLoanRecord: { try store.deleteLoanRecord($0) },
+            restoreLoanRecord: { try store.restoreLoanRecord($0) },
+            deleteLoanPayment: { try store.deleteLoanPayment($0) },
+            restoreLoanPayment: { try store.restoreLoanPayment($0) },
+            deletePerson: { try store.deletePerson($0) },
+            restorePerson: { try store.restorePerson($0) }
         )
     }
 

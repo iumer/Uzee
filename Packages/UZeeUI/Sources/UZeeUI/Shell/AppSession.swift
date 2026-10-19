@@ -359,6 +359,22 @@ public final class AppSession {
         isAddPresented = true
     }
 
+    /// Which page an entry opens on (owner, 2026-10-19): a lend, borrow or repayment on its loan's page; an
+    /// expense shared with someone or a settle-up on the People entry page; anything else on the usual one.
+    public enum EntryPage: Equatable { case loan(UUID), person, plain }
+
+    public func entryPage(for transactionID: UUID) -> EntryPage {
+        // A settle-up opens on its own page even when part of it paid off a loan.
+        if transactions.first(where: { $0.id == transactionID })?.kind == .settlement { return .person }
+        if let loan = people.loans.first(where: { loan in
+            loan.transactionID == transactionID || loan.payments.contains { $0.transactionID == transactionID }
+        }) { return .loan(loan.id) }
+        guard let transaction = transactions.first(where: { $0.id == transactionID }) else { return .plain }
+        if transaction.kind == .settlement || isSharedExpense(transaction) { return .person }
+        if let split = people.split(for: transactionID), split.people.contains(where: { $0 != people.selfID }) { return .person }
+        return .plain
+    }
+
     /// An expense split with at least one other person: made and edited on the People form.
     public func isSharedExpense(_ transaction: MoneyTransaction) -> Bool {
         guard transaction.kind == .expense, let split = people.split(for: transaction.id) else { return false }
@@ -531,6 +547,43 @@ public final class AppSession {
         }
     }
 
+    /// Deletes a loan with Undo: one that moved money goes with its transaction, a record on its own.
+    @discardableResult
+    public func deleteLoan(_ loan: Loan) -> Bool {
+        if let id = loan.transactionID, let transaction = transactions.first(where: { $0.id == id }) {
+            delete(transaction)
+            return true
+        }
+        guard perform("Couldn't delete. Nothing was changed. Try again.", { try peopleClient.deleteLoanRecord(loan.id) }) else { return false }
+        toasts.show("Deleted") { [weak self] in
+            guard let self else { return }
+            _ = self.perform("Couldn't undo. Try again.", { try self.peopleClient.restoreLoanRecord(loan.id) })
+        }
+        return true
+    }
+
+    /// Deletes a payment kept as a record (no transaction), with Undo.
+    @discardableResult
+    public func deleteLoanPayment(_ id: UUID) -> Bool {
+        guard perform("Couldn't delete. Nothing was changed. Try again.", { try peopleClient.deleteLoanPayment(id) }) else { return false }
+        toasts.show("Deleted") { [weak self] in
+            guard let self else { return }
+            _ = self.perform("Couldn't undo. Try again.", { try self.peopleClient.restoreLoanPayment(id) })
+        }
+        return true
+    }
+
+    /// Removes a settled person from People, with Undo (owner, 2026-10-19). Their old entries keep their name.
+    @discardableResult
+    public func deletePerson(_ person: Person) -> Bool {
+        guard perform("Couldn't delete \(person.name). Try again.", { try peopleClient.deletePerson(person.id) }) else { return false }
+        toasts.show("\(person.name) deleted") { [weak self] in
+            guard let self else { return }
+            _ = self.perform("Couldn't undo. Try again.", { try self.peopleClient.restorePerson(person.id) })
+        }
+        return true
+    }
+
     /// Brings a deleted transaction back with its legs, tags and receipts.
     public func restore(_ id: UUID, announce: Bool = true) {
         if perform("Couldn't restore. Try again.", { try activity.restore(id) }), announce {
@@ -612,6 +665,18 @@ public final class AppSession {
     }
 }
 
+/// What the Add sheet hands to the People form when Split is tapped.
+public struct SharedPrefill: Equatable, Sendable {
+    public var what: String = ""
+    public var amountText: String = ""
+    public var currency: Currency?
+    public var categoryID: UUID?
+    public var date: Date = Date()
+    public var note: String = ""
+    public var accountID: UUID?
+    public var editing: MoneyTransaction?
+}
+
 /// How the Add sheet starts.
 public enum AddRequest: Equatable, Sendable {
     case new
@@ -621,6 +686,8 @@ public enum AddRequest: Equatable, Sendable {
     case editShared(MoneyTransaction)
     /// "Add again today" on a shared expense, on the People form.
     case repeatShared(MoneyTransaction)
+    /// Split tapped on the Add sheet: the People form, with what was typed there (owner, 2026-10-19).
+    case sharedPrefill(SharedPrefill)
     /// "Repeat this": same details, today's date, a new transaction (TXN-014).
     case repeatOf(MoneyTransaction)
     /// "Add shared expense" from People: an expense split with a group or a person (SPL-03).

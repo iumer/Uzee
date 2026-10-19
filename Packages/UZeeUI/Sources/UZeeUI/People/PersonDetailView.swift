@@ -8,29 +8,33 @@ struct PersonDetailView: View {
     @Bindable var session: AppSession
     let personID: UUID
     @State private var sheet: PersonSheet?
+    @State private var askingDelete = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let model = PeopleModel(session: session)
         let balance = session.balances.balance(of: personID)
         let net = model.toBase(balance.net)
         let loans = session.people.loans.filter { $0.personID == personID }
-        ScrollView {
-            VStack(alignment: .leading, spacing: UZSpacing.xl) {
-                if let person = session.people.person(personID) {
+        // One list: the balance, the buttons, then History with loans in it (owner, 2026-10-19: no separate Loans
+        // section). A List so every entry can be swiped left to delete.
+        List {
+            if let person = session.people.person(personID), session.people.isListed(personID) {
+                Section {
                     header(person, net: net, balance: balance, model: model)
                     actions(person, net: net, loans: loans)
-                    historyCard(model)
-                    let open = loans.filter { LoanCalculator.status($0) == .open || LoanCalculator.status($0) == .partiallyPaid }
-                    if !open.isEmpty { loansCard(open) }
-                    Text("Loans and shared expenses with \(person.name) add up into this one balance.")
-                        .font(.footnote).foregroundStyle(UZColor.label2)
-                } else {
-                    EmptyStateView("Not found", systemImage: "person.crop.circle.badge.questionmark", description: "This person was removed.")
                 }
+                .listRowInsets(EdgeInsets(top: UZSpacing.m, leading: 0, bottom: UZSpacing.m, trailing: 0))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                historySection(model, person: person)
+            } else {
+                EmptyStateView("Not found", systemImage: "person.crop.circle.badge.questionmark", description: "This person was removed.")
+                    .listRowBackground(Color.clear)
             }
-            .padding(.horizontal, UZSpacing.xxl)
-            .padding(.bottom, UZSpacing.xxl)
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .background(UZColor.bg)
         .navigationTitle(session.people.person(personID)?.name ?? "Person")
         .navigationBarTitleDisplayMode(.inline)
@@ -49,6 +53,8 @@ struct PersonDetailView: View {
                     if let person = session.people.person(personID) {
                         Button(person.archivedAt == nil ? "Archive" : "Unarchive", systemImage: "archivebox") { toggleArchive(person) }
                             .disabled(person.archivedAt == nil && !net.isZero)
+                        Button("Delete \(person.name)", systemImage: "trash", role: .destructive) { askingDelete = true }
+                            .accessibilityIdentifier("person.delete")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -56,6 +62,22 @@ struct PersonDetailView: View {
                 .accessibilityLabel("More")
                 .accessibilityIdentifier("person.more")
             }
+        }
+        // Settled people can be deleted; anyone with money still between you is settled up first (owner, 2026-10-19).
+        .confirmationDialog(deleteTitle(net), isPresented: Binding(get: { askingDelete && net.isZero }, set: { askingDelete = $0 }),
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let person = session.people.person(personID), session.deletePerson(person) { dismiss() }
+            }
+            .accessibilityIdentifier("person.confirmDelete")
+        } message: {
+            Text("They're removed from People. Their past entries stay in Activity. You can undo it.")
+        }
+        .alert(deleteTitle(net), isPresented: Binding(get: { askingDelete && !net.isZero }, set: { askingDelete = $0 })) {
+            Button("Settle up") { sheet = .settle }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text(unsettledMessage(net))
         }
         .sheet(item: $sheet) { sheet in
             switch sheet {
@@ -96,7 +118,8 @@ struct PersonDetailView: View {
             HStack(spacing: UZSpacing.m) {
                 if !net.isZero {
                     Button { sheet = .settle } label: {
-                        Label("Settle up", systemImage: "checkmark.circle").frame(maxWidth: .infinity)
+                        // White, or the tick takes the list's blue and disappears on the blue button.
+                        Label("Settle up", systemImage: "checkmark.circle").frame(maxWidth: .infinity).foregroundStyle(.white)
                     }
                     .buttonStyle(.glassProminent)
                     .accessibilityIdentifier("person.settle")
@@ -117,88 +140,57 @@ struct PersonDetailView: View {
         }
     }
 
-    private func loansCard(_ loans: [Loan]) -> some View {
-        VStack(alignment: .leading, spacing: UZSpacing.m) {
-            SectionHeader("Loans")
-            UZCard {
-                VStack(spacing: 0) {
-                    ForEach(loans) { loan in
-                        // Tap a loan for its date, payments and notes (owner, 2026-10-15).
-                        NavigationLink(value: Route.loan(loan.id)) { loanRow(loan) }
-                            .buttonStyle(.plain)
-                        if loan.id != loans.last?.id { Divider() }
-                    }
-                }
-            }
-        }
+    private func deleteTitle(_ net: Money) -> String {
+        let name = session.people.person(personID)?.name ?? "this person"
+        return net.isZero ? "Delete \(name)?" : "Settle up with \(name) first"
     }
 
-    private func loanRow(_ loan: Loan) -> some View {
-        let status = LoanCalculator.status(loan)
-        let today = LocalDate(Date(), in: .current)
-        var meta = [loan.startDate.listTitle(today: today)]
-        if let due = loan.dueDate { meta.append("due \(due.listTitle(today: today))") }
-        if loan.isOpeningBalance { meta.append("existing balance") }
-        let interest = LoanCalculator.interest(loan, asOf: today)
-        if !interest.isZero { meta.append("interest so far \(MoneyFormatter.string(interest))") }
-        return HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(loan.direction == .lent ? "Lent" : "Borrowed") \(MoneyFormatter.string(loan.principal))").font(.body.weight(.semibold))
-                Text(meta.joined(separator: " · ")).font(.footnote).foregroundStyle(UZColor.label2)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(status.name).font(.caption.weight(.semibold))
-                    .foregroundStyle(status == .settled || status == .writtenOff ? UZColor.label2 : UZColor.warning)
-                if status == .open || status == .partiallyPaid {
-                    // Red: money you owe them. Green: money they owe you.
-                    Text("\(MoneyFormatter.string(LoanCalculator.outstanding(loan))) left").font(.subheadline.weight(.semibold)).monospacedDigit()
-                        .foregroundStyle(loan.direction == .lent ? UZColor.positive : UZColor.negative)
-                }
-            }
-        }
-        .padding(.vertical, UZSpacing.m)
-        .contentShape(.rect)
-        .contextMenu {
-            if status == .open || status == .partiallyPaid {
-                Button(loan.direction == .lent ? "They paid you" : "You paid back", systemImage: "arrow.uturn.backward") { sheet = .repay(loan.id) }
-            }
-            Button("Due date and interest", systemImage: "calendar") { sheet = .due(loan.id) }
-            Button(loan.writtenOffAt == nil ? "Write off" : "Undo write-off", systemImage: "xmark.seal") {
-                let writeOff = loan.writtenOffAt == nil
-                if session.perform("Couldn't change the loan. Try again.", { try session.peopleClient.setWrittenOff(writeOff, loan.id) }) {
-                    session.toasts.show(writeOff ? "Written off" : "Write-off undone")
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("loan.\(loan.direction.rawValue).\(MoneyFormatter.string(loan.principal))")
+    private func unsettledMessage(_ net: Money) -> String {
+        let name = session.people.person(personID)?.name ?? "They"
+        let amount = MoneyFormatter.string(SplitText.magnitude(net))
+        return net.minorUnits > 0 ? "\(name) still owes you \(amount). Settle up, then you can delete them."
+                                  : "You still owe \(name) \(amount). Settle up, then you can delete them."
     }
 
-    private func historyCard(_ model: PeopleModel) -> some View {
+    /// Every expense, loan and payment with this person, newest first. Swipe left to delete one (with Undo).
+    @ViewBuilder
+    private func historySection(_ model: PeopleModel, person: Person) -> some View {
         let items = history(model)
-        return VStack(alignment: .leading, spacing: UZSpacing.m) {
-            SectionHeader("History")
-            UZCard {
-                if items.isEmpty {
-                    Text("Nothing yet.").foregroundStyle(UZColor.label2)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(items) { item in
-                            if let loan = item.loanID {
-                                NavigationLink(value: Route.loan(loan)) { historyRow(item) }
-                                    .buttonStyle(.plain)
-                            } else if item.opensTransaction {
-                                NavigationLink(value: Route.transaction(item.id)) { historyRow(item) }
-                                    .buttonStyle(.plain)
-                            } else {
-                                historyRow(item)
-                            }
-                            if item.id != items.last?.id { Divider() }
-                        }
+        Section {
+            if items.isEmpty {
+                Text("Nothing yet.").foregroundStyle(UZColor.label2)
+            }
+            ForEach(items) { item in
+                Group {
+                    if let loan = item.loanID {
+                        NavigationLink(value: Route.loan(loan)) { historyRow(item) }
+                    } else if item.opensTransaction {
+                        NavigationLink(value: Route.transaction(item.id)) { historyRow(item) }
+                    } else {
+                        historyRow(item)
                     }
                 }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button("Delete", systemImage: "trash", role: .destructive) { delete(item) }
+                        .accessibilityIdentifier("history.delete")
+                }
+                .accessibilityIdentifier("history.\(item.title)")
             }
+        } header: {
+            Text("History")
+        } footer: {
+            Text("Loans and shared expenses with \(person.name) add up into the balance above. Swipe left on an entry to delete it.")
+        }
+    }
+
+    private func delete(_ item: HistoryItem) {
+        switch item.target {
+        case .transaction(let id):
+            if let transaction = session.transactions.first(where: { $0.id == id }) { session.delete(transaction) }
+        case .loanRecord(let id):
+            if let loan = session.people.loans.first(where: { $0.id == id }) { session.deleteLoan(loan) }
+        case .paymentRecord(let id):
+            session.deleteLoanPayment(id)
         }
     }
 
@@ -240,6 +232,11 @@ struct PersonDetailView: View {
         var opensTransaction = true
         /// A loan opens its own page, with notes.
         var loanID: UUID?
+        /// What a swipe-left Delete removes: the transaction unless it's a record kept without one.
+        var record: DeleteTarget?
+        var target: DeleteTarget { record ?? .transaction(id) }
+
+        enum DeleteTarget { case transaction(UUID), loanRecord(UUID), paymentRecord(UUID) }
     }
 
     /// Everything that moved this balance, newest first, including debts and payments kept as records only.
@@ -256,11 +253,11 @@ struct PersonDetailView: View {
             if transaction.counterpartyID == personID || loanByTransaction[transaction.id]?.personID == personID {
                 switch transaction.kind {
                 case .loanOut:
-                    return HistoryItem(id: transaction.id, title: "You lent \(name)", meta: meta,
+                    return HistoryItem(id: transaction.id, title: "You lent \(name)", meta: loanMeta(meta, loanByTransaction[transaction.id]),
                                        amount: MoneyFormatter.string(transaction.amount), theyOwe: true, caption: "you lent", date: when,
                                        loanID: loanByTransaction[transaction.id]?.id)
                 case .loanIn:
-                    return HistoryItem(id: transaction.id, title: "\(name) lent you", meta: meta,
+                    return HistoryItem(id: transaction.id, title: "\(name) lent you", meta: loanMeta(meta, loanByTransaction[transaction.id]),
                                        amount: MoneyFormatter.string(transaction.amount), theyOwe: false, caption: "you borrowed", date: when,
                                        loanID: loanByTransaction[transaction.id]?.id)
                 case .repayment:
@@ -293,18 +290,26 @@ struct PersonDetailView: View {
             let lent = loan.direction == .lent
             if loan.transactionID == nil {
                 items.append(HistoryItem(id: loan.id, title: lent ? "\(name) owes you" : "You owe \(name)",
-                                         meta: loan.startDate.listTitle(today: today) + " · record",
+                                         meta: loanMeta(loan.startDate.listTitle(today: today) + " · record", loan),
                                          amount: MoneyFormatter.string(loan.principal), theyOwe: lent,
-                                         date: loan.startDate.startDate(in: .current), opensTransaction: false, loanID: loan.id))
+                                         date: loan.startDate.startDate(in: .current), opensTransaction: false, loanID: loan.id,
+                                         record: .loanRecord(loan.id)))
             }
             for payment in loan.payments where payment.transactionID == nil {
                 items.append(HistoryItem(id: payment.id, title: lent ? "\(name) paid you" : "You paid back",
                                          meta: payment.paidOn.listTitle(today: today) + " · record",
                                          amount: "−" + MoneyFormatter.string(payment.amount), theyOwe: lent,
-                                         date: payment.paidOn.startDate(in: .current), opensTransaction: false))
+                                         date: payment.paidOn.startDate(in: .current), opensTransaction: false, loanID: loan.id,
+                                         record: .paymentRecord(payment.id)))
             }
         }
         return items.sorted { $0.date > $1.date }
+    }
+
+    /// "Oct 6 · Easypaisa · Rs 15,000 left" while part of a loan is still open.
+    private func loanMeta(_ meta: String, _ loan: Loan?) -> String {
+        guard let loan, LoanCalculator.status(loan) == .partiallyPaid else { return meta }
+        return meta + " · \(MoneyFormatter.string(LoanCalculator.outstanding(loan))) left"
     }
 
     private func toggleArchive(_ person: Person) {

@@ -7,14 +7,31 @@ import UZeeCore
 struct PeopleView: View {
     @Bindable var session: AppSession
     @State private var sheet: PeopleSheet?
+    /// All, only people with money still between you, or only the settled ones (owner, 2026-10-19).
+    @AppStorage("uzee.people.filter") private var filter: PeopleFilter = .all
 
     var body: some View {
         let model = PeopleModel(session: session)
         ScrollView {
             VStack(alignment: .leading, spacing: UZSpacing.xl) {
                 summaryCard(model)
-                let people = model.rows
-                if people.isEmpty {
+                let all = model.rows
+                let people = all.filter { filter.includes($0.balance) }
+                if !all.isEmpty {
+                    Picker("Show", selection: $filter) {
+                        ForEach(PeopleFilter.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("people.filter")
+                }
+                if !all.isEmpty && people.isEmpty {
+                    UZCard {
+                        Text(filter == .settled ? "Nobody is settled up yet." : "Everyone is settled up.")
+                            .foregroundStyle(UZColor.label2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("people.filterEmpty")
+                } else if people.isEmpty {
                     UZCard {
                         EmptyStateView("No people yet", systemImage: "person.2",
                                        description: "Add someone you lend to, borrow from or split bills with. Each person gets one balance.")
@@ -97,6 +114,27 @@ struct PeopleView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("people.owe")
             }
+        }
+    }
+}
+
+enum PeopleFilter: String, CaseIterable, Identifiable {
+    case all, unsettled, settled
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "All"
+        case .unsettled: "Unsettled"
+        case .settled: "Settled"
+        }
+    }
+
+    func includes(_ balance: Money) -> Bool {
+        switch self {
+        case .all: true
+        case .unsettled: !balance.isZero
+        case .settled: balance.isZero
         }
     }
 }

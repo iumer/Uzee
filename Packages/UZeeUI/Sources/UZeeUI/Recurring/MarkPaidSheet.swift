@@ -82,7 +82,7 @@ struct MarkPaidSheet: View {
                         Section { Label(problem, systemImage: "exclamationmark.circle.fill").foregroundStyle(UZColor.negative) }
                     }
                     Section {
-                        Button(item.type.isIncome ? "Mark received" : "Mark paid", action: save)
+                        Button(item.type.isIncome ? "Mark received" : "Mark paid") { afterTyping(save) }
                             .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
                             .accessibilityIdentifier("markPaid.confirm")

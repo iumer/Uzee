@@ -39,7 +39,7 @@ public enum PlanPart: String, CaseIterable, Hashable, Sendable {
 
     public var title: String {
         switch self {
-        case .toPay: "To pay"
+        case .toPay: "Cash flow"
         case .budget: "Budget"
         case .calendar: "Calendar"
         }

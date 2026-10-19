@@ -146,7 +146,7 @@ struct ExistingBalancesSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save).fontWeight(.semibold).accessibilityIdentifier("existing.save")
+                    Button("Save") { afterTyping(save) }.fontWeight(.semibold).accessibilityIdentifier("existing.save")
                 }
             }
             .onAppear { if rows.count == 1 && rows[0].name.isEmpty { rows[0].name = firstName } }
@@ -357,7 +357,8 @@ struct LoanSheet: View {
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                     Toggle("Due date", isOn: $hasDue)
                     if hasDue { DatePicker("Due", selection: $due, displayedComponents: .date) }
-                    TextField("Note", text: $note)
+                    TextField("What was it for?", text: $note)
+                        .accessibilityIdentifier("loan.note")
                 } footer: {
                     Text(accountID == nil ? "No account money moves. Use this for money already lent or borrowed."
                                           : "Not spending or income. \(name)'s balance updates.")
@@ -371,7 +372,7 @@ struct LoanSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save).fontWeight(.semibold).accessibilityIdentifier("loan.save")
+                    Button("Save") { afterTyping(save) }.fontWeight(.semibold).accessibilityIdentifier("loan.save")
                 }
             }
             .onAppear {
@@ -455,7 +456,7 @@ struct RepaymentSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save).fontWeight(.semibold).accessibilityIdentifier("repay.save")
+                    Button("Save") { afterTyping(save) }.fontWeight(.semibold).accessibilityIdentifier("repay.save")
                 }
             }
             .onAppear {
@@ -534,7 +535,7 @@ struct LoanTermsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).fontWeight(.semibold) }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { afterTyping(save) }.fontWeight(.semibold) }
             }
             .onAppear {
                 guard !didLoad, let loan = session.people.loans.first(where: { $0.id == loanID }) else { return }
@@ -612,7 +613,7 @@ struct SettleUpSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save).fontWeight(.semibold).accessibilityIdentifier("settle.save")
+                    Button("Save") { afterTyping(save) }.fontWeight(.semibold).accessibilityIdentifier("settle.save")
                 }
             }
             .onAppear {
@@ -690,5 +691,102 @@ struct RemindSheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+/// Edit a loan (owner, 2026-10-19): the amount, the account it moved through (or none), the date and what it
+/// was for. Saving changes the same loan and its transaction; payments already made stay.
+struct LoanEditSheet: View {
+    @Bindable var session: AppSession
+    let loan: Loan
+    @Environment(\.dismiss) private var dismiss
+    @State private var amount = ""
+    @State private var accountID: UUID?
+    @State private var date = Date()
+    @State private var note = ""
+    @State private var problem: String?
+    @State private var didLoad = false
+
+    private var name: String { loan.personID.flatMap { session.people.person($0)?.name } ?? loan.institution ?? "them" }
+    private var currency: Currency { session.ledger.account(accountID)?.currency ?? loan.principal.currency }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Text(currency.symbol).font(.title.bold()).foregroundStyle(UZColor.label2)
+                        TextField("0", text: $amount)
+                            .font(.title.bold())
+                            .keyboardType(.decimalPad)
+                            .monospacedDigit()
+                            .accessibilityIdentifier("loanEdit.amount")
+                    }
+                    TextField("What was it for?", text: $note)
+                        .accessibilityIdentifier("loanEdit.note")
+                } header: {
+                    Text(loan.direction == .lent ? "You lent \(name)" : "You borrowed from \(name)")
+                } footer: {
+                    let paid = LoanCalculator.paid(loan)
+                    if paid.minorUnits > 0 { Text("Already paid back: \(MoneyFormatter.string(paid)). The amount can't be less than that.") }
+                }
+                Section {
+                    Picker(loan.direction == .lent ? "From" : "Into", selection: $accountID) {
+                        Text("No account · already lent or borrowed").tag(UUID?.none)
+                        ForEach(session.ledger.activeAccounts) { account in
+                            Text(account.currency == session.ledger.base ? account.name : "\(account.name) (\(account.currency.code))")
+                                .tag(UUID?.some(account.id))
+                        }
+                    }
+                    .accessibilityIdentifier("loanEdit.account")
+                    DatePicker("Date", selection: $date, displayedComponents: .date)
+                } footer: {
+                    Text(accountID == nil ? "No account money moves; it's kept as a record." : "The account's balance changes with it.")
+                }
+                if let problem {
+                    Section { Label(problem, systemImage: "exclamationmark.circle.fill").foregroundStyle(UZColor.negative) }
+                        .accessibilityIdentifier("loanEdit.problem")
+                }
+            }
+            .navigationTitle("Edit loan")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { afterTyping(save) }.fontWeight(.semibold).accessibilityIdentifier("loanEdit.save")
+                }
+            }
+            .onAppear {
+                guard !didLoad else { return }
+                didLoad = true
+                amount = MarkPaidSheet.plain(loan.principal)
+                note = loan.notes ?? ""
+                date = loan.startDate.startDate(in: .current)
+                accountID = session.transactions.first { $0.id == loan.transactionID }?.legs.first { $0.role == .main }?.accountID
+            }
+        }
+    }
+
+    private func save() {
+        problem = nil
+        let money: Money
+        do {
+            money = try AmountParser.parse(amount, currency: currency)
+            guard money.minorUnits > 0 else { problem = "The amount must be more than zero."; return }
+        } catch {
+            problem = ProblemText.message(error)
+            return
+        }
+        let paid = LoanCalculator.paid(loan)
+        if money.minorUnits < paid.minorUnits {
+            problem = "\(MoneyFormatter.string(paid)) was already paid back, so the loan can't be less than that."
+            return
+        }
+        if session.perform("Couldn't save. Nothing was changed. Try again.", {
+            try session.peopleClient.updateLoan(loan.id, money, date, accountID, note)
+        }) {
+            session.toasts.show("Changes saved")
+            dismiss()
+        }
     }
 }

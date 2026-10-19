@@ -112,3 +112,70 @@ public enum OtherRates {
         return rate > 0 && rate < 1_000_000 ? rate : nil
     }
 }
+
+/// A money service on Settings › Exchange rate (owner, 2026-10-19): Google, Wise, Western Union or any other
+/// the owner adds by name. Where its live rate comes from is worked out from the name; a service UZee can't
+/// read online keeps the rates typed for it.
+public struct RateService: Codable, Hashable, Sendable, Identifiable {
+    public enum Source: String, Codable, Sendable {
+        /// The mid-market rate Google shows.
+        case market
+        case wise
+        case westernUnion
+        /// No live rate online: rates typed by hand, else Google's rate for comparing.
+        case typed
+    }
+
+    public var id: String
+    public var name: String
+    public var source: Source
+    /// Typed rates by pair key ("SAR>PKR").
+    public var typed: [String: Decimal]
+
+    public init(id: String = UUID().uuidString, name: String, source: Source? = nil, typed: [String: Decimal] = [:]) {
+        self.id = id
+        self.name = name
+        self.source = source ?? Self.source(for: name)
+        self.typed = typed
+    }
+
+    /// "Google" → market, "Wise" → wise, "Western Union" → Western Union; anything else is typed.
+    public static func source(for name: String) -> Source {
+        let key = NameKey.make(name).replacingOccurrences(of: " ", with: "")
+        if key.contains("google") || key.contains("market") || key.contains("openmarket") { return .market }
+        if key == "wise" || key.hasPrefix("wise") || key.contains("transferwise") { return .wise }
+        if key.contains("westernunion") || key == "wu" { return .westernUnion }
+        return .typed
+    }
+
+    /// Google first, then the services already shown (NayaPay, Western Union…), as before this screen changed.
+    public static func starting(with providers: [RateProvider]) -> [RateService] {
+        [RateService(id: "google", name: "Google", source: .market)]
+            + providers.map { RateService(id: $0.rawValue, name: $0.name, source: $0 == .westernUnion ? .westernUnion : .typed) }
+    }
+}
+
+/// One currency pair on Settings › Exchange rate: 1 `from` in `to`, like SAR → PKR or EUR → USD.
+public struct RatePair: Codable, Hashable, Sendable, Identifiable {
+    public var from: String
+    public var to: String
+
+    public init(from: Currency, to: Currency) {
+        self.from = from.code
+        self.to = to.code
+    }
+
+    public var id: String { from + ">" + to }
+    public var fromCurrency: Currency? { Currency.known(code: from) }
+    public var toCurrency: Currency? { Currency.known(code: to) }
+
+    /// Each foreign currency your accounts use into your base currency, USD at least.
+    public static func defaults(accountCurrencies: [Currency], base: Currency) -> [RatePair] {
+        var codes = Set(accountCurrencies.map(\.code))
+        codes.insert(Currency.usd.code)
+        codes.insert(Currency.eur.code)
+        codes.remove(base.code)
+        let sorted = codes.sorted { $0 == "USD" ? true : $1 == "USD" ? false : $0 < $1 }
+        return sorted.compactMap { Currency.known(code: $0) }.map { RatePair(from: $0, to: base) }
+    }
+}

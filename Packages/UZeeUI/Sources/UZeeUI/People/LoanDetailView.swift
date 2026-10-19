@@ -10,6 +10,9 @@ struct LoanDetailView: View {
     @State private var sheet: PersonSheet?
     @State private var draft = ""
     @FocusState private var typing: Bool
+    @State private var editing = false
+    @State private var confirmDelete = false
+    @Environment(\.dismiss) private var dismiss
 
     private var loan: Loan? { session.people.loans.first { $0.id == loanID } }
 
@@ -30,7 +33,7 @@ struct LoanDetailView: View {
                         withAnimation(.snappy) { proxy.scrollTo("notes.end", anchor: .bottom) }
                     }
                 }
-                .safeAreaInset(edge: .bottom) { composer }
+                .safeAreaInset(edge: .bottom) { NoteComposer(draft: $draft, typing: $typing, send: send) }
             } else {
                 EmptyStateView("Not found", systemImage: "doc.questionmark", description: "This loan was removed.")
             }
@@ -42,7 +45,10 @@ struct LoanDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let loan {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    // Change the amount, date, account or note (owner, 2026-10-19).
+                    Button("Edit") { editing = true }
+                        .accessibilityIdentifier("loan.edit")
                     Menu {
                         let status = LoanCalculator.status(loan)
                         if status == .open || status == .partiallyPaid {
@@ -57,6 +63,8 @@ struct LoanDetailView: View {
                                 session.toasts.show(writeOff ? "Written off" : "Write-off undone")
                             }
                         }
+                        Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                            .accessibilityIdentifier("loan.delete")
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -64,6 +72,17 @@ struct LoanDetailView: View {
                     .accessibilityIdentifier("loan.more")
                 }
             }
+        }
+        .sheet(isPresented: $editing) {
+            if let loan { LoanEditSheet(session: session, loan: loan) }
+        }
+        .confirmationDialog("Delete this loan?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let loan, session.deleteLoan(loan) { dismiss() }
+            }
+            .accessibilityIdentifier("loan.confirmDelete")
+        } message: {
+            Text("The balance with them updates now. You can undo it.")
         }
         .sheet(item: $sheet) { sheet in
             switch sheet {
@@ -104,10 +123,12 @@ struct LoanDetailView: View {
                 let interest = LoanCalculator.interest(loan, asOf: today)
                 if !interest.isZero { LabeledContent("Interest so far", value: MoneyFormatter.string(interest)) }
                 if loan.isOpeningBalance { LabeledContent("Kind", value: "Record only, no account money moved") }
-                if let transaction = loan.transactionID {
-                    NavigationLink(value: Route.transaction(transaction)) {
-                        Label("Open the transaction", systemImage: "arrow.up.right.square").font(.subheadline)
-                    }
+                if let transaction = session.transactions.first(where: { $0.id == loan.transactionID }),
+                   let leg = transaction.legs.first(where: { $0.role == .main }) {
+                    LabeledContent(loan.direction == .lent ? "From" : "Into", value: session.ledger.account(leg.accountID)?.name ?? "Account")
+                }
+                if let note = loan.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+                    LabeledContent("For", value: note)
                 }
             }
             .font(.subheadline)
@@ -139,15 +160,12 @@ struct LoanDetailView: View {
     private func notesSection(_ loan: Loan) -> some View {
         VStack(alignment: .leading, spacing: UZSpacing.m) {
             SectionHeader("Notes")
-            if let old = loan.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !old.isEmpty {
-                bubble(old, time: loan.createdAt)
-            }
-            if loan.noteLog.isEmpty && (loan.notes ?? "").trimmingCharacters(in: .whitespaces).isEmpty {
+            if loan.noteLog.isEmpty {
                 Text("No notes yet. Write one below, like \"Will pay back after Eid\".")
                     .font(.footnote).foregroundStyle(UZColor.label2)
             }
             ForEach(loan.noteLog) { note in
-                bubble(note.text, time: note.createdAt)
+                NoteBubble(text: note.text, time: note.createdAt)
                     .contextMenu {
                         Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = note.text }
                         Button("Delete", systemImage: "trash", role: .destructive) {
@@ -159,50 +177,12 @@ struct LoanDetailView: View {
         }
     }
 
-    private func bubble(_ text: String, time: Date?) -> some View {
-        HStack {
-            Spacer(minLength: 48)
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(text)
-                    .padding(.horizontal, UZSpacing.l).padding(.vertical, UZSpacing.m)
-                    .background(UZColor.tint.opacity(0.15), in: .rect(cornerRadius: 18))
-                    .textSelection(.enabled)
-                if let time {
-                    Text(time.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(UZColor.label2)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("loan.note")
-    }
-
-    private var composer: some View {
-        HStack(spacing: UZSpacing.m) {
-            TextField("Add a note", text: $draft, axis: .vertical)
-                .lineLimit(1...5)
-                .focused($typing)
-                .padding(.horizontal, UZSpacing.l).padding(.vertical, UZSpacing.m)
-                .background(UZColor.card, in: .rect(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(typing ? UZColor.tint : UZColor.separator, lineWidth: 1))
-                .contentShape(.rect)
-                .onTapGesture { typing = true }
-                .accessibilityIdentifier("loan.noteField")
-            Button(action: send) {
-                Image(systemName: "arrow.up.circle.fill").font(.system(size: 32))
-            }
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel("Add note")
-            .accessibilityIdentifier("loan.noteSend")
-        }
-        .padding(.horizontal, UZSpacing.xxl).padding(.vertical, UZSpacing.m)
-        .background(.bar)
-    }
-
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         if session.perform("Couldn't add the note. Try again.", { try session.peopleClient.addLoanNote(text, loanID) }) {
             draft = ""
+            typing = false
         }
     }
 }

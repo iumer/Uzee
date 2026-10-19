@@ -77,6 +77,9 @@ public struct RootView: View {
             } else if case .editShared(let transaction) = session.addRequest {
                 SharedExpenseSheet(session: session, editing: transaction).sessionErrors(session)
                     .interactiveDismissDisabled()
+            } else if case .sharedPrefill(let prefill) = session.addRequest {
+                SharedExpenseSheet(session: session, prefill: prefill).sessionErrors(session)
+                    .interactiveDismissDisabled()
             } else if case .repeatShared(let transaction) = session.addRequest {
                 SharedExpenseSheet(session: session, copying: transaction).sessionErrors(session)
                     .interactiveDismissDisabled()
@@ -276,7 +279,7 @@ struct TabRoot: View {
                     case .componentGallery: ComponentGallery(session: session)
                     case .accounts: AccountsView(session: session)
                     case .account(let id): AccountDetailView(session: session, accountID: id)
-                    case .transaction(let id): TransactionDetailView(session: session, transactionID: id)
+                    case .transaction(let id): EntryDestination(session: session, transactionID: id)
                     case .exchangeRate: ExchangeRateView(session: session)
                     case .recentlyDeleted: RecentlyDeletedView(session: session)
                     case .categories: CategoriesView(session: session)

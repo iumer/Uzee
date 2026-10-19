@@ -126,6 +126,64 @@ struct PeopleStoreTests {
         #expect(throws: PeopleStore.Problem.notFound) { try world.people.addEntryNote("x", transactionID: UUID()) }
     }
 
+    @Test("Edit a loan: amount, account and date change on the loan and its transaction; can't go below what's paid")
+    func editLoan() throws {
+        let world = try empty()
+        let hbl = try world.ledger.createAccount(name: "HBL", kind: .bank, currency: .pkr, openingBalance: rs(100_000), openingDate: day(10, 1))
+        let cash = try world.ledger.createAccount(name: "Cash", kind: .cash, currency: .pkr, openingBalance: rs(50_000), openingDate: day(10, 1))
+        let friend = try world.people.createPerson(name: "Test Friend")
+        let loan = try world.people.recordLoan(direction: .lent, personID: friend.id, amount: rs(25_000), accountID: hbl.id, on: day(10, 5))
+        try world.people.updateLoan(loan.id, principal: rs(30_000), date: day(10, 6), accountID: cash.id, note: "Car repair")
+        var snapshot = try world.ledger.snapshot()
+        #expect(snapshot.balances[hbl.id] == rs(100_000))
+        #expect(snapshot.balances[cash.id] == rs(20_000))
+        var edited = try #require(try world.people.snapshot().loans.first { $0.id == loan.id })
+        #expect(edited.principal == rs(30_000))
+        #expect(edited.startDate == day(10, 6))
+        #expect(edited.notes == "Car repair")
+        #expect(try balances(world).0.net(of: friend.id) == rs(30_000))
+        // No account: kept as a record, the money goes back to Cash.
+        try world.people.updateLoan(loan.id, principal: rs(30_000), date: day(10, 6), accountID: nil, note: nil)
+        snapshot = try world.ledger.snapshot()
+        #expect(snapshot.balances[cash.id] == rs(50_000))
+        edited = try #require(try world.people.snapshot().loans.first { $0.id == loan.id })
+        #expect(edited.transactionID == nil)
+        #expect(try balances(world).0.net(of: friend.id) == rs(30_000))
+        // Back to an account: the money moves again.
+        try world.people.updateLoan(loan.id, principal: rs(30_000), date: day(10, 6), accountID: hbl.id, note: nil)
+        #expect(try world.ledger.snapshot().balances[hbl.id] == rs(70_000))
+        try world.people.recordRepayment(loanID: loan.id, amount: rs(10_000), accountID: nil, on: day(10, 7))
+        #expect(throws: PeopleStore.Problem.lessThanPaid) {
+            try world.people.updateLoan(loan.id, principal: rs(9_000), date: day(10, 6), accountID: hbl.id, note: nil)
+        }
+    }
+
+    @Test("Delete and undo: a loan record, a payment record, and a settled person (name kept for old entries)")
+    func deleteRecordsAndPerson() throws {
+        let world = try empty()
+        let friend = try world.people.createPerson(name: "Test Friend")
+        let loan = try world.people.recordLoan(direction: .borrowed, personID: friend.id, amount: rs(50_000), accountID: nil, on: day(10, 1))
+        try world.people.recordRepayment(loanID: loan.id, amount: rs(20_000), accountID: nil, on: day(10, 2))
+        let payment = try #require(try world.people.snapshot().loans.first?.payments.first)
+        try world.people.deleteLoanPayment(payment.id)
+        #expect(try balances(world).0.net(of: friend.id) == rs(-50_000))
+        try world.people.restoreLoanPayment(payment.id)
+        #expect(try balances(world).0.net(of: friend.id) == rs(-30_000))
+        try world.people.deleteLoanRecord(loan.id)
+        #expect(try world.people.snapshot().loans.isEmpty)
+        try world.people.restoreLoanRecord(loan.id)
+        #expect(try world.people.snapshot().loans.count == 1)
+        try world.people.deletePerson(friend.id)
+        var snapshot = try world.people.snapshot()
+        #expect(!snapshot.others.contains { $0.id == friend.id })
+        #expect(snapshot.person(friend.id)?.name == "Test Friend")
+        #expect(!snapshot.isListed(friend.id))
+        try world.people.restorePerson(friend.id)
+        snapshot = try world.people.snapshot()
+        #expect(snapshot.isListed(friend.id))
+        #expect(throws: PeopleStore.Problem.notFound) { try world.people.deletePerson(try world.people.selfID()) }
+    }
+
     @Test("LOAN-009 a debt kept as a record: I owe Ammi Rs 150,000, pay Rs 50,000 outside my accounts, Rs 100,000 left")
     func debtPaidDownWithoutAccount() throws {
         let world = try empty()

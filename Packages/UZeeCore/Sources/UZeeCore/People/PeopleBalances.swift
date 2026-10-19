@@ -54,18 +54,23 @@ public struct PeopleSnapshot: Sendable {
     public var groups: [SplitGroup]
     public var splits: [Split]
     public var loans: [Loan]
+    /// People removed from People: not listed or offered anywhere, only named on their old entries.
+    public var removed: [Person]
 
-    public init(selfID: UUID, people: [Person], groups: [SplitGroup], splits: [Split], loans: [Loan]) {
+    public init(selfID: UUID, people: [Person], groups: [SplitGroup], splits: [Split], loans: [Loan], removed: [Person] = []) {
         self.selfID = selfID
         self.people = people
         self.groups = groups
         self.splits = splits
         self.loans = loans
+        self.removed = removed
     }
 
     public static let empty = PeopleSnapshot(selfID: UUID(), people: [], groups: [], splits: [], loans: [])
 
-    public func person(_ id: UUID?) -> Person? { people.first { $0.id == id } }
+    public func person(_ id: UUID?) -> Person? { people.first { $0.id == id } ?? removed.first { $0.id == id } }
+    /// A live person, not one removed from People.
+    public func isListed(_ id: UUID) -> Bool { people.contains { $0.id == id } }
     public func group(_ id: UUID?) -> SplitGroup? { groups.first { $0.id == id } }
     public func split(for transaction: UUID) -> Split? { splits.first { $0.transactionID == transaction } }
     /// People other than you, archived ones last.

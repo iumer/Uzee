@@ -19,10 +19,38 @@ struct BudgetModel {
     }
 
     var today: LocalDate { LocalDate(Date(), in: .current) }
-    var current: BudgetPeriod { BudgetPeriod.containing(today, kind: kind) }
+    /// This period: your own dates when you picked some that haven't ended yet (owner, 2026-10-19), else the
+    /// month or salary cycle from Budget settings.
+    var current: BudgetPeriod { custom ?? BudgetPeriod.containing(today, kind: kind) }
+
+    static let customKey = "uzee.budget.customDates"
+
+    /// The dates you picked ("2026-10-19|2026-11-18"), while they still include today or later.
+    var custom: BudgetPeriod? {
+        guard let text = UserDefaults.standard.string(forKey: Self.customKey) else { return nil }
+        let parts = text.split(separator: "|").map(String.init)
+        guard parts.count == 2, let start = LocalDate(parts[0]), let end = LocalDate(parts[1]), start <= end, end >= today else { return nil }
+        return BudgetPeriod(start: start, end: end, kind: kind)
+    }
+
+    var isCustom: Bool { custom != nil }
+
+    static func setCustom(start: LocalDate, end: LocalDate) {
+        UserDefaults.standard.set("\(start.description)|\(end.description)", forKey: customKey)
+    }
+
+    static func clearCustom() { UserDefaults.standard.removeObject(forKey: customKey) }
+
+    /// The period a list or drill-down that starts on `start` means: your own dates when they start there.
+    func period(startingAt start: LocalDate) -> BudgetPeriod {
+        if let custom, custom.start == start { return custom }
+        return BudgetPeriod.containing(start, kind: kind)
+    }
 
     func summary(for period: BudgetPeriod) -> BudgetSummary? {
-        guard let plan = try? session.budgets.plan(period) else { return nil }
+        // Your own dates use the budget (total and limits) of the month or cycle they start in.
+        let planPeriod = BudgetPeriod.containing(period.start, kind: kind)
+        guard let plan = try? session.budgets.plan(planPeriod == period ? period : planPeriod) else { return nil }
         return BudgetCalculator.summary(plan: plan, period: period, transactions: session.transactions,
                                         categories: session.ledger.categories, base: session.ledger.base, rates: session.ledger.rates)
     }
@@ -45,7 +73,9 @@ struct BudgetModel {
 
     static func title(_ period: BudgetPeriod) -> String {
         let format = Date.FormatStyle.dateTime.month(.wide).year()
-        if case .calendarMonth = period.kind { return period.start.startDate(in: .current).formatted(format) }
+        if case .calendarMonth = period.kind, period == BudgetPeriod.containing(period.start, kind: period.kind) {
+            return period.start.startDate(in: .current).formatted(format)
+        }
         return DatePresets.text(from: period.start, through: period.end)
     }
 }
@@ -54,10 +84,11 @@ struct BudgetModel {
 struct BudgetView: View {
     @Bindable var session: AppSession
     @State private var periodStart: LocalDate?
+    @State private var choosingDates = false
 
     var body: some View {
         let model = BudgetModel(session: session)
-        let period = periodStart.map { BudgetPeriod.containing($0, kind: model.kind) } ?? model.current
+        let period = periodStart.map { model.period(startingAt: $0) } ?? model.current
         ScrollView {
             VStack(alignment: .leading, spacing: UZSpacing.xl) {
                 PlanSwitch(session: session)
@@ -88,6 +119,13 @@ struct BudgetView: View {
         .toolbar {
             // Top right is the profile icon on every tab, so the period menu sits on the left.
             ToolbarItem(placement: .topBarLeading) { periodMenu(model: model, selected: period) }
+        }
+        .sheet(isPresented: $choosingDates) {
+            BudgetDatesSheet(start: period.start, end: period.end) { start, end in
+                BudgetModel.setCustom(start: start, end: end)
+                periodStart = nil
+                session.budgetRevision += 1
+            }
         }
     }
 
@@ -265,6 +303,18 @@ struct BudgetView: View {
                     if period == selected { Label(BudgetModel.title(period), systemImage: "checkmark") } else { Text(BudgetModel.title(period)) }
                 }
             }
+            Divider()
+            // Pick your own start and end dates (owner, 2026-10-19), e.g. when salary came early.
+            Button("Choose dates…", systemImage: "calendar") { choosingDates = true }
+                .accessibilityIdentifier("budget.chooseDates")
+            if model.isCustom {
+                Button("Back to \(BudgetModel.title(BudgetPeriod.containing(model.today, kind: model.kind)))", systemImage: "arrow.uturn.backward") {
+                    BudgetModel.clearCustom()
+                    periodStart = nil
+                    session.budgetRevision += 1
+                }
+                .accessibilityIdentifier("budget.resetDates")
+            }
         } label: {
             HStack(spacing: UZSpacing.xs) {
                 Text(BudgetModel.title(selected)).font(.subheadline.weight(.semibold))
@@ -325,7 +375,7 @@ struct BudgetCategoryView: View {
 
     var body: some View {
         let model = BudgetModel(session: session)
-        let period = BudgetPeriod.containing(periodStart, kind: model.kind)
+        let period = model.period(startingAt: periodStart)
         let category = session.ledger.category(categoryID)
         let ids = Set([categoryID] + session.ledger.categories.filter { $0.parentID == categoryID }.map(\.id))
         let inCategory = session.transactions.filter { $0.categoryID.map(ids.contains) ?? false }
@@ -461,5 +511,63 @@ struct BudgetCategoryView: View {
             guard transaction.kind == .expense, let payee = transaction.payeeName, !recurring.isTracked(transaction) else { return false }
             return seen.insert(NameKey.make(RecurringFinder.displayName(payee))).inserted
         }
+    }
+}
+
+/// Your own budget dates: a start and an end, inclusive. Spent, limits and lists use them until the end date
+/// passes, then the usual month or cycle comes back.
+struct BudgetDatesSheet: View {
+    let onSave: (LocalDate, LocalDate) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var start: Date
+    @State private var end: Date
+
+    init(start: LocalDate, end: LocalDate, onSave: @escaping (LocalDate, LocalDate) -> Void) {
+        self.onSave = onSave
+        _start = State(initialValue: start.startDate(in: .current))
+        _end = State(initialValue: end.startDate(in: .current))
+    }
+
+    private var startDay: LocalDate { LocalDate(start, in: .current) }
+    private var endDay: LocalDate { LocalDate(end, in: .current) }
+    private var problem: String? {
+        if startDay > endDay { return "The end date is before the start date." }
+        if endDay < LocalDate(Date(), in: .current) { return "Pick an end date of today or later; past months are in the period menu." }
+        return nil
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    DatePicker("From", selection: $start, displayedComponents: .date)
+                        .accessibilityIdentifier("budgetDates.from")
+                    DatePicker("To", selection: $end, displayedComponents: .date)
+                        .accessibilityIdentifier("budgetDates.to")
+                } footer: {
+                    if let problem {
+                        Text(problem).foregroundStyle(UZColor.negative).accessibilityIdentifier("budgetDates.problem")
+                    } else {
+                        let days = startDay.days(to: endDay) + 1
+                        Text("\(days) \(days == 1 ? "day" : "days"), both dates included. Spent and limits use these dates until \(DatePresets.text(from: endDay, through: endDay)).")
+                    }
+                }
+            }
+            .navigationTitle("Budget dates")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Use") {
+                        onSave(startDay, endDay)
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(problem != nil)
+                    .accessibilityIdentifier("budgetDates.use")
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }

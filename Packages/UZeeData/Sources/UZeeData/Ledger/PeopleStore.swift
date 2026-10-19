@@ -12,6 +12,8 @@ public struct PeopleStore: Sendable {
         case hasBalance
         case needsAccount
         case emptyNote
+        /// A loan can't be made smaller than what was already paid back.
+        case lessThanPaid
     }
 
     let database: AppDatabase
@@ -25,7 +27,7 @@ public struct PeopleStore: Sendable {
     public func snapshot() throws -> Snapshot {
         try database.writer.read { db in
             Snapshot(selfID: try Self.selfID(db), people: try Self.fetchPeople(db), groups: try Self.fetchGroups(db),
-                     splits: try Self.fetchSplits(db), loans: try Self.fetchLoans(db))
+                     splits: try Self.fetchSplits(db), loans: try Self.fetchLoans(db), removed: try Self.fetchRemovedPeople(db))
         }
     }
 
@@ -52,6 +54,27 @@ public struct PeopleStore: Sendable {
                                  Timestamp.now(), person.id.uuidString])
             guard db.changesCount == 1 else { throw Problem.notFound }
             if let oldName, oldName != name { try Self.renameLinkedRows(person.id, from: oldName, to: name, db) }
+        }
+    }
+
+    /// Removes a person from People (owner, 2026-10-19). Their past entries stay in Activity under their name.
+    /// The screen only offers it once they're settled up.
+    public func deletePerson(_ id: UUID) throws {
+        try database.writer.write { db in
+            let now = Timestamp.now()
+            try db.execute(sql: """
+                UPDATE person SET deleted_at = ?, deletion_batch_id = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL AND is_self = 0
+                """, arguments: [now, UUID().uuidString, now, id.uuidString])
+            guard db.changesCount == 1 else { throw Problem.notFound }
+        }
+    }
+
+    /// Undo for `deletePerson`.
+    public func restorePerson(_ id: UUID) throws {
+        try database.writer.write { db in
+            try db.execute(sql: "UPDATE person SET deleted_at = NULL, deletion_batch_id = NULL, updated_at = ? WHERE id = ? AND is_self = 0",
+                           arguments: [Timestamp.now(), id.uuidString])
+            guard db.changesCount == 1 else { throw Problem.notFound }
         }
     }
 
@@ -181,6 +204,90 @@ public struct PeopleStore: Sendable {
                 """, arguments: [UUID().uuidString, now, now, loan.isSample || transaction.isSample, loanID.uuidString,
                                  transaction.id.uuidString, amount.minorUnits, date.description])
             return transaction
+        }
+    }
+
+    /// Edit a loan (owner, 2026-10-19: "I can add comments but can't edit its amount"): amount, date, account and
+    /// note. Its transaction changes with it; picking "No account" keeps it as a record only, and picking an
+    /// account for a record moves the money now.
+    public func updateLoan(_ loanID: UUID, principal: Money, date: LocalDate, accountID: UUID?, note: String?,
+                           at time: Date = Date(), timeZone: TimeZone = .current) throws {
+        guard principal.minorUnits > 0 else { throw Problem.invalidAmount }
+        try database.writer.write { db in
+            guard let loan = try Self.fetchLoans(db).first(where: { $0.id == loanID }) else { throw Problem.notFound }
+            guard principal.minorUnits >= LoanCalculator.paid(loan).minorUnits else { throw Problem.lessThanPaid }
+            let now = Timestamp.now()
+            let text = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleanNote = (text?.isEmpty ?? true) ? nil : text
+            try db.execute(sql: """
+                UPDATE loan SET principal_minor = ?, currency_code = ?, start_date = ?, notes = ?, updated_at = ? WHERE id = ?
+                """, arguments: [principal.minorUnits, principal.currency.code, date.description, cleanNote, now, loanID.uuidString])
+            let name = try loan.personID.map { try Self.personName($0, db) } ?? loan.institution ?? "Loan"
+            let txnNote = cleanNote ?? (loan.direction == .lent ? "Lent to \(name)" : "Borrowed from \(name)")
+            let signed = loan.direction == .lent ? -principal.minorUnits : principal.minorUnits
+            switch (loan.transactionID, accountID) {
+            case (let txn?, let account?):
+                try db.execute(sql: """
+                    UPDATE txn SET amount_minor = ?, my_share_minor = ?, currency_code = ?, occurred_at = ?, local_date = ?, note = ?, updated_at = ?
+                    WHERE id = ?
+                    """, arguments: [principal.minorUnits, principal.minorUnits, principal.currency.code, Timestamp.from(time), date.description,
+                                     txnNote, now, txn.uuidString])
+                try db.execute(sql: """
+                    UPDATE transaction_leg SET account_id = ?, amount_minor = ?, currency_code = ?, updated_at = ?
+                    WHERE txn_id = ? AND deleted_at IS NULL
+                    """, arguments: [account.uuidString, signed, principal.currency.code, now, txn.uuidString])
+            case (let txn?, nil):
+                // Now a record only: the money no longer moved through an account.
+                try db.execute(sql: "UPDATE loan SET txn_id = NULL WHERE id = ?", arguments: [loanID.uuidString])
+                try db.execute(sql: "UPDATE txn SET deleted_at = ?, deletion_batch_id = ?, updated_at = ? WHERE id = ?",
+                               arguments: [now, UUID().uuidString, now, txn.uuidString])
+                try db.execute(sql: "UPDATE transaction_leg SET deleted_at = ?, updated_at = ? WHERE txn_id = ?", arguments: [now, now, txn.uuidString])
+            case (nil, let account?):
+                let transaction = MoneyTransaction(
+                    kind: loan.direction == .lent ? .loanOut : .loanIn, occurredAt: time, localDate: date, timeZoneID: timeZone.identifier,
+                    amount: principal, payeeName: name, note: txnNote, source: .manual, counterpartyID: loan.personID,
+                    legs: [TransactionLeg(accountID: account, amount: Money(minorUnits: signed, currency: principal.currency), role: .main)])
+                try LedgerStore.save(transaction, db)
+                try db.execute(sql: "UPDATE loan SET txn_id = ? WHERE id = ?", arguments: [transaction.id.uuidString, loanID.uuidString])
+            case (nil, nil):
+                break
+            }
+        }
+    }
+
+    /// Deletes a loan kept as a record (no transaction); one with a transaction goes with its transaction.
+    public func deleteLoanRecord(_ loanID: UUID) throws {
+        try database.writer.write { db in
+            let now = Timestamp.now()
+            try db.execute(sql: "UPDATE loan SET deleted_at = ?, deletion_batch_id = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+                           arguments: [now, UUID().uuidString, now, loanID.uuidString])
+            guard db.changesCount == 1 else { throw Problem.notFound }
+        }
+    }
+
+    public func restoreLoanRecord(_ loanID: UUID) throws {
+        try database.writer.write { db in
+            try db.execute(sql: "UPDATE loan SET deleted_at = NULL, deletion_batch_id = NULL, updated_at = ? WHERE id = ?",
+                           arguments: [Timestamp.now(), loanID.uuidString])
+            guard db.changesCount == 1 else { throw Problem.notFound }
+        }
+    }
+
+    /// Deletes a payment kept as a record ("paid Rs 50,000 in cash"); undo with `restoreLoanPayment`.
+    public func deleteLoanPayment(_ paymentID: UUID) throws {
+        try database.writer.write { db in
+            let now = Timestamp.now()
+            try db.execute(sql: "UPDATE loan_payment SET deleted_at = ?, deletion_batch_id = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+                           arguments: [now, UUID().uuidString, now, paymentID.uuidString])
+            guard db.changesCount == 1 else { throw Problem.notFound }
+        }
+    }
+
+    public func restoreLoanPayment(_ paymentID: UUID) throws {
+        try database.writer.write { db in
+            try db.execute(sql: "UPDATE loan_payment SET deleted_at = NULL, deletion_batch_id = NULL, updated_at = ? WHERE id = ?",
+                           arguments: [Timestamp.now(), paymentID.uuidString])
+            guard db.changesCount == 1 else { throw Problem.notFound }
         }
     }
 
@@ -379,6 +486,14 @@ extension PeopleStore {
             let archived: Int64? = row["archived_at"]
             return Person(id: id, name: row["display_name"], phone: row["phone"], notes: row["notes"], isSelf: row["is_self"],
                           archivedAt: archived.map(Timestamp.date), isSample: row["is_sample"])
+        }
+    }
+
+    /// People removed from People, kept only so their old entries still show their name.
+    static func fetchRemovedPeople(_ db: Database) throws -> [Person] {
+        try Row.fetchAll(db, sql: "SELECT * FROM person WHERE deleted_at IS NOT NULL AND is_self = 0").compactMap { row in
+            guard let id = UUID(uuidString: row["id"]) else { return nil }
+            return Person(id: id, name: row["display_name"], phone: row["phone"], notes: row["notes"], isSample: row["is_sample"])
         }
     }
 

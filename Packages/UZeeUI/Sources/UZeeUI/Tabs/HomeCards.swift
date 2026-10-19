@@ -172,7 +172,7 @@ struct SpentHalf: View {
             session.open(.budget)
         } label: {
             VStack(spacing: UZSpacing.s) {
-                Text("Spent in \(monthName)").font(.subheadline).foregroundStyle(UZColor.label2).lineLimit(1)
+                Text(budget.isCustom ? "Spent this period" : "Spent in \(monthName)").font(.subheadline).foregroundStyle(UZColor.label2).lineLimit(1)
                 if let summary {
                     let total = Double(summary.total.minorUnits)
                     ProgressRingView(remaining: total > 0 ? 1 - Double(summary.spent.minorUnits) / total : 1,

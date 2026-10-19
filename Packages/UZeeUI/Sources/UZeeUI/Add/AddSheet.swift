@@ -89,7 +89,7 @@ struct AddSheet: View {
                                 .accessibilityIdentifier("add.problem")
                                 .id("problem")
                         }
-                        Button(action: prepare) {
+                        Button(action: saveTapped) {
                             Text(editing == nil ? "Save" : "Save changes")
                                 .font(.headline).frame(maxWidth: .infinity).padding(.vertical, UZSpacing.s)
                         }
@@ -129,7 +129,7 @@ struct AddSheet: View {
                         .accessibilityIdentifier("add.close")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: prepare)
+                    Button("Save", action: saveTapped)
                         .accessibilityIdentifier("add.save")
                 }
             }
@@ -206,11 +206,16 @@ struct AddSheet: View {
                 .keyboardType(.decimalPad)
                 .focused($amountFocused)
                 .monospacedDigit()
-                .fixedSize()
+                // A box that keeps its size: one that grew with each digit re-laid the screen while typing and
+                // lost digits (owner, 2026-10-19: 4567 saved as 456).
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
                 .accessibilityLabel(kind == .transfer ? "Amount sent" : "Amount")
                 .accessibilityIdentifier("add.amount")
-                // No live commas: rewriting the text while typing fast dropped the last digit (BUG-017).
-                .onChange(of: amountFocused) { _, focused in if !focused { amountText = AmountTyping.grouped(amountText) } }
+                // No commas written back into the box at all: rewriting the text, live or when the keyboard closed,
+                // dropped the last digit typed (BUG-017; owner, 2026-10-19: 4567 saved as 456).
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, UZSpacing.m)
@@ -257,11 +262,31 @@ struct AddSheet: View {
         .accessibilityIdentifier(identifier)
     }
 
+    /// Hands what's typed so far to the People form, which replaces this sheet.
+    private func splitWithPeople() {
+        // Close the keyboard first and hand over on the next turn, so the last digit typed is in (it was
+        // dropped: 125000 arrived as 12500).
+        amountFocused = false
+        afterTyping {
+            session.addRequest = .sharedPrefill(SharedPrefill(
+                what: payee, amountText: amountText, currency: currency, categoryID: categoryID, date: date, note: note,
+                accountID: accountID, editing: editing))
+        }
+    }
+
     /// Scan receipt · Split · More (mockup P).
     private var actionRow: some View {
         HStack(spacing: UZSpacing.m) {
             if kind != .transfer && editing == nil { scanButton }
-            if kind == .expense || kind == .income {
+            if kind == .expense {
+                // Splitting an expense opens the People form, the same one as the People tab: who it's with, what
+                // it was for, and who owes; no "paid from" when someone else paid (owner, 2026-10-19).
+                Button(action: splitWithPeople) {
+                    actionTile("Split", systemImage: "person.2")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("add.split")
+            } else if kind == .income {
                 NavigationLink {
                     SplitEditorView(session: session, total: currentTotal, isIncome: kind == .income, caption: splitCaption,
                                     draft: $splitDraft)
@@ -655,6 +680,9 @@ struct AddSheet: View {
         case .repeatOf(let transaction), .repeatShared(let transaction):
             fill(from: transaction, keepDate: false)
             splitDraft = session.people.split(for: transaction.id).map { SplitDraft($0) }
+        case .sharedPrefill:
+            // Shown on the People form instead; nothing to load here.
+            break
         case .shared(let group, let person):
             accountID = defaultAccountID()
             amountFocused = true
@@ -688,6 +716,13 @@ struct AddSheet: View {
         note = draft.note ?? ""
         isPending = draft.status == .pending
         date = keepDate ? draft.occurredAt : Date()
+    }
+
+    /// Closes the keyboard and saves on the next turn, so the last digit typed is in the amount (typing fast
+    /// then tapping Save straight away could save 4567 as 456; owner, 2026-10-19).
+    private func saveTapped() {
+        amountFocused = false
+        afterTyping(prepare)
     }
 
     /// Validates and opens the confirm sheet; nothing is written until Confirm (SMK-012: input stays for fixing).

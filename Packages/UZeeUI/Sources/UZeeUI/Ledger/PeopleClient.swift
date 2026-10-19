@@ -26,6 +26,15 @@ public struct PeopleClient: Sendable {
     public var entryNotes: @Sendable (_ transaction: UUID) throws -> [LoanNote]
     public var addEntryNote: @Sendable (_ text: String, _ transaction: UUID) throws -> Void
     public var deleteEntryNote: @Sendable (_ note: UUID) throws -> Void
+    /// Edit a loan's amount, date, account and note (owner, 2026-10-19).
+    public var updateLoan: @Sendable (_ loan: UUID, _ amount: Money, _ date: Date, _ account: UUID?, _ note: String?) throws -> Void
+    /// Delete and undo for records kept without a transaction, and for people (owner, 2026-10-19).
+    public var deleteLoanRecord: @Sendable (_ loan: UUID) throws -> Void
+    public var restoreLoanRecord: @Sendable (_ loan: UUID) throws -> Void
+    public var deleteLoanPayment: @Sendable (_ payment: UUID) throws -> Void
+    public var restoreLoanPayment: @Sendable (_ payment: UUID) throws -> Void
+    public var deletePerson: @Sendable (_ person: UUID) throws -> Void
+    public var restorePerson: @Sendable (_ person: UUID) throws -> Void
 
     public init(snapshot: @escaping @Sendable () throws -> PeopleSnapshot,
                 createPerson: @escaping @Sendable (String, String?) throws -> Person,
@@ -43,7 +52,14 @@ public struct PeopleClient: Sendable {
                 deleteLoanNote: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
                 entryNotes: @escaping @Sendable (UUID) throws -> [LoanNote] = { _ in [] },
                 addEntryNote: @escaping @Sendable (String, UUID) throws -> Void = { _, _ in throw CoreError.notFound },
-                deleteEntryNote: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound }) {
+                deleteEntryNote: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
+                updateLoan: @escaping @Sendable (UUID, Money, Date, UUID?, String?) throws -> Void = { _, _, _, _, _ in throw CoreError.notFound },
+                deleteLoanRecord: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
+                restoreLoanRecord: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
+                deleteLoanPayment: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
+                restoreLoanPayment: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
+                deletePerson: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
+                restorePerson: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound }) {
         self.snapshot = snapshot
         self.createPerson = createPerson
         self.updatePerson = updatePerson
@@ -61,6 +77,13 @@ public struct PeopleClient: Sendable {
         self.entryNotes = entryNotes
         self.addEntryNote = addEntryNote
         self.deleteEntryNote = deleteEntryNote
+        self.updateLoan = updateLoan
+        self.deleteLoanRecord = deleteLoanRecord
+        self.restoreLoanRecord = restoreLoanRecord
+        self.deleteLoanPayment = deleteLoanPayment
+        self.restoreLoanPayment = restoreLoanPayment
+        self.deletePerson = deletePerson
+        self.restorePerson = restorePerson
     }
 
     public static let unavailable = PeopleClient(

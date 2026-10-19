@@ -243,7 +243,7 @@ struct PaymentTodoForm: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save).fontWeight(.semibold).accessibilityIdentifier("toPay.save")
+                    Button("Save") { afterTyping(save) }.fontWeight(.semibold).accessibilityIdentifier("toPay.save")
                 }
             }
             .onAppear {
@@ -336,7 +336,7 @@ struct PayTodoSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(receiving ? "Received" : "Paid", action: pay).fontWeight(.semibold).accessibilityIdentifier("toPay.paid")
+                    Button(receiving ? "Received" : "Paid") { afterTyping(pay) }.fontWeight(.semibold).accessibilityIdentifier("toPay.paid")
                 }
             }
             .onAppear {
