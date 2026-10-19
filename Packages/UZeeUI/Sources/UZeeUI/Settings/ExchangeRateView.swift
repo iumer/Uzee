@@ -309,10 +309,10 @@ struct AddRateServiceSheet: View {
                     TextField("Name, like SadaPay or Western Union", text: $name)
                         .textInputAutocapitalization(.words)
                         .autocorrectionDisabled()
-                        .onSubmit { Task { await search() } }
+                        .onSubmit { afterTyping { Task { await search() } } }
                         .accessibilityIdentifier("rateService.name")
                     Button {
-                        Task { await search() }
+                        afterTyping { Task { await search() } }
                     } label: {
                         HStack {
                             Text("Find its rates")
@@ -364,7 +364,7 @@ struct AddRateServiceSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add", action: add).fontWeight(.semibold)
+                    Button("Add") { afterTyping(add) }.fontWeight(.semibold)
                         .disabled(!searched)
                         .accessibilityIdentifier("rateService.add")
                 }

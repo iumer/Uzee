@@ -40,7 +40,7 @@ struct PersonFormSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(editing == nil ? "Add" : "Save", action: save)
+                    Button(editing == nil ? "Add" : "Save") { afterTyping(save) }
                         .fontWeight(.semibold)
                         .accessibilityIdentifier("personForm.save")
                 }
@@ -255,7 +255,7 @@ struct GroupFormSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(editing == nil ? "Create" : "Save", action: save).fontWeight(.semibold).accessibilityIdentifier("groupForm.save")
+                    Button(editing == nil ? "Create" : "Save") { afterTyping(save) }.fontWeight(.semibold).accessibilityIdentifier("groupForm.save")
                 }
             }
             .onAppear(perform: load)

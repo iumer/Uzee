@@ -121,7 +121,7 @@ struct CategoryEditView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save", action: rename).accessibilityIdentifier("category.save")
+                Button("Save") { afterTyping(rename) }.accessibilityIdentifier("category.save")
             }
         }
         .onAppear { name = category.name }
@@ -250,7 +250,7 @@ struct TagsView: View {
                     TextField("New tag", text: $name)
                         .onSubmit(add)
                         .accessibilityIdentifier("tags.name")
-                    Button("Add", action: add).disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Add") { afterTyping(add) }.disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                         .accessibilityIdentifier("tags.add")
                 }
                 if let problem { Text(problem).foregroundStyle(UZColor.negative) }
