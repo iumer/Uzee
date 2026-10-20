@@ -99,6 +99,21 @@ struct LedgerSessionTests {
         #expect(session.paymentTodos.first?.paid == Money(major: 40_000, .pkr))
     }
 
+    @Test("A note on a transaction saves on the same entry, and Undo takes it back")
+    func noteSaveUndo() {
+        let fake = FakeLedger()
+        let session = makeSession(fake)
+        let lunch = expense(1_200)
+        session.save(lunch, isNew: true)
+        var noted = lunch
+        noted.note = "Team lunch with Ali"
+        #expect(session.save(noted, isNew: false))
+        #expect(fake.saved.count == 1)
+        #expect(fake.saved[lunch.id]?.note == "Team lunch with Ali")
+        session.toasts.performUndo()
+        #expect(fake.saved[lunch.id]?.note == nil)
+    }
+
     @Test("Undo after an edit restores the previous version")
     func undoEdit() {
         let fake = FakeLedger()

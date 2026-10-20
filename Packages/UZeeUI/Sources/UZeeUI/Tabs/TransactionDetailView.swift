@@ -57,7 +57,6 @@ struct TransactionDetailView: View {
                 }
                 LabeledContent("Date", value: transaction.occurredAt.formatted(date: .complete, time: .shortened))
                 if transaction.status == .pending { LabeledContent("Status", value: "Pending · not in balance") }
-                if let note = transaction.note { LabeledContent("Note", value: note) }
             }
             if let split = session.people.split(for: transaction.id) {
                 splitSection(split, transaction: transaction)
@@ -80,6 +79,7 @@ struct TransactionDetailView: View {
                 EntryNotesSection(session: session, transactionID: transaction.id)
             }
             TagsSection(session: session, transactionID: transaction.id)
+            TransactionNoteSection(session: session, transaction: transaction)
             ReceiptsSection(session: session, transactionID: transaction.id)
             Section {
                 if AddSheet.kinds.contains(transaction.kind) {
@@ -172,5 +172,67 @@ struct TransactionDetailView: View {
     private func canTrack(_ transaction: MoneyTransaction) -> Bool {
         transaction.kind == .expense && session.ledger.category(transaction.categoryID)?.group == .subscriptions
             && !RecurringModel(session: session).isTracked(transaction)
+    }
+}
+
+/// What a transaction was for, under Tags (owner, 2026-10-20): type a note and Save; Undo takes it back.
+struct TransactionNoteSection: View {
+    @Bindable var session: AppSession
+    let transaction: MoneyTransaction
+    @State private var text = ""
+    @State private var loadedFor: UUID?
+    @FocusState private var typing: Bool
+
+    private var saved: String { transaction.note ?? "" }
+    private var changed: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines) != saved.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        Section {
+            TextField("What was it for?", text: $text, axis: .vertical)
+                .lineLimit(1...6)
+                .focused($typing)
+                // The keyboard's Done saves the note (a long note wraps; it doesn't need new lines).
+                .submitLabel(.done)
+                .onChange(of: text) { _, typed in
+                    guard typed.contains("\n") else { return }
+                    text = typed.replacingOccurrences(of: "\n", with: "")
+                    typing = false
+                    if changed { afterTyping(save) }
+                }
+                .accessibilityIdentifier("detail.note")
+            if changed {
+                HStack {
+                    Button("Cancel") {
+                        text = saved
+                        typing = false
+                    }
+                    .buttonStyle(.borderless)
+                    Spacer()
+                    Button("Save note") { afterTyping(save) }
+                        .buttonStyle(.borderless)
+                        .fontWeight(.semibold)
+                        .accessibilityIdentifier("detail.saveNote")
+                }
+            }
+        } header: {
+            Text("Note")
+        }
+        .onAppear(perform: load)
+        .onChange(of: transaction.id) { load() }
+    }
+
+    private func load() {
+        guard loadedFor != transaction.id else { return }
+        loadedFor = transaction.id
+        text = saved
+    }
+
+    private func save() {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var updated = transaction
+        updated.note = clean.isEmpty ? nil : clean
+        if session.save(updated, isNew: false) {
+            text = clean
+        }
     }
 }
