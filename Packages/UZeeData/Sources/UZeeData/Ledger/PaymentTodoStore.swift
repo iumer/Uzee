@@ -32,7 +32,8 @@ extension EventStore {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at, name = excluded.name, amount_minor = excluded.amount_minor,
                     paid_minor = excluded.paid_minor, currency_code = excluded.currency_code, done_at = excluded.done_at,
-                    due_date = excluded.due_date, reminder_at = excluded.reminder_at, direction = excluded.direction
+                    due_date = excluded.due_date, reminder_at = excluded.reminder_at, direction = excluded.direction,
+                    deleted_at = NULL, deletion_batch_id = NULL
                 """, arguments: [todo.id.uuidString, Timestamp.from(todo.createdAt), now, todo.name.trimmingCharacters(in: .whitespaces),
                                  todo.amount.minorUnits, todo.paid.minorUnits, todo.amount.currency.code, todo.doneAt.map(Timestamp.from),
                                  todo.dueDate.map(Timestamp.from), todo.reminderAt.map(Timestamp.from), todo.direction.rawValue])

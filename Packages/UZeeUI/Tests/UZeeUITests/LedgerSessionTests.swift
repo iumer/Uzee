@@ -76,6 +76,29 @@ struct LedgerSessionTests {
         #expect(calls.moved.count == 1)
     }
 
+    @Test("To pay / To receive: Delete with Undo puts the entry back as it was, part payments included")
+    func deleteTodoUndo() throws {
+        final class Store: @unchecked Sendable { var todos: [UUID: PaymentTodo] = [:] }
+        let store = Store()
+        let salary = try PaymentTodo(direction: .receive, name: "Salary", amount: Money(major: 150_000, .pkr)).paying(Money(major: 40_000, .pkr))
+        store.todos[salary.id] = salary
+        let calendar = CalendarClient(
+            events: { [] }, saveEvent: { _ in }, deleteEvent: { _ in }, reminderSettings: { ReminderSettings() }, setReminderSettings: { _ in },
+            requestNotifications: { false }, notificationsAllowed: { false }, schedule: { _ in },
+            paymentTodos: { Array(store.todos.values) }, savePaymentTodo: { store.todos[$0.id] = $0 },
+            deletePaymentTodo: { store.todos[$0] = nil })
+        let session = AppSession(info: AppInfo(marketingVersion: "0.2.0", buildNumber: "3"), isDatabaseReady: true,
+                                 sampleData: .unavailable, calendar: calendar)
+        session.reload()
+        #expect(session.paymentTodos.count == 1)
+        ToPayView.delete(salary, session: session)
+        #expect(store.todos.isEmpty)
+        #expect(session.paymentTodos.isEmpty)
+        session.toasts.performUndo()
+        #expect(store.todos[salary.id] == salary)
+        #expect(session.paymentTodos.first?.paid == Money(major: 40_000, .pkr))
+    }
+
     @Test("Undo after an edit restores the previous version")
     func undoEdit() {
         let fake = FakeLedger()

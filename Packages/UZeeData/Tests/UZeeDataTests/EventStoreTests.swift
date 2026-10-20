@@ -45,6 +45,11 @@ struct EventStoreTests {
         try store.save(salary)
         #expect(try store.paymentTodos().first { $0.id == salary.id }?.direction == .receive)
         #expect(try store.paymentTodos().first { $0.id == kameti.id }?.direction == .pay)
+        // Undo of a delete saves it again: it comes back as it was.
+        try store.deletePaymentTodo(salary.id)
+        #expect(try store.paymentTodos().first { $0.id == salary.id } == nil)
+        try store.save(salary)
+        #expect(try store.paymentTodos().first { $0.id == salary.id }?.amount == Money(major: 150_000, .pkr))
     }
 
     @Test("CAL-004 reminder settings default to a day before at 10:00 and persist")

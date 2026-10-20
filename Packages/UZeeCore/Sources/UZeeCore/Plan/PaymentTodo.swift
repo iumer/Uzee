@@ -52,6 +52,8 @@ public struct PaymentTodo: Hashable, Sendable, Identifiable {
     public func validate() throws(Problem) {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { throw .emptyName }
         guard amount.minorUnits > 0, paid.minorUnits >= 0, paid.currency == amount.currency else { throw .invalidAmount }
+        // Edited down below what was already paid (owner, 2026-10-20): refused, not saved as "paid more than it was".
+        guard paid.minorUnits <= amount.minorUnits else { throw .moreThanLeft(amount) }
     }
 
     /// After paying `part`: more than what's left is refused; paying all of it marks it done.

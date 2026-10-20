@@ -12,6 +12,7 @@ struct ToPayView: View {
     @State private var paying: PaymentTodo?
     @State private var pickingAccounts = false
     @State private var showsPaid = false
+    @State private var deleting: PaymentTodo?
     @AppStorage("uzee.toPay.list") private var list: PaymentTodo.Direction = .pay
 
     static let excludedKey = "uzee.toPay.excludedAccounts"
@@ -132,9 +133,42 @@ struct ToPayView: View {
         .navigationTitle("Plan")
         .sheet(isPresented: $adding) { PaymentTodoForm(session: session, editing: nil, direction: list) }
         .sheet(item: $editing) { PaymentTodoForm(session: session, editing: $0) }
-        .sheet(item: $paying) { PayTodoSheet(session: session, todo: $0) }
+        .sheet(item: $paying) { todo in
+            PayTodoSheet(session: session, todo: todo) {
+                paying = nil
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(400))
+                    editing = todo
+                }
+            } onDelete: {
+                paying = nil
+                deleting = todo
+            }
+        }
+        .confirmationDialog(deleting.map { "Delete \($0.name)?" } ?? "", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let todo = deleting { ToPayView.delete(todo, session: session) }
+                deleting = nil
+            }
+            .accessibilityIdentifier("toPay.confirmDelete")
+        } message: {
+            if let todo = deleting, todo.paid.minorUnits > 0 {
+                Text("\(MoneyFormatter.string(todo.paid)) was already \(todo.direction == .receive ? "received" : "paid") on it. Those entries stay in Activity. You can undo this.")
+            } else {
+                Text("You can undo this.")
+            }
+        }
         .sheet(isPresented: $pickingAccounts) { HaveAccountsSheet(session: session) }
         .accessibilityIdentifier("screen.toPay")
+    }
+
+    /// Deletes with Undo, which puts it back as it was.
+    static func delete(_ todo: PaymentTodo, session: AppSession) {
+        guard session.perform("Couldn't delete it. Try again.", { try session.calendar.deletePaymentTodo(todo.id) }) else { return }
+        session.toasts.show("\(todo.name) deleted") {
+            _ = session.perform("Couldn't undo. Try again.", { try session.calendar.savePaymentTodo(todo) })
+        }
     }
 
     private func row(_ todo: PaymentTodo) -> some View {
@@ -154,6 +188,15 @@ struct ToPayView: View {
                     Spacer()
                     Text(MoneyFormatter.string(todo.isDone ? todo.amount : todo.remaining)).monospacedDigit().fontWeight(.semibold)
                         .foregroundStyle(todo.isDone ? UZColor.label2 : todo.direction == .receive ? UZColor.positive : UZColor.negative)
+                    // Edit and Delete in plain sight, not only on a long press (owner, 2026-10-20).
+                    Menu {
+                        menuItems(todo)
+                    } label: {
+                        Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(UZColor.label2)
+                            .frame(width: 32, height: 32).contentShape(.rect)
+                    }
+                    .accessibilityLabel("More for \(todo.name)")
+                    .accessibilityIdentifier("toPay.more.\(todo.name)")
                 }
                 if !todo.isDone, todo.paid.minorUnits > 0 {
                     ProgressBarView(fraction: fraction, tint: UZColor.positive,
@@ -166,16 +209,19 @@ struct ToPayView: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            if !todo.isDone {
-                Button(todo.direction == .receive ? "Received" : "Pay", systemImage: "checkmark.circle") { paying = todo }
-            }
-            Button("Edit", systemImage: "pencil") { editing = todo }
-            Button("Delete", systemImage: "trash", role: .destructive) {
-                _ = session.perform("Couldn't delete it. Try again.", { try session.calendar.deletePaymentTodo(todo.id) })
-            }
-        }
+        .contextMenu { menuItems(todo) }
         .accessibilityIdentifier("toPay.row.\(todo.name)")
+    }
+
+    @ViewBuilder
+    private func menuItems(_ todo: PaymentTodo) -> some View {
+        if !todo.isDone {
+            Button(todo.direction == .receive ? "Received" : "Pay", systemImage: "checkmark.circle") { paying = todo }
+        }
+        Button("Edit name, amount or date", systemImage: "pencil") { editing = todo }
+            .accessibilityIdentifier("toPay.edit")
+        Button("Delete", systemImage: "trash", role: .destructive) { deleting = todo }
+            .accessibilityIdentifier("toPay.delete")
     }
 }
 
@@ -266,6 +312,10 @@ struct PaymentTodoForm: View {
             problem = "Enter the amount."
             return
         }
+        if let editing, !reopen, editing.paid.currency == currency, editing.paid.minorUnits > amount.minorUnits {
+            problem = "\(MoneyFormatter.string(editing.paid)) was already \(receiving ? "received" : "paid"), so the amount can't be less than that."
+            return
+        }
         var todo = editing ?? PaymentTodo(direction: direction, name: name, amount: amount)
         todo.name = name.trimmingCharacters(in: .whitespaces)
         todo.amount = amount
@@ -291,6 +341,8 @@ struct PaymentTodoForm: View {
 struct PayTodoSheet: View {
     @Bindable var session: AppSession
     let todo: PaymentTodo
+    var onEdit: () -> Void = {}
+    var onDelete: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
     @State private var amountText = ""
     @State private var accountID: UUID?
@@ -329,6 +381,12 @@ struct PayTodoSheet: View {
                 }
                 if let problem {
                     Section { Text(problem).foregroundStyle(UZColor.negative) }
+                }
+                Section {
+                    Button("Edit name, amount or date", systemImage: "pencil", action: onEdit)
+                        .accessibilityIdentifier("toPay.sheetEdit")
+                    Button("Delete", systemImage: "trash", role: .destructive, action: onDelete)
+                        .accessibilityIdentifier("toPay.sheetDelete")
                 }
             }
             .navigationTitle(receiving ? "Received" : "Pay")

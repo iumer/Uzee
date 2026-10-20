@@ -120,6 +120,11 @@ extension View {
 func afterTyping(_ work: @escaping @MainActor () -> Void) {
     guard !TypingGate.waiting else { return }
     TypingGate.waiting = true
+    // The box being typed in hands over exactly what it shows, in case its last keystroke hasn't reached the form.
+    if let field = TypingGate.focusedField() {
+        field.sendActions(for: .editingChanged)
+        NotificationCenter.default.post(name: UITextField.textDidChangeNotification, object: field)
+    }
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     Task { @MainActor in
         try? await Task.sleep(for: .milliseconds(150))
@@ -133,4 +138,18 @@ func afterTyping(_ work: @escaping @MainActor () -> Void) {
 @MainActor
 enum TypingGate {
     static var waiting = false
+    fileprivate static weak var found: UIResponder?
+
+    /// The text box being typed in, if any.
+    static func focusedField() -> UITextField? {
+        found = nil
+        UIApplication.shared.sendAction(#selector(UIResponder.uzeeReportFocus(_:)), to: nil, from: nil, for: nil)
+        return found as? UITextField
+    }
+}
+
+extension UIResponder {
+    @objc fileprivate func uzeeReportFocus(_ sender: Any?) {
+        MainActor.assumeIsolated { TypingGate.found = self }
+    }
 }

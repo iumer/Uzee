@@ -47,4 +47,16 @@ struct PaymentTodoTests {
         #expect(result.left == rs(20_000 + 156_000 - 30_000))
         #expect(PaymentTodo.summary(todos, have: rs(20_000), rates: [:]).left == result.left)
     }
+
+    @Test("Editing the amount: more is fine, below what was paid is refused, 0 is refused")
+    func editAmount() throws {
+        var rent = try PaymentTodo(name: "Rent", amount: rs(30_000)).paying(rs(10_000))
+        rent.amount = rs(40_000)
+        try rent.validate()
+        #expect(rent.remaining == rs(30_000))
+        rent.amount = rs(5_000)
+        #expect(throws: PaymentTodo.Problem.moreThanLeft(rs(5_000))) { try rent.validate() }
+        rent.amount = rs(0)
+        #expect(throws: PaymentTodo.Problem.invalidAmount) { try rent.validate() }
+    }
 }
