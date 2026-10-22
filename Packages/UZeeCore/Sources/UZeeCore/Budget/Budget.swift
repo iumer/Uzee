@@ -149,8 +149,36 @@ public enum BudgetCalculator {
             if covered.contains(group) { continue }
             unbudgeted[group] = sum([unbudgeted[group] ?? .zero(base), amount], base)
         }
-        let spent = sum(Array(byCategory.values), base)
+        var spent = sum(Array(byCategory.values), base)
+        // A budget line named "Loans" counts the money you lend or pay back (owner, 2026-10-22). Loans still aren't
+        // spending anywhere else; they only count toward this line and the budget total.
+        if let index = lines.firstIndex(where: { line in categories.first { $0.id == line.categoryID }.map(isLoansLine) == true }) {
+            let loans = loanOutflow(transactions, in: period, base: base, rates: rates)
+            lines[index].spent = sum([lines[index].spent, loans], base)
+            spent = sum([spent, loans], base)
+        }
         return BudgetSummary(period: period, total: plan.total, spent: spent, lines: lines, unbudgeted: unbudgeted)
+    }
+
+    /// "Loans", "Loan", "Loan payments", "Loan repayments": the line that counts lending and paying back.
+    public static func isLoansLine(_ category: SpendCategory) -> Bool {
+        ["loan", "loans", "loan payments", "loan payment", "loan repayments", "loan repayment"].contains(NameKey.make(category.name))
+    }
+
+    /// Money that left your accounts to lend or to pay back a loan, in base.
+    public static func loanOutflow(_ transactions: [MoneyTransaction], in period: BudgetPeriod, base: Currency,
+                                   rates: [String: Decimal]) -> Money {
+        var total: [Money] = []
+        for transaction in transactions where transaction.isEffective && period.contains(transaction.localDate) {
+            guard transaction.kind == .loanOut || transaction.kind == .repayment else { continue }
+            let out = transaction.legs.filter { $0.amount.minorUnits < 0 }
+            for leg in out {
+                guard let inBase = try? RateTable.toBase(Money(minorUnits: -leg.amount.minorUnits, currency: leg.amount.currency),
+                                                         base: base, rates: rates) else { continue }
+                total.append(inBase)
+            }
+        }
+        return sum(total, base)
     }
 
     /// My-share spending per category id within the period (refunds subtract).

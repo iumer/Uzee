@@ -97,7 +97,9 @@ struct BudgetView: View {
                     categories(summary, model: model)
                     historyCard(model.history(count: 6, before: model.current), model: model)
                     reportsRow
-                    Text("Your shares only · transfers and loans excluded · warning at \(model.warnPercent)%"
+                    let loansLine = summary.lines.contains { line in session.ledger.category(line.categoryID).map(BudgetCalculator.isLoansLine) == true }
+                    Text("Your shares only · " + (loansLine ? "transfers excluded, loans count in Loans" : "transfers and loans excluded")
+                         + " · warning at \(model.warnPercent)%"
                          + (session.ledger.footnote.map { " · " + $0 } ?? ""))
                         .font(.caption).foregroundStyle(UZColor.label2)
                         .accessibilityIdentifier("budget.footnote")

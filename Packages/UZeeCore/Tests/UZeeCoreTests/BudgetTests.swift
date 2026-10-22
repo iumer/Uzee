@@ -76,4 +76,27 @@ struct BudgetTests {
         #expect(day(2026, 10, 1).weekday == 5) // Thursday
         #expect(day(2026, 3, 1).addingMonths(-3) == day(2025, 12, 1))
     }
+
+    @Test("A budget line named Loans counts lending and paying back; nothing else does")
+    func loansLine() {
+        let account = UUID()
+        let loans = SpendCategory(type: .expense, name: "Loans", group: .other)
+        let food = SpendCategory(type: .expense, name: "Food", group: .food)
+        let october = BudgetPeriod.containing(day(2026, 10, 6), kind: .calendarMonth)
+        func txn(_ kind: TransactionKind, _ amount: Int64, _ leg: Int64, category: UUID? = nil) -> MoneyTransaction {
+            MoneyTransaction(kind: kind, occurredAt: Date(), localDate: day(2026, 10, 10), timeZoneID: "Asia/Karachi", amount: rs(amount),
+                             categoryID: category, legs: [TransactionLeg(accountID: account, amount: rs(leg), role: .main)])
+        }
+        let rows = [txn(.loanOut, 20_000, -20_000), txn(.repayment, 5_000, -5_000), txn(.repayment, 3_000, 3_000),
+                    txn(.loanIn, 50_000, 50_000), txn(.expense, 4_000, -4_000, category: food.id)]
+        let plan = BudgetPlan(periodStart: october.start, total: rs(100_000), limits: [loans.id: rs(30_000)])
+        let summary = BudgetCalculator.summary(plan: plan, period: october, transactions: rows, categories: [loans, food], base: .pkr, rates: [:])
+        #expect(summary.lines.first { $0.categoryID == loans.id }?.spent == rs(25_000))
+        #expect(summary.spent == rs(29_000))
+        #expect(summary.unbudgeted[food.id] == rs(4_000))
+        // Without a Loans line, loans don't count at all.
+        let plain = BudgetCalculator.summary(plan: BudgetPlan(periodStart: october.start, total: rs(100_000)), period: october,
+                                             transactions: rows, categories: [loans, food], base: .pkr, rates: [:])
+        #expect(plain.spent == rs(4_000))
+    }
 }

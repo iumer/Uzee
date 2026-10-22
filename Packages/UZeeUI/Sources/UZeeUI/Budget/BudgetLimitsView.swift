@@ -12,6 +12,10 @@ struct BudgetLimitsView: View {
     @State private var warnPercent = 80
     @State private var kind: BudgetPeriodKind = .calendarMonth
     @State private var loaded = false
+    @State private var adding = false
+    @State private var renaming: SpendCategory?
+    @State private var deleting: SpendCategory?
+    @State private var renameText = ""
     @Environment(\.dismiss) private var dismiss
 
     private static let step: Int64 = 1_000
@@ -56,7 +60,13 @@ struct BudgetLimitsView: View {
             Section {
                 ForEach(groups) { category in
                     limitRow(category)
+                        .contextMenu { customMenu(category) }
                 }
+                // Your own lines, like "Loans" (owner, 2026-10-22).
+                Button { adding = true } label: {
+                    Label("Add a budget line", systemImage: "plus.circle.fill")
+                }
+                .accessibilityIdentifier("limits.addLine")
             } header: {
                 HStack {
                     Text("Categories · your share")
@@ -68,7 +78,8 @@ struct BudgetLimitsView: View {
                     .textCase(nil)
                 }
             } footer: {
-                Text("Steps of Rs 1,000. Suggestions use what you spent last period.")
+                Text("Steps of Rs 1,000. Suggestions use what you spent last period. A line named \"Loans\" counts money you lend "
+                     + "and pay back. Long-press a line you added to rename or delete it.")
             }
 
             Section {
@@ -94,6 +105,38 @@ struct BudgetLimitsView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Budget limits")
+        .sheet(isPresented: $adding) {
+            BudgetLineSheet(session: session, base: session.ledger.base) { category, limit in
+                setLimit(category.id, limit)
+            }
+        }
+        .alert("Rename \(renaming?.name ?? "")", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Save") {
+                if let category = renaming {
+                    let name = renameText.trimmingCharacters(in: .whitespaces)
+                    if !name.isEmpty {
+                        _ = session.perform("Couldn't rename it. Try another name.", { try session.activity.renameCategory(category.id, name) })
+                    }
+                }
+                renaming = nil
+            }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
+        .onChange(of: renaming) { renameText = renaming?.name ?? "" }
+        .confirmationDialog("Delete \(deleting?.name ?? "")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let category = deleting,
+                   session.perform("Couldn't delete it. Try again.", { try session.activity.deleteCategory(category.id) }) {
+                    limits[category.id] = nil
+                    limitTexts[category.id] = nil
+                }
+                deleting = nil
+            }
+        } message: {
+            Text("Its limit goes. Anything filed under it moves to Other.")
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -152,6 +195,15 @@ struct BudgetLimitsView: View {
             }
         }
         .padding(.vertical, UZSpacing.xs)
+    }
+
+    /// Rename and Delete for lines you added (built-in categories are managed in Settings › Categories).
+    @ViewBuilder
+    private func customMenu(_ category: SpendCategory) -> some View {
+        if category.systemKey == nil {
+            Button("Rename", systemImage: "pencil") { renaming = category }
+            Button("Delete", systemImage: "trash", role: .destructive) { deleting = category }
+        }
     }
 
     // MARK: Data
@@ -229,6 +281,76 @@ struct BudgetLimitsView: View {
         if ok {
             session.budgetRevision += 1
             session.toasts.show(previousKind == kind ? "Budget saved" : "Budget saved · period changed")
+            dismiss()
+        }
+    }
+}
+
+/// A budget line of your own: a name and a limit. It becomes an expense category, so you can file spending under it;
+/// "Loans" also counts money you lend and pay back (owner, 2026-10-22).
+struct BudgetLineSheet: View {
+    @Bindable var session: AppSession
+    let base: Currency
+    let onAdd: (SpendCategory, Int64) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var limitText = ""
+    @State private var problem: String?
+
+    private var isLoans: Bool {
+        BudgetCalculator.isLoansLine(SpendCategory(type: .expense, name: name, group: .other))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Name, like Loans or Gifts", text: $name)
+                        .textInputAutocapitalization(.words)
+                        .accessibilityIdentifier("budgetLine.name")
+                    HStack {
+                        Text(base.symbol).foregroundStyle(UZColor.label2)
+                        TextField("Limit", text: $limitText)
+                            .keyboardType(.numberPad)
+                            .monospacedDigit()
+                            .accessibilityIdentifier("budgetLine.limit")
+                    }
+                } footer: {
+                    Text(isLoans ? "Counts money you lend and pay back on loans. It doesn't show as spending anywhere else."
+                         : "It's also a new category, so you can file spending under it when you add it.")
+                }
+                if let problem {
+                    Section { Text(problem).foregroundStyle(UZColor.negative) }
+                }
+            }
+            .navigationTitle("Add a budget line")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { afterTyping(add) }.fontWeight(.semibold).accessibilityIdentifier("budgetLine.add")
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func add() {
+        let clean = name.trimmingCharacters(in: .whitespaces)
+        guard !clean.isEmpty else { problem = "Give it a name."; return }
+        let limit = min(Int64(String(limitText.filter(\.isNumber).prefix(12))) ?? 0, 999_999_999_999)
+        if let existing = session.ledger.categories.first(where: {
+            $0.parentID == nil && $0.type == .expense && NameKey.make($0.name) == NameKey.make(clean)
+        }) {
+            // Already there (maybe hidden): use it rather than making a second one.
+            if existing.isHidden { _ = session.perform("Couldn't show it.", { try session.activity.setCategoryHidden(false, existing.id) }) }
+            onAdd(existing, limit)
+            dismiss()
+            return
+        }
+        var created: SpendCategory?
+        if session.perform("Couldn't add it. Try another name.", { created = try session.activity.createCategory(clean, nil) }), let created {
+            onAdd(created, limit)
             dismiss()
         }
     }

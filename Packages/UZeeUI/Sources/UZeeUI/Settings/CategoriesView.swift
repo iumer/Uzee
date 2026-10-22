@@ -7,6 +7,7 @@ struct CategoriesView: View {
     @State private var editing: SpendCategory?
     @State private var addingTo: SpendCategory?
     @State private var usage: [UUID: Int] = [:]
+    @State private var deleting: SpendCategory?
 
     var body: some View {
         List {
@@ -18,6 +19,11 @@ struct CategoriesView: View {
                     Button("Add subcategory", systemImage: "plus") { addingTo = group }
                         .font(.subheadline)
                         .accessibilityIdentifier("categories.add.\(group.name)")
+                } header: {
+                    // One "Spending" and one "Income" heading (owner, 2026-10-22: every income group used to read "Income").
+                    if group.id == groups.first(where: { $0.type == group.type })?.id {
+                        Text(group.type == .income ? "Income" : "Spending")
+                    }
                 }
             }
         }
@@ -27,6 +33,20 @@ struct CategoriesView: View {
         .onAppear(perform: loadUsage)
         .sheet(item: $editing, onDismiss: loadUsage) { category in
             NavigationStack { CategoryEditView(session: session, category: category, usage: usage[category.id] ?? 0) }
+        }
+        .confirmationDialog(deleting.map { "Delete \($0.name)?" } ?? "", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let category = deleting,
+                   session.perform("Couldn't delete the category. Try again.", { try session.activity.deleteCategory(category.id) }) {
+                    session.toasts.show("\(category.name) deleted")
+                    loadUsage()
+                }
+                deleting = nil
+            }
+            .accessibilityIdentifier("categories.confirmDelete")
+        } message: {
+            Text("It isn't used by any transaction.")
         }
         .sheet(item: $addingTo) { parent in
             NavigationStack { NewCategoryView(session: session, parent: parent) }
@@ -48,7 +68,7 @@ struct CategoriesView: View {
         Button { editing = category } label: {
             HStack(spacing: UZSpacing.l) {
                 if isGroup { CategoryTile(category.group, size: 30) } else { Color.clear.frame(width: 30, height: 1) }
-                Text(category.type == .income && isGroup ? "Income" : category.name)
+                Text(category.name)
                     .font(isGroup ? .body.weight(.semibold) : .body)
                     .foregroundStyle(category.isHidden ? UZColor.label2 : UZColor.label)
                 Spacer()
@@ -57,6 +77,14 @@ struct CategoriesView: View {
                     Text("\(count)").font(.footnote).monospacedDigit().foregroundStyle(UZColor.label2)
                         .accessibilityLabel("\(count) transactions")
                 }
+            }
+        }
+        // Swipe left to delete one that isn't used and has no subcategories; a used one offers Merge in its page.
+        .swipeActions(edge: .trailing) {
+            if (usage[category.id] ?? 0) == 0, !session.ledger.categories.contains(where: { $0.parentID == category.id }) {
+                Button("Delete", systemImage: "trash", role: .destructive) { deleting = category }
+            } else {
+                Button("Merge", systemImage: "arrow.triangle.merge") { editing = category }.tint(UZColor.tint)
             }
         }
         .accessibilityIdentifier("categories.\(category.name)")
