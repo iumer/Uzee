@@ -167,7 +167,7 @@ struct BudgetView: View {
                     }
                     .frame(width: 96, height: 96)
                     VStack(alignment: .leading, spacing: UZSpacing.xs) {
-                        Text(summary.isOver ? "Over by" : "Left").font(.subheadline.weight(.semibold)).foregroundStyle(UZColor.label2)
+                        Text(summary.isOver ? "Over budget by" : "Budget left").font(.subheadline.weight(.semibold)).foregroundStyle(UZColor.label2)
                         AmountText(summary.isOver ? ((try? summary.left.negated()) ?? summary.left) : summary.left,
                                    font: .system(.largeTitle, weight: .bold))
                             .foregroundStyle(summary.isOver ? UZColor.negative : UZColor.label)

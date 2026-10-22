@@ -195,10 +195,11 @@ struct SpentHalf: View {
                     .minimumScaleFactor(0.5).lineLimit(1)
                 if let summary {
                     if summary.isOver {
-                        Text("Over by \(MoneyFormatter.string((try? summary.left.negated()) ?? summary.left))")
+                        Text("Over budget by \(MoneyFormatter.string((try? summary.left.negated()) ?? summary.left))")
                             .font(.caption.weight(.semibold)).foregroundStyle(UZColor.negative).lineLimit(1).minimumScaleFactor(0.7)
                     } else {
-                        Text("\(MoneyFormatter.string(summary.left)) left · \(daysLeft) \(daysLeft == 1 ? "day" : "days")")
+                        // "of budget", not of your money (owner, 2026-10-22: "I have 500k, why only 130k left?").
+                        Text("\(MoneyFormatter.string(summary.left)) of budget left · \(daysLeft) \(daysLeft == 1 ? "day" : "days")")
                             .font(.caption).foregroundStyle(UZColor.label2).lineLimit(1).minimumScaleFactor(0.7)
                     }
                 }
