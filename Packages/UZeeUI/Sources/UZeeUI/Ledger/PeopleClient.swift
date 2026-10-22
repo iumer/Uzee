@@ -15,6 +15,8 @@ public struct PeopleClient: Sendable {
     public var recordLoan: @Sendable (_ direction: LoanDirection, _ person: UUID, _ amount: Money, _ account: UUID?, _ date: Date,
                                       _ due: LocalDate?, _ note: String?) throws -> Void
     public var recordRepayment: @Sendable (_ loan: UUID, _ amount: Money, _ account: UUID?, _ date: Date) throws -> Void
+    /// A repayment into or out of an account in another currency: `received` is what actually moved there.
+    public var recordRepaymentReceived: @Sendable (_ loan: UUID, _ amount: Money, _ account: UUID, _ date: Date, _ received: Money) throws -> Void
     public var setWrittenOff: @Sendable (_ writtenOff: Bool, _ loan: UUID) throws -> Void
     public var setDueDate: @Sendable (_ due: LocalDate?, _ interestBasisPoints: Int?, _ loan: UUID) throws -> Void
     public var addExistingBalances: @Sendable ([BalanceRow]) throws -> Void
@@ -59,6 +61,9 @@ public struct PeopleClient: Sendable {
                 deleteLoanPayment: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
                 restoreLoanPayment: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
                 deletePerson: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
+                recordRepaymentReceived: @escaping @Sendable (UUID, Money, UUID, Date, Money) throws -> Void = { _, _, _, _, _ in
+                    throw CoreError.notFound
+                },
                 restorePerson: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound }) {
         self.snapshot = snapshot
         self.createPerson = createPerson
@@ -83,6 +88,7 @@ public struct PeopleClient: Sendable {
         self.deleteLoanPayment = deleteLoanPayment
         self.restoreLoanPayment = restoreLoanPayment
         self.deletePerson = deletePerson
+        self.recordRepaymentReceived = recordRepaymentReceived
         self.restorePerson = restorePerson
     }
 

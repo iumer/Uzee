@@ -271,6 +271,9 @@ final class AppContainer {
             deleteLoanPayment: { try store.deleteLoanPayment($0) },
             restoreLoanPayment: { try store.restoreLoanPayment($0) },
             deletePerson: { try store.deletePerson($0) },
+            recordRepaymentReceived: { loan, amount, account, date, received in
+                _ = try store.recordRepayment(loanID: loan, amount: amount, accountID: account, on: day(date), at: date, received: received)
+            },
             restorePerson: { try store.restorePerson($0) }
         )
     }

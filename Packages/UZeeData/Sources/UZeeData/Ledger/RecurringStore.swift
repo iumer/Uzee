@@ -88,6 +88,8 @@ public struct RecurringStore: Sendable {
                     split = made
                 }
             }
+            // Converted here too, so what's returned is what's saved (a dollar salary into a rupee account comes back in rupees).
+            try LedgerStore.convertLegsToAccountCurrency(&transaction, db)
             try LedgerStore.save(transaction, db)
             if let split { try PeopleStore.insertSplit(split, isSample: transaction.isSample, db) }
             try Self.upsertRecord(OccurrenceRecord(itemID: itemID, scheduledDate: scheduledDate, status: .paid, transactionID: transaction.id),

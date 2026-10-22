@@ -184,6 +184,22 @@ struct PeopleStoreTests {
         #expect(throws: PeopleStore.Problem.notFound) { try world.people.deletePerson(try world.people.selfID()) }
     }
 
+    @Test("A dollar loan paid back in rupees into a rupee account: the loan goes down in dollars, HBL up in rupees")
+    func repaidInAnotherCurrency() throws {
+        let world = try empty()
+        let wise = try world.ledger.createAccount(name: "Wise", kind: .multiCurrency, currency: .usd, openingBalance: Money(major: 1_000, .usd),
+                                                  openingDate: day(10, 1))
+        let hbl = try world.ledger.createAccount(name: "HBL", kind: .bank, currency: .pkr, openingBalance: rs(10_000), openingDate: day(10, 1))
+        let friend = try world.people.createPerson(name: "Test Friend")
+        let loan = try world.people.recordLoan(direction: .lent, personID: friend.id, amount: Money(major: 500, .usd), accountID: wise.id, on: day(10, 2))
+        let txn = try #require(try world.people.recordRepayment(loanID: loan.id, amount: Money(major: 200, .usd), accountID: hbl.id, on: day(10, 5),
+                                                                  received: rs(55_000)))
+        #expect(txn.legs.map(\.amount) == [rs(55_000)])
+        #expect(try world.ledger.snapshot().balances[hbl.id] == rs(65_000))
+        let after = try #require(try world.people.snapshot().loans.first { $0.id == loan.id })
+        #expect(LoanCalculator.outstanding(after) == Money(major: 300, .usd))
+    }
+
     @Test("LOAN-009 a debt kept as a record: I owe Ammi Rs 150,000, pay Rs 50,000 outside my accounts, Rs 100,000 left")
     func debtPaidDownWithoutAccount() throws {
         let world = try empty()

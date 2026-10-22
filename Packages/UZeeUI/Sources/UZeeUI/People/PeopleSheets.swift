@@ -413,8 +413,23 @@ struct RepaymentSheet: View {
     @State private var date = Date()
     @State private var problem: String?
     @State private var didLoad = false
+    @State private var receivedText = ""
 
     private var loan: Loan? { session.people.loans.first { $0.id == loanID } }
+
+    /// The chosen account when it isn't in the loan's currency.
+    private func otherAccount(_ loan: Loan) -> Account? {
+        guard let account = session.ledger.account(accountID), account.currency != loan.principal.currency else { return nil }
+        return account
+    }
+
+    /// Starts what arrived at today's rate, from the amount typed above.
+    private func fillReceived() {
+        guard let loan, let other = otherAccount(loan) else { receivedText = ""; return }
+        let typed = (try? AmountParser.parse(amount, currency: loan.principal.currency)) ?? LoanCalculator.outstanding(loan)
+        let converted = try? RateTable.convert(typed, to: other.currency, base: session.ledger.base, rates: session.ledger.rates)
+        receivedText = converted.map(MarkPaidSheet.plain) ?? ""
+    }
 
     var body: some View {
         NavigationStack {
@@ -436,15 +451,35 @@ struct RepaymentSheet: View {
                     Section {
                         Picker(loan.direction == .lent ? "Into" : "From", selection: $accountID) {
                             Text("No account, just a record").tag(UUID?.none)
-                            ForEach(session.ledger.activeAccounts.filter { $0.currency == loan.principal.currency }) { account in
-                                Text(account.name).tag(UUID?.some(account.id))
+                            // Any account: paid back in another currency asks what actually arrived (owner, 2026-10-22).
+                            ForEach(session.ledger.activeAccounts) { account in
+                                Text(account.currency == loan.principal.currency ? account.name : "\(account.name) (\(account.currency.code))")
+                                    .tag(UUID?.some(account.id))
                             }
                         }
                         .accessibilityIdentifier("repay.account")
+                        if let other = otherAccount(loan) {
+                            HStack {
+                                Text(loan.direction == .lent ? "Arrived in \(other.name)" : "Left \(other.name)")
+                                Spacer()
+                                Text(other.currency.symbol).foregroundStyle(UZColor.label2)
+                                TextField("0", text: $receivedText)
+                                    .keyboardType(.decimalPad)
+                                    .monospacedDigit()
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(maxWidth: 140)
+                                    .accessibilityIdentifier("repay.received")
+                            }
+                        }
                         DatePicker("Date", selection: $date, displayedComponents: .date)
                     } footer: {
-                        Text(accountID == nil ? "Only the balance goes down; no account changes. Use this for cash or money paid outside UZee."
-                             : "Not spending or income. The loan's balance goes down.")
+                        if let other = otherAccount(loan) {
+                            Text("The loan is in \(loan.principal.currency.code) and \(other.name) in \(other.currency.code). The loan goes down by the "
+                                 + "\(loan.principal.currency.code) amount; \(other.name) by what you type here (it starts at today's rate, fees and all).")
+                        } else {
+                            Text(accountID == nil ? "Only the balance goes down; no account changes. Use this for cash or money paid outside UZee."
+                                 : "Not spending or income. The loan's balance goes down.")
+                        }
                     }
                 }
                 if let problem {
@@ -468,6 +503,7 @@ struct RepaymentSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .onChange(of: accountID) { fillReceived() }
     }
 
     private func save() {
@@ -490,8 +526,20 @@ struct RepaymentSheet: View {
             problem = "Check the amount."
             return
         }
+        var received: Money?
+        if let other = otherAccount(loan) {
+            guard let typed = try? AmountParser.parse(receivedText, currency: other.currency), typed.minorUnits > 0 else {
+                problem = "Type the \(other.currency.code) amount that " + (loan.direction == .lent ? "arrived in" : "left") + " \(other.name)."
+                return
+            }
+            received = typed
+        }
         if session.perform("Couldn't save. Nothing was changed. Try again.", {
-            try session.peopleClient.recordRepayment(loan.id, money, accountID, date)
+            if let received, let accountID {
+                try session.peopleClient.recordRepaymentReceived(loan.id, money, accountID, date, received)
+            } else {
+                try session.peopleClient.recordRepayment(loan.id, money, accountID, date)
+            }
         }) {
             let name = session.people.person(loan.personID)?.name ?? "them"
             let left = session.people.loans.first { $0.id == loan.id }.map { LoanCalculator.outstanding($0) }
@@ -708,7 +756,8 @@ struct LoanEditSheet: View {
     @State private var didLoad = false
 
     private var name: String { loan.personID.flatMap { session.people.person($0)?.name } ?? loan.institution ?? "them" }
-    private var currency: Currency { session.ledger.account(accountID)?.currency ?? loan.principal.currency }
+    /// The loan keeps its currency: switching a dollar loan to a rupee account would turn $500 into Rs 500.
+    private var currency: Currency { loan.principal.currency }
 
     var body: some View {
         NavigationStack {
@@ -733,9 +782,8 @@ struct LoanEditSheet: View {
                 Section {
                     Picker(loan.direction == .lent ? "From" : "Into", selection: $accountID) {
                         Text("No account · already lent or borrowed").tag(UUID?.none)
-                        ForEach(session.ledger.activeAccounts) { account in
-                            Text(account.currency == session.ledger.base ? account.name : "\(account.name) (\(account.currency.code))")
-                                .tag(UUID?.some(account.id))
+                        ForEach(session.ledger.activeAccounts.filter { $0.currency == loan.principal.currency }) { account in
+                            Text(account.name).tag(UUID?.some(account.id))
                         }
                     }
                     .accessibilityIdentifier("loanEdit.account")

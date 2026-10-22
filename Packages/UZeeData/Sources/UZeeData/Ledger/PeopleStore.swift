@@ -179,7 +179,7 @@ public struct PeopleStore: Sendable {
     /// brings the balance down ("Ammi got Rs 50,000 back in cash, outside my accounts"): no transaction.
     @discardableResult
     public func recordRepayment(loanID: UUID, amount: Money, accountID: UUID?, on date: LocalDate, at time: Date = Date(),
-                                timeZone: TimeZone = .current) throws -> MoneyTransaction? {
+                                timeZone: TimeZone = .current, received: Money? = nil) throws -> MoneyTransaction? {
         try database.writer.write { db in
             guard let loan = try Self.fetchLoans(db).first(where: { $0.id == loanID }) else { throw Problem.notFound }
             try LoanCalculator.validatePayment(amount, for: loan)
@@ -192,11 +192,18 @@ public struct PeopleStore: Sendable {
                 return nil
             }
             let name = try loan.personID.map { try Self.personName($0, db) } ?? loan.institution ?? "Loan"
-            let transaction = MoneyTransaction(
-                kind: .repayment, occurredAt: time, localDate: date, timeZoneID: timeZone.identifier, amount: amount,
+            // Repaid in another currency (a dollar loan paid back in rupees into HBL, owner 2026-10-22): the account
+            // moves by what actually arrived or left; the loan goes down by `amount` in its own currency.
+            let moved = received ?? amount
+            var transaction = MoneyTransaction(
+                kind: .repayment, occurredAt: time, localDate: date, timeZoneID: timeZone.identifier, amount: moved,
                 payeeName: name, note: loan.direction == .lent ? "\(name) repaid" : "Repaid \(name)", counterpartyID: loan.personID,
-                legs: [TransactionLeg(accountID: accountID, amount: loan.direction == .lent ? amount : Money(minorUnits: -amount.minorUnits, currency: amount.currency),
+                legs: [TransactionLeg(accountID: accountID, amount: loan.direction == .lent ? moved : Money(minorUnits: -moved.minorUnits, currency: moved.currency),
                                       role: .main)])
+            if moved.currency != amount.currency, amount.minorUnits > 0 {
+                transaction.note = (transaction.note ?? "") + " · \(MoneyFormatter.string(amount))"
+            }
+            try LedgerStore.convertLegsToAccountCurrency(&transaction, db)
             try LedgerStore.save(transaction, db)
             try db.execute(sql: """
                 INSERT INTO loan_payment (id, created_at, updated_at, is_sample, loan_id, txn_id, amount_minor, paid_on)

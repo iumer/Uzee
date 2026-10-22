@@ -457,7 +457,8 @@ public final class AppSession {
         }
         reload()
         let next = recurring.item(item).flatMap { recurring.next($0, today: today) }
-        let message = before != nil ? "Marked paid · next on \(next.map { DateText.short($0.dueDate) } ?? "—")" : "Marked paid"
+        let word = recurring.item(item)?.type.isIncome == true ? "Marked received" : "Marked paid"
+        let message = before != nil ? "\(word) · next on \(next.map { DateText.short($0.dueDate) } ?? "—")" : word
         toasts.show(message) { [weak self] in
             guard let self else { return }
             do {
