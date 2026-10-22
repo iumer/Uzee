@@ -11,6 +11,8 @@ public struct LedgerStore: Sendable {
         case currencyLocked
         /// Accounts with transactions are archived, never deleted (ACC-005).
         case accountHasTransactions
+        /// A leg in another currency than its account, with no rate to convert it (the currency code).
+        case noRate(String)
     }
 
     let database: AppDatabase
@@ -26,7 +28,7 @@ public struct LedgerStore: Sendable {
             let accounts = try Self.fetchAccounts(db)
             let transactions = try Self.fetchTransactions(db, from: nil, through: nil)
             let rates = try Self.fetchRates(db)
-            let balances = try BalanceCalculator.balances(of: accounts, transactions: transactions)
+            let balances = try BalanceCalculator.balances(of: accounts, transactions: transactions, base: base, rates: rates)
             let available = try BalanceCalculator.available(accounts: accounts, balances: balances, base: base, rates: rates)
             let counted = accounts.filter { $0.includeInTotals && !$0.isArchived }
             return LedgerSnapshot(base: base, accounts: accounts, balances: balances, available: available,
@@ -294,6 +296,7 @@ extension LedgerStore {
 
     static func save(_ transaction: MoneyTransaction, _ db: Database) throws {
         var transaction = transaction
+        try convertLegsToAccountCurrency(&transaction, db)
         let legAccounts = transaction.legs.map(\.accountID.uuidString)
         if !legAccounts.isEmpty {
             let placeholders = Array(repeating: "?", count: legAccounts.count).joined(separator: ",")
@@ -335,6 +338,33 @@ extension LedgerStore {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, arguments: [UUID().uuidString, now, now, transaction.isSample, id, leg.accountID.uuidString,
                                  leg.amount.minorUnits, leg.amount.currency.code, leg.role.rawValue])
+        }
+    }
+
+    /// Every leg is stored in its own account's currency. A path that hands over a dollar amount for a rupee account
+    /// (a USD salary marked received into HBL, owner 2026-10-22) is converted here at the table rate, with the rate kept
+    /// on the transaction, instead of saving a row every balance trips over. No rate yet: refused, nothing saved.
+    static func convertLegsToAccountCurrency(_ transaction: inout MoneyTransaction, _ db: Database) throws {
+        var table: (base: Currency, rates: [String: Decimal])?
+        for index in transaction.legs.indices {
+            let leg = transaction.legs[index]
+            guard let code = try String.fetchOne(db, sql: "SELECT currency_code FROM account WHERE id = ?", arguments: [leg.accountID.uuidString]),
+                  code != leg.amount.currency.code, let currency = Currency.known(code: code) else { continue }
+            if table == nil {
+                let base = try String.fetchOne(db, sql: """
+                    SELECT base_currency_code FROM exchange_rate WHERE deleted_at IS NULL ORDER BY effective_from DESC, created_at DESC LIMIT 1
+                    """).flatMap(Currency.known(code:)) ?? .pkr
+                table = (base, try fetchRates(db))
+            }
+            guard let table, let rate = RateTable.crossRate(from: leg.amount.currency, to: currency, base: table.base, rates: table.rates) else {
+                throw Problem.noRate(table?.base == leg.amount.currency ? code : leg.amount.currency.code)
+            }
+            transaction.legs[index].amount = try CurrencyConverter.convertChecked(leg.amount, to: currency, rate: rate)
+            let foreign = leg.amount.currency == table.base ? currency : leg.amount.currency
+            if transaction.fxRate == nil, foreign != table.base,
+               let toBase = RateTable.crossRate(from: foreign, to: table.base, base: table.base, rates: table.rates) {
+                transaction.fxRate = Rounding.halfUp(toBase, scale: 6)
+            }
         }
     }
 

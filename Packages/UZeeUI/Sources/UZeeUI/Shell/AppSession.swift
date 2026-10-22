@@ -490,7 +490,9 @@ public final class AppSession {
             toasts.show("\(recurring.item(item)?.name ?? "That bill") is already \(done.status == .paid ? "paid" : "skipped")")
             return
         }
+        // An account in another currency than the bill: open the sheet so the real amount that arrived or left is typed.
         guard let bill = recurring.item(item), bill.accountID != nil || bill.paidByID != nil,
+              ledger.account(bill.accountID).map({ $0.currency == bill.amount.currency }) ?? true,
               (try? recurringClient.markPaid(item, scheduled, bill.amount(on: scheduled), bill.accountID, Date())) != nil else {
             openReminder(item: item, date: scheduled)
             return

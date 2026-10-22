@@ -336,8 +336,8 @@ struct PaymentTodoForm: View {
     }
 }
 
-/// Paying a to-do: all of it, or a part. Optionally saved as spending from an account in the same currency,
-/// so "You have" goes down too.
+/// Paying a to-do: all of it, or a part. Optionally saved as spending or income on an account, so "You have"
+/// moves too. An account in another currency asks what actually arrived or left in it (owner, 2026-10-22).
 struct PayTodoSheet: View {
     @Bindable var session: AppSession
     let todo: PaymentTodo
@@ -348,8 +348,14 @@ struct PayTodoSheet: View {
     @State private var accountID: UUID?
     @State private var problem: String?
     @State private var didLoad = false
+    @State private var accountAmountText = ""
 
-    private var accounts: [Account] { session.ledger.activeAccounts.filter { $0.currency == todo.amount.currency } }
+    private var accounts: [Account] { session.ledger.activeAccounts }
+    /// The chosen account when its currency isn't the to-do's.
+    private var otherCurrencyAccount: Account? {
+        guard let account = session.ledger.account(accountID), account.currency != todo.amount.currency else { return nil }
+        return account
+    }
     private var receiving: Bool { todo.direction == .receive }
 
     var body: some View {
@@ -375,9 +381,26 @@ struct PayTodoSheet: View {
                         ForEach(accounts) { Text($0.name).tag(UUID?.some($0.id)) }
                     }
                     .accessibilityIdentifier("toPay.account")
+                    if let other = otherCurrencyAccount {
+                        HStack {
+                            Text(receiving ? "Arrived in \(other.name)" : "Taken from \(other.name)")
+                            Spacer()
+                            Text(other.currency.symbol).foregroundStyle(UZColor.label2)
+                            TextField("0", text: $accountAmountText)
+                                .keyboardType(.decimalPad).monospacedDigit()
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 140)
+                                .accessibilityIdentifier("toPay.accountAmount")
+                        }
+                    }
                 } footer: {
-                    Text(receiving ? "Pick the account to also save it as income, so its balance goes up."
-                                   : "Pick the account to also save it as spending, so its balance goes down.")
+                    if let other = otherCurrencyAccount {
+                        Text("\(other.name) is in \(other.currency.code). Type the \(other.currency.code) amount that "
+                             + (receiving ? "arrived" : "left") + "; it starts at today's rate.")
+                    } else {
+                        Text(receiving ? "Pick the account to also save it as income, so its balance goes up."
+                                       : "Pick the account to also save it as spending, so its balance goes down.")
+                    }
                 }
                 if let problem {
                     Section { Text(problem).foregroundStyle(UZColor.negative) }
@@ -402,7 +425,18 @@ struct PayTodoSheet: View {
                 didLoad = true
                 // Empty, with the full amount as the hint: typing a part no longer adds to "20000" (it became "2000010000").
             }
+            .onChange(of: accountID) { fillAccountAmount() }
+            .onChange(of: amountText) { fillAccountAmount() }
         }
+    }
+
+    /// Starts the other-currency amount at today's rate, from what's being paid.
+    private func fillAccountAmount() {
+        guard let other = otherCurrencyAccount else { accountAmountText = ""; return }
+        let text = amountText.trimmingCharacters(in: .whitespaces).isEmpty ? MarkPaidSheet.plain(todo.remaining) : amountText
+        let part = (try? AmountParser.parse(text, currency: todo.amount.currency)) ?? todo.remaining
+        let converted = try? RateTable.convert(part, to: other.currency, base: session.ledger.base, rates: session.ledger.rates)
+        accountAmountText = converted.map(MarkPaidSheet.plain) ?? ""
     }
 
     private func pay() {
@@ -424,13 +458,21 @@ struct PayTodoSheet: View {
             return
         }
         if let accountID {
+            var posted = part
+            if let other = otherCurrencyAccount {
+                guard let typed = try? AmountParser.parse(accountAmountText, currency: other.currency), typed.minorUnits > 0 else {
+                    problem = "Type the \(other.currency.code) amount that " + (receiving ? "arrived in " : "left ") + "\(other.name)."
+                    return
+                }
+                posted = typed
+            }
             // Spending or income needs a category: what UZee would guess for the name, else "Other".
             let type: CategoryType = receiving ? .income : .expense
             let pickable = session.ledger.categories.filter { $0.type == type && !$0.isHidden }
             let remembered = (try? session.activity.rememberedCategories()) ?? [:]
             let category = CategorySuggester.suggest(payee: todo.name, remembered: remembered, categories: pickable)
                 ?? pickable.first { $0.name.lowercased().hasPrefix("other") }?.id ?? pickable.first?.id
-            let draft = TransactionDraft(kind: receiving ? .income : .expense, status: .posted, amount: part, accountID: accountID, categoryID: category,
+            let draft = TransactionDraft(kind: receiving ? .income : .expense, status: .posted, amount: posted, accountID: accountID, categoryID: category,
                                          payeeName: todo.name,
                                          occurredAt: Date(), timeZone: .current, source: .manual)
             guard let built = try? TransactionValidator.build(draft, accounts: session.ledger.accounts, base: session.ledger.base),

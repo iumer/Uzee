@@ -3,29 +3,41 @@ import Foundation
 /// Balances are derived, never typed or stored (ACC-03, DATA_MODEL §6).
 public enum BalanceCalculator {
     /// Opening balance plus every effective leg on this account dated on or after the opening date.
-    public static func balance(of account: Account, transactions: some Sequence<MoneyTransaction>) throws(MoneyError) -> Money {
+    public static func balance(of account: Account, transactions: some Sequence<MoneyTransaction>, base: Currency = .pkr,
+                               rates: [String: Decimal] = [:]) throws(MoneyError) -> Money {
         var total = account.openingBalance
         for transaction in transactions where transaction.isEffective && transaction.localDate >= account.openingDate {
             for leg in transaction.legs where leg.accountID == account.id {
-                total = try total.adding(leg.amount)
+                guard let amount = inAccountCurrency(leg.amount, account.currency, base: base, rates: rates) else { continue }
+                total = try total.adding(amount)
             }
         }
         return total
     }
 
     /// Balance of every account, keyed by id.
-    public static func balances(of accounts: [Account], transactions: [MoneyTransaction]) throws(MoneyError) -> [UUID: Money] {
+    public static func balances(of accounts: [Account], transactions: [MoneyTransaction], base: Currency = .pkr,
+                                rates: [String: Decimal] = [:]) throws(MoneyError) -> [UUID: Money] {
         var result: [UUID: Money] = [:]
         for account in accounts { result[account.id] = account.openingBalance }
         for transaction in transactions where transaction.isEffective {
             for leg in transaction.legs {
                 guard let account = accounts.first(where: { $0.id == leg.accountID }),
                       transaction.localDate >= account.openingDate,
-                      let current = result[leg.accountID] else { continue }
-                result[leg.accountID] = try current.adding(leg.amount)
+                      let current = result[leg.accountID],
+                      let amount = inAccountCurrency(leg.amount, account.currency, base: base, rates: rates) else { continue }
+                result[leg.accountID] = try current.adding(amount)
             }
         }
         return result
+    }
+
+    /// A leg saved in another currency than its account (a $1,875 salary marked received into a rupee account, before
+    /// 0.15.12) blanked every screen with "currencyMismatch" (owner, 2026-10-22). It counts at the table rate instead,
+    /// or is left out when there's no rate, so one odd row never takes the app down.
+    static func inAccountCurrency(_ amount: Money, _ currency: Currency, base: Currency, rates: [String: Decimal]) -> Money? {
+        if amount.currency == currency { return amount }
+        return try? RateTable.convert(amount, to: currency, base: base, rates: rates)
     }
 
     /// "Available" (DSH-01): non-archived accounts with include-in-totals, each converted to base
@@ -52,6 +64,23 @@ public enum RateTable {
     /// Currencies in `currencies` that can't be converted yet, sorted by code.
     public static func missing(_ currencies: Set<Currency>, base: Currency, rates: [String: Decimal]) -> [Currency] {
         currencies.filter { !hasRate($0, base: base, rates: rates) }.sorted { $0.code < $1.code }
+    }
+
+    /// Target units per 1 unit of `from`, through the base: USD → PKR is the USD rate, PKR → USD is 1 / that, and
+    /// EUR → USD goes across both. Nil when either side has no rate yet.
+    public static func crossRate(from: Currency, to: Currency, base: Currency, rates: [String: Decimal]) -> Decimal? {
+        if from == to { return 1 }
+        let fromRate: Decimal? = from == base ? 1 : rates[from.code]
+        let toRate: Decimal? = to == base ? 1 : rates[to.code]
+        guard let fromRate, let toRate, fromRate > 0, toRate > 0 else { return nil }
+        return fromRate / toRate
+    }
+
+    /// `money` in `target` at the table rates; throws when there's no rate for one of them.
+    public static func convert(_ money: Money, to target: Currency, base: Currency, rates: [String: Decimal]) throws(MoneyError) -> Money {
+        if money.currency == target { return money }
+        guard let rate = crossRate(from: money.currency, to: target, base: base, rates: rates) else { throw .currencyMismatch }
+        return try CurrencyConverter.convertChecked(money, to: target, rate: rate)
     }
 
     public static func toBase(_ money: Money, base: Currency, rates: [String: Decimal]) throws(MoneyError) -> Money {

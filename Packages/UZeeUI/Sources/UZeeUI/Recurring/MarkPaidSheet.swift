@@ -16,6 +16,9 @@ struct MarkPaidSheet: View {
     @State private var keepNewPrice = true
     /// Paid early: keep the next dates, or count them from the day it was paid (owner, 2026-10-19).
     @State private var countFromPayment: Bool?
+    /// What actually arrived or left in the chosen account when it's in another currency: a $1,875 salary that
+    /// came as Rs 517,000 into HBL (owner, 2026-10-22).
+    @State private var accountAmountText = ""
 
     private var model: RecurringModel { RecurringModel(session: session) }
     private var item: RecurringItem? { session.recurring.item(occurrence.itemID) }
@@ -75,11 +78,29 @@ struct MarkPaidSheet: View {
                                 }
                             }
                             .accessibilityIdentifier("markPaid.account")
+                            if let other = otherCurrencyAccount {
+                                HStack {
+                                    Text(item.type.isIncome ? "Arrived in \(other.name)" : "Taken from \(other.name)")
+                                    Spacer()
+                                    Text(other.currency.symbol).foregroundStyle(UZColor.label2)
+                                    TextField("0", text: $accountAmountText)
+                                        .keyboardType(.decimalPad)
+                                        .monospacedDigit()
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(maxWidth: 140)
+                                        .accessibilityIdentifier("markPaid.accountAmount")
+                                }
+                            }
                         }
                         DatePicker(item.type.isIncome ? "Date received" : "Date paid", selection: $date, displayedComponents: .date)
                             .accessibilityIdentifier("markPaid.date")
                     } footer: {
-                        Text(footer(item))
+                        if let other = otherCurrencyAccount {
+                            Text("\(other.name) is in \(other.currency.code). Type the \(other.currency.code) amount that "
+                                 + (item.type.isIncome ? "arrived" : "left") + "; it starts at today's rate. " + footer(item))
+                        } else {
+                            Text(footer(item))
+                        }
                     }
                     if let early = earlyChoice(item) {
                         Section {
@@ -130,6 +151,7 @@ struct MarkPaidSheet: View {
             }
             .onAppear(perform: load)
             .onChange(of: countFromPayment) { problem = nil }
+            .onChange(of: accountID) { fillAccountAmount() }
         }
         .accessibilityIdentifier("sheet.markPaid")
     }
@@ -200,6 +222,22 @@ struct MarkPaidSheet: View {
         let due = occurrence.dueDate.startDate(in: .current)
         date = due > Date() ? Date() : due
         if occurrence.dueDate < session.today { date = Date() }
+        fillAccountAmount()
+    }
+
+    /// The chosen account when its currency isn't the bill's.
+    private var otherCurrencyAccount: Account? {
+        guard someoneElsePays == nil, let account = session.ledger.account(accountID),
+              account.currency != occurrence.amount.currency else { return nil }
+        return account
+    }
+
+    /// Starts the other-currency amount at today's rate, from the amount typed above.
+    private func fillAccountAmount() {
+        guard let other = otherCurrencyAccount else { accountAmountText = ""; return }
+        let typed = (try? AmountParser.parse(amountText, currency: occurrence.amount.currency)) ?? occurrence.amount
+        let converted = try? RateTable.convert(typed, to: other.currency, base: session.ledger.base, rates: session.ledger.rates)
+        accountAmountText = converted.map(Self.plain) ?? ""
     }
 
     static func plain(_ money: Money) -> String {
@@ -240,8 +278,18 @@ struct MarkPaidSheet: View {
             problem = "Choose the account it was paid from."
             return
         }
+        var posted = money
+        if let other = otherCurrencyAccount {
+            do {
+                posted = try AmountParser.parse(accountAmountText, currency: other.currency)
+                guard posted.minorUnits > 0 else { throw AmountParser.Failure.empty }
+            } catch {
+                problem = "Type the \(other.currency.code) amount that " + (item?.type.isIncome == true ? "arrived in " : "left ") + "\(other.name)."
+                return
+            }
+        }
         let moving = item.map { earlyChoice($0) != nil } == true && countFromPayment == true
-        guard session.markPaid(occurrence, amount: money, account: account, date: date, countFromPayment: moving) else { return }
+        guard session.markPaid(occurrence, amount: posted, account: account, date: date, countFromPayment: moving) else { return }
         if keepNewPrice, money != occurrence.amount, var updated = item {
             updated.amount = money
             _ = session.perform("Saved the payment, but couldn't change the usual amount.", {

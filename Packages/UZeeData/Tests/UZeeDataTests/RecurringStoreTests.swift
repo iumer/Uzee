@@ -67,6 +67,31 @@ struct RecurringStoreTests {
         #expect(next?.scheduledDate == day(11, 8))
     }
 
+    @Test("A dollar salary received into a rupee account: converted at the rate, balances still read (owner, 2026-10-22)")
+    func usdSalaryIntoRupeeAccount() throws {
+        let world = try sample()
+        let salary = item("Salary", try world.recurring.snapshot())
+        let hbl = try account("HBL", world)
+        let before = try world.ledger.snapshot().balances[hbl]!
+        let paid = try world.recurring.markPaid(itemID: salary.id, scheduledDate: day(10, 21), amount: Money(minorUnits: 187_500, currency: .usd),
+                                                accountID: hbl, on: day(10, 21))
+        #expect(paid.legs.map(\.amount) == [rs(525_000)])
+        #expect(paid.fxRate == 280)
+        let after = try world.ledger.snapshot().balances[hbl]!
+        #expect(try after.subtracting(before) == rs(525_000))
+        #expect(try world.recurring.snapshot().next(salary, today: day(10, 21))?.scheduledDate == day(11, 21))
+    }
+
+    @Test("The rupees that actually arrived for a dollar salary are saved as they are")
+    func receivedRupeesForDollarSalary() throws {
+        let world = try sample()
+        let salary = item("Salary", try world.recurring.snapshot())
+        let hbl = try account("HBL", world)
+        let paid = try world.recurring.markPaid(itemID: salary.id, scheduledDate: day(10, 21), amount: rs(517_000), accountID: hbl, on: day(10, 21))
+        #expect(paid.amount == rs(517_000) && paid.legs.map(\.amount) == [rs(517_000)] && paid.fxRate == nil)
+        #expect(paid.kind == .income && paid.categoryID == salary.categoryID)
+    }
+
     @Test("Paid early, counting from that day: next due moves, saved and read back; Undo puts it back")
     func paidEarlyMovesDates() throws {
         let world = try sample()

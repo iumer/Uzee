@@ -218,6 +218,19 @@ struct TransactionEngineTests {
         #expect(try before.subtracting(after) == rs(650))
     }
 
+    @Test("A leg saved in the wrong currency counts at the rate instead of failing every balance (owner, 2026-10-22)")
+    func mismatchedLegNeverThrows() throws {
+        var odd = try save(TransactionDraft(kind: .income, amount: rs(1_000), accountID: hbl.id, categoryID: category, occurredAt: date(6), timeZone: karachi))
+        odd.legs = [TransactionLeg(accountID: hbl.id, amount: usd(cents: 10_000), role: .main)]
+        let balances = try BalanceCalculator.balances(of: accounts, transactions: [odd], base: .pkr, rates: rates)
+        #expect(try balances[hbl.id]!.subtracting(hbl.openingBalance) == rs(28_000))
+        let noRate = try BalanceCalculator.balances(of: accounts, transactions: [odd])
+        #expect(noRate[hbl.id] == hbl.openingBalance)
+        #expect(RateTable.crossRate(from: .pkr, to: .usd, base: .pkr, rates: rates) == Decimal(1) / 280)
+        #expect(try RateTable.convert(rs(28_000), to: .usd, base: .pkr, rates: rates) == usd(cents: 10_000))
+        #expect(RateTable.crossRate(from: .eur, to: .usd, base: .pkr, rates: rates) == nil)
+    }
+
     @Test("TXN-005 refund reduces spending, not income")
     func refund() throws {
         let food = try save(TransactionDraft(kind: .expense, amount: rs(2_180), accountID: hbl.id, categoryID: category, occurredAt: date(2), timeZone: karachi))
