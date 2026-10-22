@@ -42,6 +42,7 @@ struct RemindersTests {
                                         today: today, minuteNow: 9 * 60, format: format)
         #expect(plan.first?.fireDate == LocalDate(year: 2026, month: 10, day: 25))
         #expect(plan.first?.title == "Salary expected today")
+        #expect(plan.first?.isIncome == true)
     }
 
     @Test("CAL-005 a missed lead time falls back to the due morning; a missed due time gets nothing")

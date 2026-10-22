@@ -93,10 +93,12 @@ struct HomeCards: View {
                 ForEach(overdue.prefix(2)) { row in
                     HStack(spacing: UZSpacing.m) {
                         Image(systemName: "exclamationmark.circle.fill").foregroundStyle(UZColor.negative).accessibilityHidden(true)
-                        Text("\(row.item.name) is overdue · \(MoneyFormatter.string(row.occurrence.amount))")
+                        // Income isn't "overdue" or paid: it hasn't come yet, and you mark it received (owner, 2026-10-22).
+                        Text(row.item.type.isIncome ? "\(row.item.name) hasn't come yet · \(MoneyFormatter.string(row.occurrence.amount))"
+                             : "\(row.item.name) is overdue · \(MoneyFormatter.string(row.occurrence.amount))")
                             .font(.subheadline.weight(.semibold)).foregroundStyle(UZColor.negative).lineLimit(2)
                         Spacer()
-                        Button("Pay") { paying = row.occurrence }
+                        Button(row.item.type.isIncome ? "Received" : "Pay") { paying = row.occurrence }
                             .buttonStyle(.borderedProminent).controlSize(.small)
                             .accessibilityIdentifier(row.id == overdue.first?.id ? "home.payOverdue" : "home.pay.\(row.item.name)")
                     }

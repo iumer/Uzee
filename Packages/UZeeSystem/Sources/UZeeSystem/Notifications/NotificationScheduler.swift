@@ -8,6 +8,8 @@ public final class NotificationScheduler: NSObject, UNUserNotificationCenterDele
     public static let shared = NotificationScheduler()
 
     public static let billCategory = "uzee.bill"
+    /// Salary and other income: "Mark received" instead of "Mark paid".
+    public static let incomeCategory = "uzee.income"
     public static let markPaidAction = "uzee.markPaid"
     public static let snoozeAction = "uzee.snooze"
 
@@ -29,8 +31,13 @@ public final class NotificationScheduler: NSObject, UNUserNotificationCenterDele
                                             options: [.authenticationRequired, .foreground], icon: UNNotificationActionIcon(systemImageName: "checkmark.circle"))
         let snooze = UNNotificationAction(identifier: Self.snoozeAction, title: "Snooze 1 day", options: [],
                                           icon: UNNotificationActionIcon(systemImageName: "clock.arrow.circlepath"))
-        center.setNotificationCategories([UNNotificationCategory(identifier: Self.billCategory, actions: [markPaid, snooze],
-                                                                 intentIdentifiers: [], options: [])])
+        let markReceived = UNNotificationAction(identifier: Self.markPaidAction, title: "Mark received",
+                                                options: [.authenticationRequired, .foreground],
+                                                icon: UNNotificationActionIcon(systemImageName: "checkmark.circle"))
+        center.setNotificationCategories([
+            UNNotificationCategory(identifier: Self.billCategory, actions: [markPaid, snooze], intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: Self.incomeCategory, actions: [markReceived, snooze], intentIdentifiers: [], options: []),
+        ])
     }
 
     /// Asks once; later calls return the saved answer without a prompt.
@@ -61,7 +68,7 @@ public final class NotificationScheduler: NSObject, UNUserNotificationCenterDele
             if let item = reminder.itemID { info["item"] = item.uuidString }
             if let date = reminder.scheduledDate { info["date"] = date.description }
             content.userInfo = info
-            if reminder.kind == .bill { content.categoryIdentifier = Self.billCategory }
+            if reminder.kind == .bill { content.categoryIdentifier = reminder.isIncome ? Self.incomeCategory : Self.billCategory }
             var when = DateComponents()
             when.year = reminder.fireDate.year
             when.month = reminder.fireDate.month

@@ -77,11 +77,14 @@ public struct PlannedReminder: Hashable, Sendable {
     /// For bills: the item and scheduled date that Mark paid and Snooze act on.
     public var itemID: UUID?
     public var scheduledDate: LocalDate?
+    /// Money coming in (salary): its button says "Mark received", not "Mark paid" (owner, 2026-10-22).
+    public var isIncome: Bool
 
     public static let idPrefix = "uzee."
 
     public init(id: String, kind: Kind, fireDate: LocalDate, minuteOfDay: Int, title: String, body: String,
-                itemID: UUID? = nil, scheduledDate: LocalDate? = nil) {
+                itemID: UUID? = nil, scheduledDate: LocalDate? = nil, isIncome: Bool = false) {
+        self.isIncome = isIncome
         self.id = id
         self.kind = kind
         self.fireDate = fireDate
@@ -139,7 +142,7 @@ public enum ReminderPlanner {
                     fireDate: fire, minuteOfDay: minute,
                     title: isIncome ? "\(item.name) expected today" : "\(item.name) due \(phrase(occurrence.dueDate, from: fire))",
                     body: isIncome ? "\(amount)Mark it received when it arrives." : "\(amount)Mark it paid or snooze it from here.",
-                    itemID: item.id, scheduledDate: occurrence.scheduledDate))
+                    itemID: item.id, scheduledDate: occurrence.scheduledDate, isIncome: isIncome))
             }
         }
 
