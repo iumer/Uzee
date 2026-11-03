@@ -7,6 +7,8 @@ TARGETED_DEVICE_FAMILY = 1,2
 SWIFT_VERSION = 6.0
 SWIFT_STRICT_CONCURRENCY = complete
 GENERATE_INFOPLIST_FILE = YES
+// Partial plist merged into the generated one: the backup file type.
+INFOPLIST_FILE = Config/UZee-Info.plist
 INFOPLIST_KEY_CFBundleDisplayName = UZee
 INFOPLIST_KEY_UILaunchScreen_Generation = YES
 INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES

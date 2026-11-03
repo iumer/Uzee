@@ -2,6 +2,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UZeeCore
 
+extension UTType {
+    /// UZee's backup file (declared in the app's Info.plist), so Files shows it as a UZee backup and the picker offers it.
+    static let uzeeBackup = UTType(exportedAs: "app.uzee.backup", conformingTo: .data)
+}
+
 /// Settings › Backup and restore (DATA-02, US-11): a password-protected file with everything, including
 /// receipts, saved wherever you like (Files, iCloud Drive, AirDrop); restore checks it before replacing anything.
 struct BackupView: View {
@@ -18,6 +23,8 @@ struct BackupView: View {
     @State private var restorePassword = ""
     @State private var summary: BackupSummary?
     @State private var confirmRestore = false
+    /// The password the shown summary was checked with.
+    @State private var checkedPassword: String?
 
     var body: some View {
         Form {
@@ -32,16 +39,22 @@ struct BackupView: View {
                     ShareLink(item: file) { Label("Save or share the backup", systemImage: "square.and.arrow.up") }
                         .accessibilityIdentifier("backup.share")
                 } else {
+                    // afterTyping: the last typed character reaches the password before it's used (owner, 2026-11-03:
+                    // a backup "wouldn't open" because Check read the password one letter short).
                     Button {
-                        make()
+                        afterTyping(make)
                     } label: {
                         HStack {
                             Label("Make backup", systemImage: "lock.doc")
                             if working { Spacer(); ProgressView() }
                         }
                     }
-                    .disabled(working || password.count < BackupProblem.minimumPasswordLength || password != confirm)
+                    .disabled(working || makeHint != nil)
                     .accessibilityIdentifier("backup.make")
+                    if let makeHint {
+                        Text(makeHint).font(.footnote).foregroundStyle(UZColor.label2)
+                            .accessibilityIdentifier("backup.makeHint")
+                    }
                 }
             } header: {
                 Text("Back up")
@@ -55,9 +68,15 @@ struct BackupView: View {
                     SecureField("Backup password", text: $restorePassword)
                         .accessibilityIdentifier("backup.restorePassword")
                         // A checked backup is tied to the password it was checked with.
-                        .onChange(of: restorePassword) { summary = nil }
-                    Button("Check backup") { check() }
-                        .disabled(working || restorePassword.isEmpty)
+                        .onChange(of: restorePassword) { if restorePassword != checkedPassword { summary = nil } }
+                    Button { afterTyping(check) } label: {
+                        HStack {
+                            Text(working && summary == nil ? "Checking…" : "Check backup")
+                            if working && summary == nil { Spacer(); ProgressView() }
+                        }
+                    }
+                    .accessibilityIdentifier("backup.check")
+                    .disabled(working || restorePassword.isEmpty)
                 }
                 if let summary {
                     VStack(alignment: .leading, spacing: UZSpacing.xs) {
@@ -81,7 +100,7 @@ struct BackupView: View {
             }
         }
         .navigationTitle("Backup and restore")
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.data]) { result in
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.uzeeBackup, .data]) { result in
             problem = nil
             summary = nil
             guard case .success(let url) = result else { return }
@@ -96,6 +115,18 @@ struct BackupView: View {
             Text("Your current data is copied aside first.")
         }
         .onChange(of: password) { file = nil }
+        .onChange(of: confirm) { file = nil }
+    }
+
+    /// Why Make backup is grey, in words, instead of a silent disabled button.
+    private var makeHint: String? {
+        if password.isEmpty { return "Type a password to make a backup." }
+        if password.count < BackupProblem.minimumPasswordLength {
+            return "The password needs \(BackupProblem.minimumPasswordLength) or more characters (\(password.count) so far)."
+        }
+        if confirm.isEmpty { return "Type the same password again below it." }
+        if password != confirm { return "The two passwords don't match yet." }
+        return nil
     }
 
     private func make() {
@@ -121,7 +152,9 @@ struct BackupView: View {
             let result = await Task.detached { Result { try backup.inspect(data, secret) } }.value
             working = false
             switch result {
-            case .success(let found): summary = found
+            case .success(let found):
+                checkedPassword = secret
+                summary = found
             case .failure(let error): problem = (error as? BackupProblem)?.message ?? BackupProblem.failed.message
             }
         }

@@ -51,18 +51,32 @@ final class AppContainer {
     private static func backupClient(_ database: AppDatabase, _ files: AttachmentStore, info: AppInfo) -> BackupClient {
         let cipher = BackupService.Cipher(iterations: BackupCrypto.iterations,
                                           seal: { try BackupCrypto.seal($0, password: $1, salt: $2, iterations: $3) },
-                                          open: { try BackupCrypto.open($0, password: $1, salt: $2, iterations: $3) })
+                                          open: { sealed, password, salt, iterations in
+                                              do { return try BackupCrypto.open(sealed, password: password, salt: salt, iterations: iterations) } catch {
+                                                  Log.data.error("Backup open failed: \(String(describing: error), privacy: .public) bytes=\(sealed.count) pw=\(password.count)")
+                                                  throw error
+                                              }
+                                          })
         let service = BackupService(database: database, attachments: files, cipher: cipher)
         return BackupClient(
             makeBackup: { password in
                 let data = try service.makeBackup(password: password, appVersion: info.displayVersion)
-                let day = LocalDate(Date(), in: .current)
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent("UZee backup \(day).uzeebackup")
-                try data.write(to: url, options: [.atomic, .completeFileProtection])
+                // The time too, so a second backup the same day doesn't overwrite the first in Files.
+                let now = Date()
+                let time = now.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)).replacingOccurrences(of: ":", with: ".")
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("UZee backup \(LocalDate(now, in: .current)) \(time).uzeebackup")
+                // Readable by the share sheet and Files while it's open, even if the iPhone locks mid-save.
+                try data.write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen])
                 Log.data.info("Backup made")
                 return url
             },
-            inspect: { try service.inspect($0, password: $1) },
+            inspect: { file, password in
+                do { return try service.inspect(file, password: password) } catch {
+                    Log.data.error("Backup check failed: \(String(describing: error), privacy: .public) bytes=\(file.count)")
+                    throw error
+                }
+            },
             restore: { data, password in
                 let safety = try StorageLocation.databaseFolder().appendingPathComponent("Safety copies", isDirectory: true)
                 let summary = try service.restore(data, password: password, safetyFolder: safety)

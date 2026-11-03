@@ -30,7 +30,7 @@ public enum BackupProblem: Error, Equatable, Sendable {
     public var message: String {
         switch self {
         case .notABackup: "This isn't a UZee backup file."
-        case .wrongPasswordOrDamaged: "Wrong password, or the file is damaged. Nothing was changed."
+        case .wrongPasswordOrDamaged: "Wrong password, or the file is damaged. Check capital letters and try again; nothing was changed."
         case .tooNew: "This backup is from a newer UZee. Update UZee first."
         case .weakPassword: "Use at least 8 characters."
         case .failed: "Couldn't finish. Nothing was changed."
