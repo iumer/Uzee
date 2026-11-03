@@ -25,6 +25,8 @@ struct AddSheet: View {
     /// transaction already has, so editing never changes it quietly (owner, 2026-10-15).
     @State private var chosenCurrency: Currency?
     @State private var toAccountID: UUID?
+    /// Optional bank charge on a new transfer. Empty means no fee. Taken from the account the money left.
+    @State private var feeText = ""
     @State private var categoryID: UUID?
     @State private var payee = ""
     /// The category filled in from the payee; replaced while the user hasn't picked another (CAT-007/008).
@@ -38,6 +40,8 @@ struct AddSheet: View {
     @State private var splitDraft: SplitDraft?
     /// Set once saved, so a second tap while the sheet closes can't add it twice.
     @State private var didSave = false
+    /// Built with the transfer, then saved beside it. Nil when there is no fee.
+    @State private var feeToSave: MoneyTransaction?
     @State private var reviewSplit: Split?
     /// The edited transaction had a split, so saving without one removes it.
     @State private var hadSplit = false
@@ -545,6 +549,22 @@ struct AddSheet: View {
                 Text("·").foregroundStyle(UZColor.label3)
                 accountMenu("to", selection: $toAccountID, identifier: "add.to")
             }
+            if editing == nil, let account {
+                HStack {
+                    Text("Fee").foregroundStyle(UZColor.label2)
+                    Spacer()
+                    Text(account.currency.symbol).foregroundStyle(UZColor.label2)
+                    TextField("Optional", text: $feeText)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                        .frame(maxWidth: 160)
+                        .accessibilityLabel("Transfer fee")
+                        .accessibilityIdentifier("add.fee")
+                }
+                .padding(UZSpacing.l)
+                .background(UZColor.card, in: .rect(cornerRadius: 12))
+            }
             DatePicker("Date", selection: $date, displayedComponents: .date)
                 .labelsHidden()
                 .accessibilityIdentifier("add.date")
@@ -568,7 +588,9 @@ struct AddSheet: View {
                     Text(wiseFill.note).font(.footnote).foregroundStyle(UZColor.label2).accessibilityIdentifier("add.wise")
                 }
             }
-            Text("Moving your own money between accounts. It isn't spending or income.")
+            Text(feeText.trimmingCharacters(in: .whitespaces).isEmpty
+                 ? "Moving your own money between accounts. It isn't spending or income."
+                 : "The move isn't spending. The fee is, from the account it left.")
                 .font(.footnote).foregroundStyle(UZColor.label2)
         }
         .frame(maxWidth: .infinity)
@@ -748,6 +770,38 @@ struct AddSheet: View {
         let me = session.people.selfID
         let othersPaid = splitDraft.map { $0.payer != nil && $0.payer != me } ?? false
         let checkedAccountID = accountID ?? (othersPaid ? ledger.activeAccounts.first { $0.currency == currency }?.id : nil)
+        feeToSave = nil
+        if kind == .transfer, editing == nil {
+            let trimmedFee = feeText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedFee.isEmpty {
+                guard let source = account else { problem = "Choose the account the fee left."; return }
+                let feeMoney: Money
+                do {
+                    feeMoney = try AmountParser.parse(trimmedFee, currency: source.currency)
+                } catch {
+                    problem = ProblemText.message(error)
+                    return
+                }
+                guard feeMoney.minorUnits > 0 else { problem = "The fee must be more than zero."; return }
+                guard let feeCategory = ledger.categories.first(where: { $0.systemKey == "financial.transfer_fees" })?.id else {
+                    problem = "Couldn't find Transfer fees. Nothing was saved."
+                    return
+                }
+                let destination = ledger.account(toAccountID)?.name
+                let feeDraft = TransactionDraft(
+                    kind: .expense, status: isPending ? .pending : .posted, amount: feeMoney, accountID: source.id,
+                    categoryID: feeCategory, payeeName: "Transfer fee",
+                    note: destination.map { "Fee on transfer to \($0)" } ?? "Transfer fee",
+                    occurredAt: date, timeZone: editing.flatMap { TimeZone(identifier: $0.timeZoneID) } ?? .current,
+                    source: .manual)
+                do {
+                    feeToSave = try TransactionValidator.build(feeDraft, accounts: ledger.accounts, base: ledger.base)
+                } catch {
+                    problem = ProblemText.message(error)
+                    return
+                }
+            }
+        }
         let draft = TransactionDraft(
             kind: kind, status: isPending ? .pending : .posted, amount: amount, accountID: checkedAccountID,
             toAccountID: kind == .transfer ? toAccountID : nil, receivedAmount: received,
@@ -774,9 +828,14 @@ struct AddSheet: View {
     /// Saves straight away; the toast's Undo takes it back (no second "Save this?" step).
     private func commit(_ transaction: MoneyTransaction) {
         guard !didSave else { return }
-        let saved = reviewSplit != nil || hadSplit
-            ? session.save(transaction, split: reviewSplit, isNew: editing == nil)
-            : session.save(transaction, isNew: editing == nil)
+        let saved: Bool
+        if let fee = feeToSave, transaction.kind == .transfer, editing == nil {
+            saved = session.saveTransfer(transaction, fee: fee)
+        } else if reviewSplit != nil || hadSplit {
+            saved = session.save(transaction, split: reviewSplit, isNew: editing == nil)
+        } else {
+            saved = session.save(transaction, isNew: editing == nil)
+        }
         if saved {
             didSave = true
             attachReceipt(to: transaction.id)

@@ -141,6 +141,33 @@ struct LedgerTests {
         #expect(try store.snapshot().balance(of: account("Easypaisa", snapshot)) == rs(21_350))
     }
 
+    @Test("A transfer fee comes out of the source account and is the only spending")
+    func transferFee() throws {
+        let store = LedgerStore(database: try AppDatabase.inMemory())
+        let hbl = try store.createAccount(name: "HBL", kind: .bank, currency: .pkr, openingBalance: rs(50_000),
+                                          openingDate: LocalDate(year: 2026, month: 10, day: 1))
+        let meezan = try store.createAccount(name: "Meezan", kind: .bank, currency: .pkr, openingBalance: rs(1_000),
+                                             openingDate: LocalDate(year: 2026, month: 10, day: 1))
+        let accounts = try store.accounts()
+        let transfer = try TransactionValidator.build(
+            TransactionDraft(kind: .transfer, amount: rs(10_000), accountID: hbl.id, toAccountID: meezan.id, occurredAt: date(6), timeZone: karachi),
+            accounts: accounts)
+        let feeCategory = try #require(store.categories().first { $0.systemKey == "financial.transfer_fees" }?.id)
+        let fee = try TransactionValidator.build(
+            TransactionDraft(kind: .expense, amount: rs(50), accountID: hbl.id, categoryID: feeCategory, payeeName: "Transfer fee",
+                             note: "Fee on transfer to Meezan", occurredAt: date(6), timeZone: karachi),
+            accounts: accounts)
+        try store.save(transfer)
+        try store.save(fee)
+        let snapshot = try store.snapshot()
+        #expect(snapshot.balance(of: hbl) == rs(39_950))
+        #expect(snapshot.balance(of: meezan) == rs(11_000))
+        let totals = try PeriodTotals.compute(store.transactions(), from: october.0, through: october.1, base: .pkr, rates: [:])
+        #expect(totals.spending == rs(50))
+        #expect(totals.income.isZero)
+        #expect(SpendingRules.spendingSign(transfer.kind) == 0)
+    }
+
     @Test("TXN-012 a failing write saves nothing")
     func atomic() throws {
         let (_, store) = try sampleDatabase()

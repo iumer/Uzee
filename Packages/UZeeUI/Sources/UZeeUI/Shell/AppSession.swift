@@ -381,6 +381,37 @@ public final class AppSession {
         return split.people.contains { $0 != people.selfID }
     }
 
+    /// Saves a new transfer and, when there is one, its fee. Undo removes both.
+    @discardableResult
+    public func saveTransfer(_ transfer: MoneyTransaction, fee: MoneyTransaction?) -> Bool {
+        guard let fee else { return save(transfer, isNew: true) }
+        do {
+            try client.save(transfer)
+            do {
+                try client.save(fee)
+            } catch {
+                try? client.discard(transfer.id)
+                errorMessage = "Couldn't save the fee. Nothing was changed. Try again."
+                return false
+            }
+        } catch {
+            errorMessage = "Couldn't save. Nothing was changed. Try again."
+            return false
+        }
+        reload()
+        toasts.show("Saved") { [weak self] in
+            guard let self else { return }
+            do {
+                try self.client.discard(fee.id)
+                try self.client.discard(transfer.id)
+            } catch {
+                self.errorMessage = "Couldn't undo. Your entry is still saved."
+            }
+            self.reload()
+        }
+        return true
+    }
+
     /// Saves a new or edited transaction, then offers Undo for 5 seconds (AUD-13, TXN-013).
     @discardableResult
     public func save(_ transaction: MoneyTransaction, isNew: Bool) -> Bool {

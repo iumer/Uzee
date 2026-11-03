@@ -131,6 +131,19 @@ struct PeopleTests {
         #expect(people.net(of: partner) == rs(-9_800))
     }
 
+    @Test("A settle-up with no account uses the note to say who paid")
+    func settleOutsideAccounts() {
+        let person = UUID()
+        var paid = txn(.settlement, rs(20_000), on: day(10, 2), counterparty: person)
+        paid.note = "You paid Ammi"
+        #expect(Settlement.from(paid)?.amount == rs(20_000))
+        paid.note = "Ammi paid you"
+        #expect(Settlement.from(paid)?.amount == Money(minorUnits: -rs(20_000).minorUnits, currency: .pkr))
+        // A leg still wins over the note, so older settle-ups keep their direction.
+        let fromAccount = txn(.settlement, rs(20_000), on: day(10, 2), leg: -2_000_000, counterparty: person)
+        #expect(Settlement.from(fromAccount)?.amount == rs(20_000))
+    }
+
     @Test("SPL-011 settling Rs 9,800 from HBL zeroes the Office balance")
     func settleOffice() throws {
         var data = try dataset()

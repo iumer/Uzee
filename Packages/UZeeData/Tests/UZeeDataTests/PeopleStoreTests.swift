@@ -105,6 +105,24 @@ struct PeopleStoreTests {
         #expect(try balances(world).0.net(of: usama.id) == rs(15_000))
     }
 
+    @Test("A shared expense paid outside your accounts does not change the account, and they still owe their share")
+    func sharedExpenseOutsideAccount() throws {
+        let world = try empty()
+        let cash = try world.ledger.createAccount(name: "Cash", kind: .cash, currency: .pkr, openingBalance: rs(60_000), openingDate: day(10, 1))
+        let friend = try world.people.createPerson(name: "Ammi")
+        let me = try world.people.selfID()
+        let expense = MoneyTransaction(kind: .expense, occurredAt: Date(), localDate: day(10, 5), timeZoneID: "Asia/Karachi",
+                                       amount: rs(20_000), payeeName: "Dinner", legs: [])
+        let split = Split(transactionID: expense.id, method: .equal, payers: [SplitPayer(personID: me, amount: rs(20_000))],
+                          shares: [SplitShare(personID: me, share: rs(10_000)), SplitShare(personID: friend.id, share: rs(10_000))])
+        try world.people.save(expense, split: split)
+        let saved = try #require(try world.ledger.transactions().first { $0.payeeName == "Dinner" })
+        #expect(saved.legs.isEmpty)
+        #expect(saved.myShare == rs(10_000))
+        #expect(try world.ledger.snapshot().balances[cash.id] == rs(60_000))
+        #expect(try balances(world).0.net(of: friend.id) == rs(10_000))
+    }
+
     @Test("Notes on a shared expense: add, list oldest first, delete; empty refused")
     func entryNotes() throws {
         let world = try empty()
@@ -276,6 +294,28 @@ struct PeopleStoreTests {
         let snapshot = try world.people.snapshot()
         #expect(snapshot.people.map(\.name) == ["You"])
         #expect(snapshot.groups.isEmpty && snapshot.splits.isEmpty && snapshot.loans.isEmpty)
+    }
+
+    @Test("Settling outside your accounts closes what you owe and does not move any balance")
+    func settleOutsideAccounts() throws {
+        let world = try empty()
+        let hbl = try world.ledger.createAccount(name: "HBL", kind: .bank, currency: .pkr, openingBalance: rs(40_000),
+                                                 openingDate: day(10, 1))
+        let ammi = try world.people.createPerson(name: "Ammi")
+        _ = try world.people.recordLoan(direction: .borrowed, personID: ammi.id, amount: rs(20_000), accountID: nil, on: day(10, 1))
+        let settlement = try world.people.settle(personID: ammi.id, groupID: nil, amount: rs(20_000), iPaid: true, accountID: nil, on: day(10, 2))
+        #expect(settlement.legs.isEmpty)
+        #expect(settlement.note == "You paid Ammi")
+        #expect(SpendingRules.spendingSign(settlement.kind) == 0)
+        let (ledger, snapshot) = try balances(world)
+        #expect(ledger.net(of: ammi.id).isZero)
+        #expect(snapshot.loans.allSatisfy { LoanCalculator.outstanding($0).isZero })
+        #expect(try world.ledger.snapshot().balance(of: hbl) == rs(40_000))
+        // They paid you some other way: the people balance moves, HBL does not.
+        let theyPaid = try world.people.settle(personID: ammi.id, groupID: nil, amount: rs(5_000), iPaid: false, accountID: nil, on: day(10, 3))
+        #expect(theyPaid.note == "Ammi paid you")
+        #expect(try balances(world).0.net(of: ammi.id) == rs(-5_000))
+        #expect(try world.ledger.snapshot().balance(of: hbl) == rs(40_000))
     }
 
     @Test("BUG-026: settling up with Usama pays off his open loans, oldest first, and he's settled everywhere")

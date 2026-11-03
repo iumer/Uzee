@@ -8,6 +8,20 @@ Entries before 0.0.1 are documentation stages and are dated instead of versioned
 
 Built without per-milestone approval at the owner's request (2026-10-07): M4–M8 back to back, then a whole-app review against the mockups.
 
+## [0.15.17] build 71 — 2026-11-01 — Shared expense without an account
+
+### Added
+- People › a person › Add an expense: Paid from now includes "Don't add from expense". The expense still splits with that person, and only your share counts as spending. No account balance changes. Picking a bank still takes the money from that account.
+
+## [0.15.16] build 70 — 2026-11-01 — Transfer fee and settle outside accounts
+
+### Added
+- Add › Moved: an optional Fee. The amount you type still moves from one account to the other and is not spending. The fee, if you type one, is a separate Transfer fees expense taken from the account the money left, on the same day. Leave Fee empty and nothing else changes. Editing an old transfer does not add a fee.
+- People › a person › Settle up: the From / Into menu now has "Don't take it from an account" (or "Don't add it to an account" when they pay you). That settles what you owe without adding or taking money from any account. Picking an account still works as before.
+
+### Not changed
+- Voice, statement import, splits, budgets, loans that already go through an account, and transfers with no fee.
+
 ## [0.10.0] build 14 — 2026-10-08 — Owner's test round fixes, reminders, backup, namaz and Qibla
 
 ### Changed

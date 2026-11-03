@@ -158,6 +158,9 @@ struct PersonEntryView: View {
         if let leg = transaction.legs.first(where: { $0.role == .main }) {
             LabeledContent(transaction.kind == .settlement && leg.amount.minorUnits > 0 ? "Into" : "Paid from",
                            value: ledger.account(leg.accountID)?.name ?? "Account")
+        } else if transaction.kind == .settlement {
+            let added = transaction.note?.hasSuffix(" paid you") == true
+            LabeledContent("Account", value: added ? "None, not added to your accounts" : "None, not taken from your accounts")
         } else {
             LabeledContent("Account", value: "None, no money left your accounts")
         }

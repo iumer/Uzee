@@ -20,7 +20,7 @@ public struct PeopleClient: Sendable {
     public var setWrittenOff: @Sendable (_ writtenOff: Bool, _ loan: UUID) throws -> Void
     public var setDueDate: @Sendable (_ due: LocalDate?, _ interestBasisPoints: Int?, _ loan: UUID) throws -> Void
     public var addExistingBalances: @Sendable ([BalanceRow]) throws -> Void
-    public var settle: @Sendable (_ person: UUID, _ group: UUID?, _ amount: Money, _ iPaid: Bool, _ account: UUID, _ date: Date) throws -> Void
+    public var settle: @Sendable (_ person: UUID, _ group: UUID?, _ amount: Money, _ iPaid: Bool, _ account: UUID?, _ date: Date) throws -> Void
     /// Dated notes on a loan, like a chat (owner, 2026-10-15).
     public var addLoanNote: @Sendable (_ text: String, _ loan: UUID) throws -> Void
     public var deleteLoanNote: @Sendable (_ note: UUID) throws -> Void
@@ -49,7 +49,7 @@ public struct PeopleClient: Sendable {
                 setWrittenOff: @escaping @Sendable (Bool, UUID) throws -> Void,
                 setDueDate: @escaping @Sendable (LocalDate?, Int?, UUID) throws -> Void,
                 addExistingBalances: @escaping @Sendable ([BalanceRow]) throws -> Void,
-                settle: @escaping @Sendable (UUID, UUID?, Money, Bool, UUID, Date) throws -> Void,
+                settle: @escaping @Sendable (UUID, UUID?, Money, Bool, UUID?, Date) throws -> Void,
                 addLoanNote: @escaping @Sendable (String, UUID) throws -> Void = { _, _ in throw CoreError.notFound },
                 deleteLoanNote: @escaping @Sendable (UUID) throws -> Void = { _ in throw CoreError.notFound },
                 entryNotes: @escaping @Sendable (UUID) throws -> [LoanNote] = { _ in [] },

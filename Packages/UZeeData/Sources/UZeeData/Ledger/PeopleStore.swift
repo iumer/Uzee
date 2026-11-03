@@ -397,17 +397,24 @@ public struct PeopleStore: Sendable {
     // MARK: Settle up
 
     /// Settle up (SPL-08): `iPaid` sends money from the account to the person; otherwise they paid me.
+    /// Without an account it only updates what you owe (cash, or some other way that never touched these accounts).
     @discardableResult
-    public func settle(personID: UUID, groupID: UUID?, amount: Money, iPaid: Bool, accountID: UUID, on date: LocalDate,
+    public func settle(personID: UUID, groupID: UUID?, amount: Money, iPaid: Bool, accountID: UUID?, on date: LocalDate,
                        at time: Date = Date(), timeZone: TimeZone = .current) throws -> MoneyTransaction {
         guard amount.minorUnits > 0 else { throw Problem.invalidAmount }
         return try database.writer.write { db in
             let name = try Self.personName(personID, db)
+            let legs: [TransactionLeg]
+            if let accountID {
+                legs = [TransactionLeg(accountID: accountID, amount: iPaid ? Money(minorUnits: -amount.minorUnits, currency: amount.currency) : amount,
+                                       role: .main)]
+            } else {
+                legs = []
+            }
             let transaction = MoneyTransaction(
                 kind: .settlement, occurredAt: time, localDate: date, timeZoneID: timeZone.identifier, amount: amount,
                 payeeName: name, note: iPaid ? "You paid \(name)" : "\(name) paid you", counterpartyID: personID, groupID: groupID,
-                legs: [TransactionLeg(accountID: accountID, amount: iPaid ? Money(minorUnits: -amount.minorUnits, currency: amount.currency) : amount,
-                                      role: .main)])
+                legs: legs)
             try LedgerStore.save(transaction, db)
             // Pays off their open loans first, oldest first, so the loans close with it (BUG-026); what's left
             // settles shared expenses. Group settle-ups are about the group only.

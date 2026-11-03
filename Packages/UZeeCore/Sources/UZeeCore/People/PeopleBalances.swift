@@ -95,10 +95,16 @@ public struct Settlement: Hashable, Sendable {
     }
 
     /// The settlement carried by `transaction`, if it is one. The account leg says who paid:
-    /// money leaving my account means I paid them.
+    /// money leaving my account means I paid them. With no account (settled outside UZee) the note does:
+    /// "You paid …" or "… paid you".
     public static func from(_ transaction: MoneyTransaction) -> Settlement? {
         guard transaction.kind == .settlement, transaction.isEffective, let person = transaction.counterpartyID else { return nil }
-        let iPaid = (transaction.legs.first?.amount.minorUnits ?? -1) < 0
+        let iPaid: Bool
+        if let leg = transaction.legs.first {
+            iPaid = leg.amount.minorUnits < 0
+        } else {
+            iPaid = transaction.note?.hasSuffix(" paid you") != true
+        }
         let amount = iPaid ? transaction.amount : Money(minorUnits: -transaction.amount.minorUnits, currency: transaction.amount.currency)
         return Settlement(transactionID: transaction.id, personID: person, groupID: transaction.groupID, amount: amount,
                           date: transaction.localDate)

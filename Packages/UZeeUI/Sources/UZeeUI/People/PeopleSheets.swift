@@ -643,6 +643,7 @@ struct SettleUpSheet: View {
                 }
                 Section {
                     Picker(iPay ? "From" : "Into", selection: $accountID) {
+                        Text(iPay ? "Don't take it from an account" : "Don't add it to an account").tag(UUID?.none)
                         ForEach(session.ledger.activeAccounts.filter { $0.currency == session.ledger.base }) { account in
                             Text(account.name).tag(UUID?.some(account.id))
                         }
@@ -676,13 +677,18 @@ struct SettleUpSheet: View {
     }
 
     private var hint: String {
-        guard !suggested.isZero else { return "You're settled with \(name). A payment now starts a new balance." }
+        let outside = accountID == nil
+            ? (iPay ? " Nothing is taken from your accounts." : " Nothing is added to your accounts.")
+            : ""
+        guard !suggested.isZero else {
+            return "You're settled with \(name). A payment now starts a new balance.\(outside)"
+        }
         let full = MoneyFormatter.string(SplitText.magnitude(suggested))
-        return suggested.isNegative ? "You owe \(name) \(full). Not spending." : "\(name) owes you \(full). Not income."
+        let base = suggested.isNegative ? "You owe \(name) \(full). Not spending." : "\(name) owes you \(full). Not income."
+        return base + outside
     }
 
     private func save() {
-        guard let accountID else { problem = "Choose an account."; return }
         let money: Money
         do {
             money = try AmountParser.parse(amount, currency: session.ledger.base)

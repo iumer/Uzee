@@ -61,7 +61,11 @@ struct SharedExpenseSheet: View {
         _chosenCurrency = State(initialValue: transaction.amount.currency)
         _date = State(initialValue: transaction.occurredAt)
         _note = State(initialValue: transaction.note ?? "")
-        if let account = transaction.legs.first(where: { $0.role == .main })?.accountID { _accountID = State(initialValue: account) }
+        if let account = transaction.legs.first(where: { $0.role == .main })?.accountID {
+            _accountID = State(initialValue: account)
+        } else {
+            _accountID = State(initialValue: nil)
+        }
     }
 
     /// Split tapped on the Add sheet: carries over what was typed there.
@@ -92,8 +96,16 @@ struct SharedExpenseSheet: View {
     private var hasPeople: Bool { draft.members.contains { $0 != me } }
     private var currency: Currency { youPaid ? (ledger.account(accountID)?.currency ?? chosenCurrency) : chosenCurrency }
     private var total: Money { (try? AmountParser.parse(amountText, currency: currency)) ?? .zero(currency) }
-    /// You paid some or all of it, so money left one of your accounts.
+    /// You paid some or all of it, so money left one of your accounts, unless Paid from is "Don't add from expense".
     private var youPaid: Bool { draft.payer == me || (draft.payer == nil && (draft.paidAmounts[me] ?? 0) > 0) }
+    /// Paid from an account was turned off: the people balance still changes, no account does.
+    private var outsideAccounts: Bool { youPaid && accountID == nil }
+
+    private var paidFromHint: String {
+        if !youPaid { return "No money leaves your accounts; it's added to what you owe." }
+        if outsideAccounts { return "Nothing is taken from your accounts. Only your share counts as your spending." }
+        return "Only your share counts as your spending."
+    }
 
     var body: some View {
         NavigationStack {
@@ -119,6 +131,8 @@ struct SharedExpenseSheet: View {
                         HStack(spacing: UZSpacing.l) {
                             CurrencyMenu(ledger: ledger, currency: currency, size: 22) { choice in
                                 chosenCurrency = choice
+                                // "Don't add from expense" stays selected when the currency changes.
+                                guard accountID != nil else { return }
                                 if ledger.account(accountID)?.currency != choice,
                                    let match = ledger.activeAccounts.first(where: { $0.currency == choice }) {
                                     accountID = match.id
@@ -155,6 +169,7 @@ struct SharedExpenseSheet: View {
                             .accessibilityIdentifier("shared.date")
                         if youPaid {
                             Picker("Paid from", selection: $accountID) {
+                                Text("Don't add from expense").tag(UUID?.none)
                                 ForEach(ledger.activeAccounts) { account in
                                     Text(account.currency == ledger.base ? account.name : "\(account.name) (\(account.currency.code))")
                                         .tag(UUID?.some(account.id))
@@ -165,7 +180,7 @@ struct SharedExpenseSheet: View {
                         TextField("Note (optional)", text: $note, axis: .vertical)
                             .accessibilityIdentifier("shared.note")
                     } footer: {
-                        Text(youPaid ? "Only your share counts as your spending." : "No money leaves your accounts; it's added to what you owe.")
+                        Text(paidFromHint)
                     }
                     if let problem {
                         Section {
@@ -293,15 +308,36 @@ struct SharedExpenseSheet: View {
             focus = .what
             return
         }
-        // Someone else paid: no account moves, but the amount still needs a currency to be checked against.
-        let checkedAccountID = youPaid ? accountID : ledger.activeAccounts.first { $0.currency == currency }?.id
+        // Someone else paid, or "Don't add from expense": no account moves. The draft still needs an
+        // account of the same currency so it can be checked; the legs are removed before saving.
+        let checkedAccountID = youPaid && !outsideAccounts
+            ? accountID
+            : ledger.activeAccounts.first { $0.currency == currency }?.id
         let transaction = TransactionDraft(
             kind: .expense, status: .posted, amount: amount, accountID: checkedAccountID, toAccountID: nil, receivedAmount: nil,
             categoryID: categoryID ?? fallbackCategory, payeeName: what.trimmingCharacters(in: .whitespaces), note: note,
             occurredAt: date, timeZone: editing.flatMap { TimeZone(identifier: $0.timeZoneID) } ?? .current,
             source: editing?.source ?? .manual)
         do {
-            let built = try TransactionValidator.build(transaction, accounts: ledger.accounts, base: ledger.base, existing: editing)
+            let built: MoneyTransaction
+            if outsideAccounts, checkedAccountID == nil {
+                guard let category = categoryID ?? fallbackCategory else {
+                    problem = "Choose a category."
+                    return
+                }
+                let zone = editing.flatMap { TimeZone(identifier: $0.timeZoneID) } ?? .current
+                let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+                built = MoneyTransaction(
+                    id: editing?.id ?? UUID(), kind: .expense, occurredAt: date, localDate: LocalDate(date, in: zone),
+                    timeZoneID: zone.identifier, amount: amount, categoryID: category,
+                    payeeName: what.trimmingCharacters(in: .whitespacesAndNewlines),
+                    note: trimmedNote.isEmpty ? nil : trimmedNote, source: editing?.source ?? .manual, legs: [],
+                    createdAt: editing?.createdAt ?? Date(), isSample: editing?.isSample ?? false)
+            } else {
+                var checked = try TransactionValidator.build(transaction, accounts: ledger.accounts, base: ledger.base, existing: editing)
+                if outsideAccounts { checked.legs = [] }
+                built = checked
+            }
             let split: Split
             do {
                 split = try draft.build(total: built.amount, transactionID: built.id)
