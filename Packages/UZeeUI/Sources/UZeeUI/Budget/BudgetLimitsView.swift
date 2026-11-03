@@ -79,7 +79,7 @@ struct BudgetLimitsView: View {
                 }
             } footer: {
                 Text("Steps of Rs 1,000. Suggestions use what you spent last period. A line named \"Loans\" counts money you lend "
-                     + "and pay back. Long-press a line you added to rename or delete it.")
+                     + "and pay back. Tap a name to rename it; long-press a line you added to delete it.")
             }
 
             Section {
@@ -115,8 +115,15 @@ struct BudgetLimitsView: View {
             Button("Save") {
                 if let category = renaming {
                     let name = renameText.trimmingCharacters(in: .whitespaces)
-                    if !name.isEmpty {
-                        _ = session.perform("Couldn't rename it. Try another name.", { try session.activity.renameCategory(category.id, name) })
+                    if !name.isEmpty, name != category.name {
+                        // Same checks as Settings › Categories (no empty or duplicate names).
+                        do {
+                            try session.activity.renameCategory(category.id, name)
+                            session.reload()
+                            session.toasts.show("Renamed to \(name)")
+                        } catch {
+                            session.errorMessage = CategoryProblemText.text(error)
+                        }
                     }
                 }
                 renaming = nil
@@ -163,7 +170,16 @@ struct BudgetLimitsView: View {
                 CategoryTile(category.group, size: 30)
                 // Type the limit, or nudge it with − / + (owner, 2026-10-12: tapping + a thousand at a time was slow).
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(category.name)
+                    // Tap the name to rename it, here and everywhere it's used (owner, 2026-11-03).
+                    Button { renaming = category } label: {
+                        HStack(spacing: UZSpacing.xs) {
+                            Text(category.name).foregroundStyle(UZColor.label)
+                            Image(systemName: "pencil").font(.caption).foregroundStyle(UZColor.label3)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Rename \(category.name)")
+                    .accessibilityIdentifier("limits.rename.\(category.name)")
                     HStack(spacing: UZSpacing.xxs) {
                         Text(session.ledger.base.symbol).font(.headline).foregroundStyle(UZColor.label2)
                         TextField("0", text: limitText(category.id))
@@ -200,8 +216,8 @@ struct BudgetLimitsView: View {
     /// Rename and Delete for lines you added (built-in categories are managed in Settings › Categories).
     @ViewBuilder
     private func customMenu(_ category: SpendCategory) -> some View {
+        Button("Rename", systemImage: "pencil") { renaming = category }
         if category.systemKey == nil {
-            Button("Rename", systemImage: "pencil") { renaming = category }
             Button("Delete", systemImage: "trash", role: .destructive) { deleting = category }
         }
     }

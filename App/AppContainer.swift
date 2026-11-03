@@ -106,7 +106,7 @@ final class AppContainer {
     private static func calendarClient(_ database: AppDatabase) -> CalendarClient {
         let store = EventStore(database: database)
         let notifications = NotificationScheduler.shared
-        return CalendarClient(
+        var client = CalendarClient(
             events: { try store.events() },
             saveEvent: { try store.save($0) },
             deleteEvent: { try store.delete($0) },
@@ -124,6 +124,12 @@ final class AppContainer {
             paymentTodos: { try store.paymentTodos() },
             savePaymentTodo: { try store.save($0) },
             deletePaymentTodo: { try store.deletePaymentTodo($0) })
+        client.payments = TodoPaymentsClient(
+            list: { try store.todoPayments($0) }, add: { try store.addTodoPayment($0) }, update: { try store.updateTodoPayment($0) },
+            delete: { try store.deleteTodoPayment($0) }, restore: { try store.restoreTodoPayment($0) }, clear: { try store.clearTodoPayments($0) },
+            suggestedLink: { try store.suggestedLink($0).map { ($0.payment, $0.transaction, $0.amount) } },
+            link: { try store.linkTodoPayment($0, transactionID: $1) })
+        return client
     }
 
     /// The one container, shared by the app scene and Siri (App Intents run in the app's process).

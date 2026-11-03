@@ -22,6 +22,8 @@ public struct CalendarClient: Sendable {
     public var paymentTodos: @Sendable () throws -> [PaymentTodo]
     public var savePaymentTodo: @Sendable (PaymentTodo) throws -> Void
     public var deletePaymentTodo: @Sendable (UUID) throws -> Void
+    /// Each payment on a to-do, with its date and the entry it made (owner, 2026-11-03).
+    public var payments: TodoPaymentsClient = .unavailable
 
     public init(events: @escaping @Sendable () throws -> [CalendarEvent],
                 saveEvent: @escaping @Sendable (CalendarEvent) throws -> Void,
@@ -59,4 +61,36 @@ public struct CalendarClient: Sendable {
         events: { [] }, saveEvent: { _ in throw CoreError.notFound }, deleteEvent: { _ in throw CoreError.notFound },
         reminderSettings: { .standard }, setReminderSettings: { _ in throw CoreError.notFound },
         requestNotifications: { false }, notificationsAllowed: { false }, schedule: { _ in })
+}
+
+/// The payment history of a To pay / To receive item.
+public struct TodoPaymentsClient: Sendable {
+    public var list: @Sendable (UUID) throws -> [TodoPayment]
+    public var add: @Sendable (TodoPayment) throws -> Void
+    public var update: @Sendable (TodoPayment) throws -> Void
+    public var delete: @Sendable (UUID) throws -> Void
+    public var restore: @Sendable (UUID) throws -> Void
+    public var clear: @Sendable (UUID) throws -> Void
+    /// An earlier payment and the one Activity entry that looks like it: (payment, transaction, its amount).
+    public var suggestedLink: @Sendable (UUID) throws -> (UUID, UUID, Money)?
+    public var link: @Sendable (UUID, UUID) throws -> Void
+
+    public init(list: @escaping @Sendable (UUID) throws -> [TodoPayment], add: @escaping @Sendable (TodoPayment) throws -> Void,
+                update: @escaping @Sendable (TodoPayment) throws -> Void, delete: @escaping @Sendable (UUID) throws -> Void,
+                restore: @escaping @Sendable (UUID) throws -> Void, clear: @escaping @Sendable (UUID) throws -> Void,
+                suggestedLink: @escaping @Sendable (UUID) throws -> (UUID, UUID, Money)?, link: @escaping @Sendable (UUID, UUID) throws -> Void) {
+        self.list = list
+        self.add = add
+        self.update = update
+        self.delete = delete
+        self.restore = restore
+        self.clear = clear
+        self.suggestedLink = suggestedLink
+        self.link = link
+    }
+
+    public static let unavailable = TodoPaymentsClient(
+        list: { _ in [] }, add: { _ in throw CoreError.notFound }, update: { _ in throw CoreError.notFound },
+        delete: { _ in throw CoreError.notFound }, restore: { _ in throw CoreError.notFound }, clear: { _ in throw CoreError.notFound },
+        suggestedLink: { _ in nil }, link: { _, _ in throw CoreError.notFound })
 }

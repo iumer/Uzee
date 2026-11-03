@@ -87,3 +87,29 @@ public struct PaymentTodo: Hashable, Sendable, Identifiable {
                 Money(minorUnits: have.minorUnits + toReceive - toPay, currency: have.currency))
     }
 }
+
+/// One payment on a To pay / To receive item (owner, 2026-11-03: "show the entries with date and time, and let me
+/// edit them"). When it was saved as spending or income, it points at that transaction, and the transaction's
+/// amount is what counts, so fixing Rs 4,000 to Rs 400,000 in Activity shows here too.
+public struct TodoPayment: Hashable, Sendable, Identifiable {
+    public var id: UUID
+    public var todoID: UUID
+    /// In the to-do's currency. For a linked payment in the same currency, the transaction's current amount.
+    public var amount: Money
+    public var paidAt: Date
+    public var transactionID: UUID?
+    public var accountID: UUID?
+    /// A row made from the paid total kept before payments had a history (0.15.19).
+    public var isEarlier: Bool
+
+    public init(id: UUID = UUID(), todoID: UUID, amount: Money, paidAt: Date, transactionID: UUID? = nil, accountID: UUID? = nil,
+                isEarlier: Bool = false) {
+        self.id = id
+        self.todoID = todoID
+        self.amount = amount
+        self.paidAt = paidAt
+        self.transactionID = transactionID
+        self.accountID = accountID
+        self.isEarlier = isEarlier
+    }
+}

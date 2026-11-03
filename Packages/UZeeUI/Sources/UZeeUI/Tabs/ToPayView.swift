@@ -173,7 +173,8 @@ struct ToPayView: View {
 
     private func row(_ todo: PaymentTodo) -> some View {
         let fraction = todo.amount.minorUnits > 0 ? Double(todo.paid.minorUnits) / Double(todo.amount.minorUnits) : 0
-        return Button { if todo.isDone { editing = todo } else { paying = todo } } label: {
+        // Its page: what's paid, what's left, and each payment with its date (owner, 2026-11-03).
+        return NavigationLink(value: Route.paymentTodo(todo.id)) {
             VStack(alignment: .leading, spacing: UZSpacing.s) {
                 HStack {
                     Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
@@ -319,6 +320,7 @@ struct PaymentTodoForm: View {
         var todo = editing ?? PaymentTodo(direction: direction, name: name, amount: amount)
         todo.name = name.trimmingCharacters(in: .whitespaces)
         todo.amount = amount
+        let startOver = editing != nil && (reopen || todo.paid.currency != currency)
         if reopen || todo.paid.currency != currency {
             todo.paid = .zero(currency)
             todo.doneAt = nil
@@ -330,7 +332,11 @@ struct PaymentTodoForm: View {
         todo.dueDate = hasDueDate ? dueDate : nil
         todo.reminderAt = (hasDueDate && hasReminder) ? reminderAt : nil
         guard !todo.name.isEmpty else { problem = "Give it a name."; return }
-        if session.perform("Couldn't save. Try again.", { try session.calendar.savePaymentTodo(todo) }) {
+        if session.perform("Couldn't save. Try again.", {
+            try session.calendar.savePaymentTodo(todo)
+            // Paid is the sum of its payments: starting over sets them aside (their entries stay in Activity).
+            if startOver { try session.calendar.payments.clear(todo.id) }
+        }) {
             dismiss()
         }
     }
@@ -343,6 +349,8 @@ struct PayTodoSheet: View {
     let todo: PaymentTodo
     var onEdit: () -> Void = {}
     var onDelete: () -> Void = {}
+    /// Edit and Delete at the bottom; the item's own page has them in its menu instead.
+    var showsManage = true
     @Environment(\.dismiss) private var dismiss
     @State private var amountText = ""
     @State private var accountID: UUID?
@@ -405,11 +413,13 @@ struct PayTodoSheet: View {
                 if let problem {
                     Section { Text(problem).foregroundStyle(UZColor.negative) }
                 }
-                Section {
-                    Button("Edit name, amount or date", systemImage: "pencil", action: onEdit)
-                        .accessibilityIdentifier("toPay.sheetEdit")
-                    Button("Delete", systemImage: "trash", role: .destructive, action: onDelete)
-                        .accessibilityIdentifier("toPay.sheetDelete")
+                if showsManage {
+                    Section {
+                        Button("Edit name, amount or date", systemImage: "pencil", action: onEdit)
+                            .accessibilityIdentifier("toPay.sheetEdit")
+                        Button("Delete", systemImage: "trash", role: .destructive, action: onDelete)
+                            .accessibilityIdentifier("toPay.sheetDelete")
+                    }
                 }
             }
             .navigationTitle(receiving ? "Received" : "Pay")
@@ -457,6 +467,7 @@ struct PayTodoSheet: View {
             }
             return
         }
+        var transactionID: UUID?
         if let accountID {
             var posted = part
             if let other = otherCurrencyAccount {
@@ -481,8 +492,11 @@ struct PayTodoSheet: View {
                                     : "Couldn't save the spending. Try again, or pick \"Don't add as spending\"."
                 return
             }
+            transactionID = built.id
         }
-        if session.perform("Couldn't save. Try again.", { try session.calendar.savePaymentTodo(next) }) {
+        // One row per payment, linked to the entry it made, so editing that entry in Activity changes what's paid here.
+        let payment = TodoPayment(todoID: todo.id, amount: part, paidAt: Date(), transactionID: transactionID, accountID: accountID)
+        if session.perform("Couldn't save. Try again.", { try session.calendar.payments.add(payment) }) {
             session.toasts.show(next.isDone ? "\(todo.name) \(receiving ? "received" : "paid")"
                                 : "\(MoneyFormatter.string(next.remaining)) \(receiving ? "still to come" : "left") for \(todo.name)")
             dismiss()

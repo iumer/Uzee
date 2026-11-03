@@ -8,6 +8,9 @@ struct ReportsView: View {
     @Bindable var session: AppSession
     @State private var choice: Choice = .thisMonth
     @State private var pdf: SharedFile?
+    /// Dates picked by hand (owner, 2026-11-03); the whole report follows them until "Back to this month".
+    @State private var custom: (start: LocalDate, end: LocalDate)?
+    @State private var choosingDates = false
 
     enum Choice: String, CaseIterable, Identifiable {
         // Last month, this month, last 6 months, left to right (owner, 2026-10-19).
@@ -22,7 +25,8 @@ struct ReportsView: View {
     private var today: LocalDate { session.today }
 
     private var range: (start: LocalDate, end: LocalDate) {
-        switch choice {
+        if let custom { return custom }
+        return switch choice {
         case .thisMonth: (today.firstOfMonth, today.lastOfMonth)
         case .lastMonth: (today.firstOfMonth.addingMonths(-1), today.firstOfMonth.addingDays(-1))
         case .sixMonths: (today.firstOfMonth.addingMonths(-6), today.firstOfMonth.addingDays(-1))
@@ -40,6 +44,8 @@ struct ReportsView: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("reports.period")
+                .onChange(of: choice) { custom = nil }
+                dates(range)
                 content(range: range, totals: totals, net: net)
             }
             .padding(.horizontal, UZSpacing.xxl)
@@ -55,12 +61,34 @@ struct ReportsView: View {
             }
         }
         .sheet(item: $pdf) { ShareSheet(items: [$0.url]) }
+        .sheet(isPresented: $choosingDates) {
+            ReportDatesSheet(start: range.start, end: range.end) { custom = ($0, $1) }
+                .presentationDetents([.medium])
+        }
         .accessibilityIdentifier("screen.reports")
+    }
+
+    /// The dates the report covers; tap to pick any start and end.
+    private func dates(_ range: (start: LocalDate, end: LocalDate)) -> some View {
+        HStack {
+            Button { choosingDates = true } label: {
+                Label(DatePresets.text(from: range.start, through: range.end), systemImage: "calendar")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .accessibilityIdentifier("reports.dates")
+            Spacer()
+            if custom != nil {
+                Button("Back to \(choice.rawValue.lowercased())") { custom = nil }
+                    .font(.subheadline)
+                    .accessibilityIdentifier("reports.resetDates")
+            } else {
+                Text("Tap to choose dates").font(.footnote).foregroundStyle(UZColor.label2)
+            }
+        }
     }
 
     @ViewBuilder
     private func content(range: (start: LocalDate, end: LocalDate), totals: (income: Money, spending: Money), net: Money) -> some View {
-        Text(DatePresets.text(from: range.start, through: range.end)).font(.footnote).foregroundStyle(UZColor.label2)
         HStack(spacing: UZSpacing.l) {
             kpi("Income", totals.income, color: UZColor.positive)
             kpi("Spending", totals.spending, color: UZColor.label)
@@ -362,4 +390,53 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+/// Any start and end for Reports, both days included.
+struct ReportDatesSheet: View {
+    let onUse: (LocalDate, LocalDate) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var start: Date
+    @State private var end: Date
+
+    init(start: LocalDate, end: LocalDate, onUse: @escaping (LocalDate, LocalDate) -> Void) {
+        self.onUse = onUse
+        _start = State(initialValue: start.startDate(in: .current))
+        _end = State(initialValue: end.startDate(in: .current))
+    }
+
+    private var startDay: LocalDate { LocalDate(start, in: .current) }
+    private var endDay: LocalDate { LocalDate(end, in: .current) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    DatePicker("From", selection: $start, displayedComponents: .date).accessibilityIdentifier("reportDates.from")
+                    DatePicker("To", selection: $end, displayedComponents: .date).accessibilityIdentifier("reportDates.to")
+                } footer: {
+                    if startDay > endDay {
+                        Text("The end date is before the start date.").foregroundStyle(UZColor.negative)
+                    } else {
+                        let days = startDay.days(to: endDay) + 1
+                        Text("\(days) \(days == 1 ? "day" : "days"), both dates included. Income, spending, where it went and the PDF all use these dates.")
+                    }
+                }
+            }
+            .navigationTitle("Report dates")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Use") {
+                        onUse(startDay, endDay)
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(startDay > endDay)
+                    .accessibilityIdentifier("reportDates.use")
+                }
+            }
+        }
+    }
 }

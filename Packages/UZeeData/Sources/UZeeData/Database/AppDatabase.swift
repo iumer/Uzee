@@ -143,6 +143,45 @@ public final class AppDatabase: Sendable {
                 t.add(column: "rule_restarts", .text)
             }
         }
+        // 0.15.19: each To pay payment is its own row, linked to the transaction it made, so an Activity edit shows in
+        // Cash flow (owner, 2026-11-03, "bby": Rs 4,000 fixed to Rs 400,000 in Activity, still Rs 4,000 paid in Cash flow).
+        migrator.registerMigration("v18_todo_payments") { db in
+            try db.create(table: "payment_todo_payment") { t in
+                t.primaryKey("id", .text)
+                t.column("created_at", .integer).notNull()
+                t.column("updated_at", .integer).notNull()
+                t.column("deleted_at", .integer)
+                t.column("todo_id", .text).notNull().references("payment_todo", onDelete: .cascade)
+                t.column("amount_minor", .integer).notNull()
+                t.column("currency_code", .text).notNull()
+                t.column("paid_at", .integer).notNull()
+                t.column("txn_id", .text)
+                t.column("account_id", .text)
+                t.column("is_earlier", .boolean).notNull().defaults(to: false)
+            }
+            try db.execute(sql: "CREATE INDEX todo_payment_todo ON payment_todo_payment(todo_id)")
+            // What was paid so far becomes one "Earlier payments" row. It's linked to the transaction it made when exactly one
+            // spending (or income) entry has the to-do's name and that amount, made after the to-do.
+            let todos = try Row.fetchAll(db, sql: "SELECT * FROM payment_todo WHERE paid_minor > 0")
+            for todo in todos {
+                let id: String = todo["id"], name: String = todo["name"], paid: Int64 = todo["paid_minor"]
+                let currency: String = todo["currency_code"], direction: String = todo["direction"] ?? "pay"
+                let kind = direction == "receive" ? "income" : "expense"
+                let matches = try Row.fetchAll(db, sql: """
+                    SELECT t.id, t.occurred_at, l.account_id FROM txn t JOIN payee p ON p.id = t.payee_id
+                    LEFT JOIN transaction_leg l ON l.txn_id = t.id AND l.role = 'main'
+                    WHERE t.deleted_at IS NULL AND t.kind = ? AND t.amount_minor = ? AND t.currency_code = ?
+                      AND lower(p.name) = lower(?) AND t.created_at >= ?
+                    """, arguments: [kind, paid, currency, name, todo["created_at"] as Int64])
+                let linked = matches.count == 1 ? matches[0] : nil
+                try db.execute(sql: """
+                    INSERT INTO payment_todo_payment (id, created_at, updated_at, todo_id, amount_minor, currency_code, paid_at, txn_id, account_id, is_earlier)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, arguments: [UUID().uuidString, todo["updated_at"] as Int64, todo["updated_at"] as Int64, id, paid, currency,
+                                     (linked?["occurred_at"] as Int64?) ?? (todo["updated_at"] as Int64), linked?["id"] as String?,
+                                     linked?["account_id"] as String?, linked == nil])
+            }
+        }
         return migrator
     }
 

@@ -295,6 +295,7 @@ struct TabRoot: View {
                     case .recurring(let id): RecurringDetailView(session: session, itemID: id)
                     case .reports: ReportsView(session: session)
                     case .prayer: PrayerView(session: session)
+                    case .paymentTodo(let id): PaymentTodoDetailView(session: session, todoID: id)
                     }
                 }
         }
