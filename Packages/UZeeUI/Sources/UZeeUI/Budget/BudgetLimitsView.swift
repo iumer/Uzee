@@ -16,6 +16,10 @@ struct BudgetLimitsView: View {
     @State private var renaming: SpendCategory?
     @State private var deleting: SpendCategory?
     @State private var renameText = ""
+    /// Lines taken off this list with a swipe (owner, 2026-11-03). The category stays for old entries; "Add a budget
+    /// line" with its name brings it back. Saved with Done.
+    @State private var removed: Set<String> = Set(UserDefaults.standard.stringArray(forKey: BudgetLimitsView.removedKey) ?? [])
+    static let removedKey = "uzee.budget.removedLines"
     @Environment(\.dismiss) private var dismiss
 
     private static let step: Int64 = 1_000
@@ -61,6 +65,10 @@ struct BudgetLimitsView: View {
                 ForEach(groups) { category in
                     limitRow(category)
                         .contextMenu { customMenu(category) }
+                        .swipeActions(edge: .trailing) {
+                            Button("Delete", systemImage: "trash", role: .destructive) { removeLine(category) }
+                                .accessibilityIdentifier("limits.swipeDelete.\(category.name)")
+                        }
                 }
                 // Your own lines, like "Loans" (owner, 2026-10-22).
                 Button { adding = true } label: {
@@ -79,7 +87,7 @@ struct BudgetLimitsView: View {
                 }
             } footer: {
                 Text("Steps of Rs 1,000. Suggestions use what you spent last period. A line named \"Loans\" counts money you lend "
-                     + "and pay back. Tap a name to rename it; long-press a line you added to delete it.")
+                     + "and pay back. Tap a name to rename it; swipe left to take a line off the budget.")
             }
 
             Section {
@@ -107,6 +115,7 @@ struct BudgetLimitsView: View {
         .navigationTitle("Budget limits")
         .sheet(isPresented: $adding) {
             BudgetLineSheet(session: session, base: session.ledger.base) { category, limit in
+                removed.remove(category.id.uuidString)
                 setLimit(category.id, limit)
             }
         }
@@ -225,7 +234,25 @@ struct BudgetLimitsView: View {
     // MARK: Data
 
     private var groups: [SpendCategory] {
-        session.ledger.categories.filter { $0.parentID == nil && $0.type == .expense && !$0.isHidden }
+        session.ledger.categories.filter { $0.parentID == nil && $0.type == .expense && !$0.isHidden && !removed.contains($0.id.uuidString) }
+    }
+
+    /// Swipe left › Delete: the line and its limit leave the budget (the total follows); Undo puts both back.
+    private func removeLine(_ category: SpendCategory) {
+        let limit = limits[category.id]
+        let text = limitTexts[category.id]
+        withAnimation {
+            removed.insert(category.id.uuidString)
+            limits[category.id] = nil
+            limitTexts[category.id] = nil
+        }
+        session.toasts.show("\(category.name) removed from the budget") {
+            withAnimation {
+                removed.remove(category.id.uuidString)
+                limits[category.id] = limit
+                limitTexts[category.id] = text
+            }
+        }
     }
 
     private var currentPeriod: BudgetPeriod {
@@ -293,6 +320,7 @@ struct BudgetLimitsView: View {
             let plan = BudgetPlan(periodStart: currentPeriod.start, total: Money(major: effective, base),
                                   limits: limits.filter { $0.value > 0 }.mapValues { Money(major: $0, base) })
             try session.budgets.save(plan)
+            UserDefaults.standard.set(removed.sorted(), forKey: Self.removedKey)
         }
         if ok {
             session.budgetRevision += 1
@@ -313,6 +341,13 @@ struct BudgetLineSheet: View {
     @State private var limitText = ""
     @State private var problem: String?
 
+    /// A top-level spending category with this name already (maybe one taken off the budget earlier).
+    private var existing: SpendCategory? {
+        let key = NameKey.make(name.trimmingCharacters(in: .whitespaces))
+        guard !key.isEmpty else { return nil }
+        return session.ledger.categories.first { $0.parentID == nil && $0.type == .expense && NameKey.make($0.name) == key }
+    }
+
     private var isLoans: Bool {
         BudgetCalculator.isLoansLine(SpendCategory(type: .expense, name: name, group: .other))
     }
@@ -332,8 +367,13 @@ struct BudgetLineSheet: View {
                             .accessibilityIdentifier("budgetLine.limit")
                     }
                 } footer: {
-                    Text(isLoans ? "Counts money you lend and pay back on loans. It doesn't show as spending anywhere else."
-                         : "It's also a new category, so you can file spending under it when you add it.")
+                    if isLoans {
+                        Text("Counts money you lend and pay back on loans. It doesn't show as spending anywhere else.")
+                    } else if let existing {
+                        Text("\(existing.name) is already a category: its line comes back to the budget, with what's already filed under it.")
+                    } else {
+                        Text("It's also a new category, so you can file spending under it when you add it.")
+                    }
                 }
                 if let problem {
                     Section { Text(problem).foregroundStyle(UZColor.negative) }
