@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// Empty state: system ContentUnavailableView, one sentence, at most one action (DESIGN_SYSTEM §15).

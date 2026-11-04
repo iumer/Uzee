@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// Shared level for bars and rings: under, near (≥ warning threshold) or over (DESIGN_SYSTEM §11).

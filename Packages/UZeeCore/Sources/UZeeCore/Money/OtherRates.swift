@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Rates other than Wise's, shown next to it in Settings › Exchange rate (owner, 2026-10-15): the market rate

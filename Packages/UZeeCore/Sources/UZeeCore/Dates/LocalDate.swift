@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// A calendar day without a time, in the user's zone when it was recorded (DATA_MODEL §1, CAL-07).

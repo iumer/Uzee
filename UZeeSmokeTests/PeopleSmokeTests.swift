@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import XCTest
 
 /// M5 smoke tests on the sample dataset, in-memory: overall balances (SPL-015), a person's balance

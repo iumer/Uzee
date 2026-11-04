@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Turns typed text into exact money (DATA_MODEL §4 "Input"): no silent rounding, no floating point.

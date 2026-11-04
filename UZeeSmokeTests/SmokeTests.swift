@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import XCTest
 
 /// Smoke and M1 navigation tests from docs/TEST_REGISTRY.md. They never touch the real database.

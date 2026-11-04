@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// "Today the actual subscription price of ChatGPT was 5,000": a dollar bill paid from a rupee account comes out a

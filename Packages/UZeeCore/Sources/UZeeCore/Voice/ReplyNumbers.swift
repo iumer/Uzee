@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Checks the on-device model's reply against what the tools said, so a total it made up is never spoken (owner, 2026-10-16).

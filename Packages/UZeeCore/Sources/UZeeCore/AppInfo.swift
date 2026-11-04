@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 /// Version information shown in the app and recorded in BUILD_HISTORY.
 public struct AppInfo: Sendable, Equatable {
     public let marketingVersion: String

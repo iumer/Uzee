@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 import UZeeCore
 
@@ -143,7 +146,7 @@ struct SettingsView: View {
             } footer: {
                 Text("Removes every account, transaction, person, bill and receipt so you can import and add fresh. A copy is kept on this iPhone in case you change your mind; make a backup first if you want one elsewhere.")
             }
-            Section("About") {
+            Section {
                 LabeledContent {
                     Text(session.info.displayVersion).monospacedDigit()
                 } label: {
@@ -162,6 +165,19 @@ struct SettingsView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(databaseText)
                 .accessibilityIdentifier("settings.database")
+
+                LabeledContent {
+                    Text("iUmer Farooq")
+                } label: {
+                    SettingsLabel("Built by", symbol: "hammer", color: Color(uiColor: .systemBlue))
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Built by iUmer Farooq")
+                .accessibilityIdentifier("settings.builtBy")
+            } header: {
+                Text("About")
+            } footer: {
+                Text("© 2026 iUmer Farooq. All rights reserved.")
             }
 
             #if DEBUG

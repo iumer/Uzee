@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Finds amounts and dates in text read from receipts, statements and speech (AI-02, IMP-01, VOX-04).

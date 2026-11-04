@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import XCTest
 
 /// M4 smoke tests on the sample dataset, in-memory: October overview (BUD-001), the Personal over line

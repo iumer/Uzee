@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Wise's mid-market rates (CUR-03): the same numbers wise.com shows on its converter, live and day by day.

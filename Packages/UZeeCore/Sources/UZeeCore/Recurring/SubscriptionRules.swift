@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// One rule for "is this a subscription", whether a payment is already tracked, and bills drafted from a payment (owner, 2026-10-16).
