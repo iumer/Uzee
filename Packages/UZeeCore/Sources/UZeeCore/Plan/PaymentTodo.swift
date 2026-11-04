@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// A payment still to make, on Plan › To pay (owner, 2026-10-15): "Kameti, Rs 20,000", paid in one go or in parts

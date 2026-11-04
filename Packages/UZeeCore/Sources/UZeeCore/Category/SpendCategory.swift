@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Which tree a category belongs to (DATA_MODEL §3.8 `kind`).

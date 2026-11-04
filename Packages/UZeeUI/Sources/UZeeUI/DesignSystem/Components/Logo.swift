@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// Animated UZee logo, "Wallet pal": the same drawing as the app icon (docs/brand/uzee-icon.svg).

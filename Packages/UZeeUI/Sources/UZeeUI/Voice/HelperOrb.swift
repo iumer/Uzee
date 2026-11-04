@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// The UZee helper's face: the wallet logo in a soft glow that breathes while listening, ripples while

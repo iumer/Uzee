@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// "Sample data" banner shown on every tab while sample mode is on (DATA-001, PRV-04).

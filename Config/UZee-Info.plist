@@ -3,6 +3,8 @@
 <!-- Merged into the generated Info.plist. The backup file type, so Files knows a .uzeebackup is UZee's (owner, 2026-11-03). -->
 <plist version="1.0">
 <dict>
+	<key>NSHumanReadableCopyright</key>
+	<string>Built by iUmer Farooq. © 2026 iUmer Farooq. All rights reserved.</string>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

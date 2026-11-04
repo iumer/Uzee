@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// Siri & voice (SCR-40): what to say, where else Ask UZee lives, and whether Apple Intelligence is on (VOX-01, VOX-08).

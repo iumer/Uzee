@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Account types (ACC-02). Raw values are stored; unknown values from a newer app decode to `.other`.

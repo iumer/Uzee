@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import XCTest
 
 /// The owner's requests and bug reports that a screen test can check (docs/OWNER_CHECKLIST.md). These run on

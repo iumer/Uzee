@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// Press feedback for tappable cards and rows: scale 0.96 with a spring, none under Reduce Motion.

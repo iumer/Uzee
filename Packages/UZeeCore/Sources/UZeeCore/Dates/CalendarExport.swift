@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// One UZee date written to the iPhone's Calendar (CAL-06): a bill, a custom event or a loan due date.

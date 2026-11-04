@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Transactions in a screenshot's text (owner, 2026-10-15): a bank or wallet app's list of transactions, an

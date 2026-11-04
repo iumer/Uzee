@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 /// A currency UZee can show. Amounts are always stored in minor units (DATA_MODEL §1);
 /// `displayFractionDigits` only controls how many decimals the UI shows.
 public struct Currency: Hashable, Sendable {

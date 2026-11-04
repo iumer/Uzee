@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// Opaque content card: `card` fill, 20 pt continuous corners, 16 pt padding, no shadow (DESIGN_SYSTEM §14).

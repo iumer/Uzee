@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Recently Deleted rules (PRD DATA-05): deleted items stay restorable for 30 days, then are purged.

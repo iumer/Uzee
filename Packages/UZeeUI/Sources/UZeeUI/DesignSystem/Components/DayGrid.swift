@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// Pick a day of the month (1…31) from a small calendar-style grid, with an optional "Not fixed" choice

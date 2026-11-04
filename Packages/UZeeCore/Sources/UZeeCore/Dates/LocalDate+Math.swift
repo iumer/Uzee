@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// Calendar arithmetic on days. Uses a fixed Gregorian calendar in UTC so results never depend on

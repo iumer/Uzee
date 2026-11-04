@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 /// Top-level categories (PRD Appendix A). Colour and symbol belong to the top level and
 /// subcategories inherit them (DESIGN_SYSTEM §2). Raw values are stored, so never rename them.
 public enum CategoryKind: String, CaseIterable, Sendable, Codable {

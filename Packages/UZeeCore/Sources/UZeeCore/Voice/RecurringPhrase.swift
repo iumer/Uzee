@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// "Recurring mobile bill of Rs 1,900 on the 20th of every month", "Add 5,779 as yearly fees of golden debit card":

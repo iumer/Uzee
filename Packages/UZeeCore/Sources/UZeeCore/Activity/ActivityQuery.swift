@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// A user-defined label on transactions (CAT-006). Not named `Tag` to stay clear of Apple SDK names.

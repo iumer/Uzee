@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// A spoken amount: "20k", "1.5 lakh", "$20", "Rs 5,000", "two thousand five hundred" (VOX-04).

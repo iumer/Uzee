@@ -1,5 +1,7 @@
 # UZee
 
+**Built by iUmer Farooq** · © 2026 iUmer Farooq. All rights reserved.
+
 Personal finance, budgeting, reminders and calendar app for iPhone and iPad.
 
 The project is in the documentation stage; no application code exists yet.
@@ -14,3 +16,8 @@ The project is in the documentation stage; no application code exists yet.
 - [Architecture](docs/ARCHITECTURE.md) · [Data model](docs/DATA_MODEL.md)
 - [Milestone plan](docs/MILESTONE_PLAN.md) · [Test plan](docs/TEST_PLAN.md) · [Test registry](docs/TEST_REGISTRY.md) · [Bug registry](docs/BUG_REGISTRY.md)
 - [Build history](docs/BUILD_HISTORY.md) · [Changelog](docs/CHANGELOG.md) · [Deployment guide](docs/DEPLOYMENT_GUIDE.md)
+
+## License
+
+Built by iUmer Farooq. Copyright (c) 2026 iUmer Farooq. All rights reserved.
+This code is public to view only; it is not open source. Copies and forks must keep the author's name. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

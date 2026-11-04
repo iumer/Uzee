@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import XCTest
 
 /// M2 transaction smoke tests (SMK-007, SMK-009, SMK-010, SMK-012) on an in-memory database.

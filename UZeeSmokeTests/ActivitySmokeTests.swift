@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import XCTest
 
 /// M3 smoke tests on the sample dataset, in-memory: day totals and search (TXN-020, TXN-025),

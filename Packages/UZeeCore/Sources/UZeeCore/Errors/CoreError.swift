@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 /// Errors raised by domain logic. User-facing text is produced in one place
 /// (UZeeUI ErrorPresentation), never from these cases directly.
 public enum CoreError: Error, Equatable, Sendable {

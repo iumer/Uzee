@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// A bill coming soon from an account that hasn't enough in it (owner, 2026-10-15: "if the payment date is coming

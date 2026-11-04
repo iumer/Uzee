@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import Foundation
 
 /// One person (DATA_MODEL §3.13). Exactly one live row is "You" (`isSelf`); names need not be unique.

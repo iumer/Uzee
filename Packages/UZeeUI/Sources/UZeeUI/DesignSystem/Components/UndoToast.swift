@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import SwiftUI
 
 /// Shows one toast at a time above the tab bar, e.g. "Saved · Undo" for 5 s (DESIGN_SYSTEM §10, AUD-13).

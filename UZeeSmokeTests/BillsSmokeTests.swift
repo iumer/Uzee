@@ -1,3 +1,6 @@
+// UZee · Built by iUmer Farooq
+// Copyright (c) 2026 iUmer Farooq. All rights reserved. See LICENSE.
+
 import XCTest
 
 /// M6/M7 smoke tests on the sample dataset, in-memory: the Calendar month (CAL-001), Bills & subscriptions
