@@ -16,6 +16,14 @@ struct ToPayView: View {
     @AppStorage("uzee.toPay.list") private var list: PaymentTodo.Direction = .pay
 
     static let excludedKey = "uzee.toPay.excludedAccounts"
+    /// To receive entries switched off, so they don't count in the totals (owner, 2026-11-10). New ones count.
+    static let excludedReceiveKey = "uzee.toPay.excludedReceive"
+    @State private var pickingReceive = false
+    @State private var excludedReceive: Set<String> = Set(UserDefaults.standard.stringArray(forKey: ToPayView.excludedReceiveKey) ?? [])
+
+    private func counts(_ todo: PaymentTodo) -> Bool {
+        todo.direction == .pay || !excludedReceive.contains(todo.id.uuidString)
+    }
 
     /// The accounts counted in "You have": all in totals, minus the ones switched off here.
     private var counted: [Account] {
@@ -36,7 +44,8 @@ struct ToPayView: View {
         let open = shown.filter { !$0.isDone }
         let paid = shown.filter(\.isDone)
         let have = self.have
-        let summary = PaymentTodo.totals(todos, have: have, rates: session.ledger.rates)
+        let summary = PaymentTodo.totals(todos.filter(counts), have: have, rates: session.ledger.rates)
+        let openReceive = todos.filter { $0.direction == .receive && !$0.isDone }
         let receiving = list == .receive
         ScrollView {
             VStack(alignment: .leading, spacing: UZSpacing.xl) {
@@ -53,13 +62,18 @@ struct ToPayView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("toPay.have")
-                        if summary.toReceive.minorUnits > 0 {
-                            HStack {
-                                Text("To receive").foregroundStyle(UZColor.label2)
-                                Spacer()
-                                Text("+" + MoneyFormatter.string(summary.toReceive)).font(.title3.weight(.semibold)).monospacedDigit()
-                                    .foregroundStyle(UZColor.positive)
+                        if !openReceive.isEmpty {
+                            // Tap to pick which money still to come counts, like You have (owner, 2026-11-10).
+                            Button { pickingReceive = true } label: {
+                                HStack {
+                                    Text("To receive").foregroundStyle(UZColor.label2)
+                                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(UZColor.label3)
+                                    Spacer()
+                                    Text("+" + MoneyFormatter.string(summary.toReceive)).font(.title3.weight(.semibold)).monospacedDigit()
+                                        .foregroundStyle(UZColor.positive)
+                                }
                             }
+                            .buttonStyle(.plain)
                             .accessibilityIdentifier("toPay.toReceive")
                         }
                         HStack {
@@ -160,6 +174,11 @@ struct ToPayView: View {
             }
         }
         .sheet(isPresented: $pickingAccounts) { HaveAccountsSheet(session: session) }
+        .sheet(isPresented: $pickingReceive, onDismiss: {
+            excludedReceive = Set(UserDefaults.standard.stringArray(forKey: Self.excludedReceiveKey) ?? [])
+        }) {
+            ReceiveCountedSheet(session: session)
+        }
         .accessibilityIdentifier("screen.toPay")
     }
 
@@ -180,7 +199,10 @@ struct ToPayView: View {
                     Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(todo.isDone ? UZColor.positive : UZColor.label3)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(todo.name).strikethrough(todo.isDone).foregroundStyle(UZColor.label)
+                        Text(todo.name).strikethrough(todo.isDone).foregroundStyle(counts(todo) ? UZColor.label : UZColor.label3)
+                        if !todo.isDone, !counts(todo) {
+                            Text("Not counted").font(.caption2).foregroundStyle(UZColor.label3)
+                        }
                         if !todo.isDone, let due = todo.dueDate {
                             Text(due.formatted(date: .abbreviated, time: .omitted))
                                 .font(.caption2).foregroundStyle(UZColor.label3)
@@ -188,7 +210,7 @@ struct ToPayView: View {
                     }
                     Spacer()
                     Text(MoneyFormatter.string(todo.isDone ? todo.amount : todo.remaining)).monospacedDigit().fontWeight(.semibold)
-                        .foregroundStyle(todo.isDone ? UZColor.label2 : todo.direction == .receive ? UZColor.positive : UZColor.negative)
+                        .foregroundStyle(todo.isDone || !counts(todo) ? UZColor.label2 : todo.direction == .receive ? UZColor.positive : UZColor.negative)
                     // Edit and Delete in plain sight, not only on a long press (owner, 2026-10-20).
                     Menu {
                         menuItems(todo)
@@ -533,6 +555,48 @@ struct HaveAccountsSheet: View {
                         session.reload()
                         dismiss()
                     }
+                }
+            }
+        }
+    }
+}
+
+/// Which To receive entries count in the totals; untick money you're not sure will come.
+struct ReceiveCountedSheet: View {
+    @Bindable var session: AppSession
+    /// Its own copy, saved on every switch; the list reads it back when the sheet closes.
+    @State private var excluded: Set<String> = Set(UserDefaults.standard.stringArray(forKey: ToPayView.excludedReceiveKey) ?? [])
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(session.paymentTodos.filter { $0.direction == .receive && !$0.isDone }) { todo in
+                        Toggle(isOn: Binding(get: { !excluded.contains(todo.id.uuidString) },
+                                             set: { on in
+                                                 if on { excluded.remove(todo.id.uuidString) } else { excluded.insert(todo.id.uuidString) }
+                                                 // Kept at once, even if the sheet is swiped away.
+                                                 UserDefaults.standard.set(excluded.sorted(), forKey: ToPayView.excludedReceiveKey)
+                                             })) {
+                            LabeledContent(todo.name, value: MoneyFormatter.string(todo.remaining))
+                        }
+                        .accessibilityIdentifier("receiveCounted.\(todo.name)")
+                    }
+                } footer: {
+                    Text("Only the ones you switch on count in To receive and Left after it all. The rest stay on the list.")
+                }
+            }
+            .navigationTitle("To receive")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        UserDefaults.standard.set(excluded.sorted(), forKey: ToPayView.excludedReceiveKey)
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .accessibilityIdentifier("receiveCounted.done")
                 }
             }
         }
