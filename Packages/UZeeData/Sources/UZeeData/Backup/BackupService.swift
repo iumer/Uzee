@@ -106,6 +106,7 @@ public struct BackupService: Sendable {
             _ = try AppDatabase(queue)
             let check = try queue.read { try String.fetchOne($0, sql: "PRAGMA integrity_check") }
             guard check == "ok" else { throw BackupProblem.wrongPasswordOrDamaged }
+            try Self.stripUnknownSchema(queue)
         } catch let problem as BackupProblem {
             throw problem
         } catch {
@@ -178,6 +179,47 @@ public struct BackupService: Sendable {
     }
 
     // MARK: Helpers
+
+    /// A backup file can hold any SQLite schema. Keep only what this version's own migrations
+    /// create: unknown tables, indexes, views and triggers are dropped, and any view or trigger
+    /// whose SQL differs from ours is replaced with ours, so restored data can't bring code with it.
+    static func stripUnknownSchema(_ queue: DatabaseQueue) throws {
+        struct Item: Hashable { var type: String; var name: String }
+        let sql = "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
+        let reference = try AppDatabase.inMemory()
+        var expected: [Item: String?] = [:]
+        try reference.writer.read { db in
+            for row in try Row.fetchAll(db, sql: sql) {
+                expected[Item(type: row["type"], name: row["name"])] = row["sql"] as String?
+            }
+        }
+        func quoted(_ name: String) -> String { "\"" + name.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
+        try queue.write { db in
+            let restored = try Row.fetchAll(db, sql: sql)
+            // Triggers and views first, so dropping a table can't fire or break anything.
+            for kind in ["trigger", "view", "index", "table"] {
+                for row in restored where (row["type"] as String) == kind {
+                    let item = Item(type: kind, name: row["name"])
+                    let known = expected.keys.contains(item)
+                    let sameSQL = known && (expected[item] ?? nil) == (row["sql"] as String?)
+                    switch kind {
+                    case "trigger", "view":
+                        if !sameSQL { try db.execute(sql: "DROP \(kind.uppercased()) IF EXISTS \(quoted(item.name))") }
+                    case "index":
+                        // Auto-indexes have no SQL and are covered by the sqlite_ filter.
+                        if !known { try db.execute(sql: "DROP INDEX IF EXISTS \(quoted(item.name))") }
+                    default:
+                        if !known { try db.execute(sql: "DROP TABLE IF EXISTS \(quoted(item.name))") }
+                    }
+                }
+            }
+            // Put back our own triggers and views that were missing or replaced.
+            let kept = Set(try Row.fetchAll(db, sql: sql).map { Item(type: $0["type"], name: $0["name"]) })
+            for (item, createSQL) in expected where (item.type == "trigger" || item.type == "view") && !kept.contains(item) {
+                if let createSQL { try db.execute(sql: createSQL) }
+            }
+        }
+    }
 
     private func receiptNames() throws -> [String] {
         try database.writer.read { db in try String.fetchAll(db, sql: "SELECT file_name FROM attachment WHERE deleted_at IS NULL") }

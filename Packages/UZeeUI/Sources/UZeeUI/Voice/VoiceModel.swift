@@ -95,6 +95,8 @@ final class VoiceModel {
     private var turn = 0
     private var cardTurn = 0
     private var lastSentence = ""
+    /// A card was already on screen when the current sentence arrived, so the user has seen it.
+    private var cardSeenBeforeTurn = false
     /// When the user last made a sound or a new word was recognised, for end-of-speech.
     private var lastSound = Date()
     private var history = VoiceHistory()
@@ -272,6 +274,7 @@ final class VoiceModel {
         draft = ""
         turn += 1
         lastSentence = sentence
+        cardSeenBeforeTurn = card != nil
         lines.append(Line(speaker: .me, text: sentence))
         if let balance = pendingBalance, let intent = AssistantReply.intent(sentence) {
             pendingBalance = nil
@@ -516,7 +519,13 @@ final class VoiceModel {
     }
 
     private func remindForModel(_ title: String, date: LocalDate, minute: Int?, amount: Money?) -> String {
-        addReminder(ReminderPhrase.Request(title: title, date: date, minuteOfDay: minute, amount: amount))
+        // The model may only add a reminder the user asked for in their own words: text the model read
+        // (imported payees, notes, search results) must not be able to put events on the calendar.
+        let said = " " + lastSentence.lowercased() + " "
+        guard [" remind", "reminder", " yaad", " calendar", " alert me", " notify me"].contains(where: said.contains) else {
+            return "Not added: the user didn't ask for a reminder. Ask them if they want one."
+        }
+        return addReminder(ReminderPhrase.Request(title: title, date: date, minuteOfDay: minute, amount: amount))
     }
 
     /// Saves a reminder said out loud (VOX-04) and says when it is.
@@ -550,8 +559,9 @@ final class VoiceModel {
 
     private func confirmForModel() -> String {
         guard card != nil else { return "There is no card on screen to save." }
-        // Saving needs the user's yes, after they've seen the card.
-        guard cardTurn < turn || AssistantReply.saysYes(lastSentence) else {
+        // Saving needs the user's yes in this sentence, and a card they saw before saying it.
+        // A later sentence alone ("make it 3,000") is an edit, not a yes.
+        guard AssistantReply.saysYes(lastSentence), cardTurn < turn || cardSeenBeforeTurn else {
             return "Not saved yet: the user hasn't confirmed. Show the card and ask them to say yes."
         }
         let saved = commit()

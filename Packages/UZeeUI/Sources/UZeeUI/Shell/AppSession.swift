@@ -116,6 +116,24 @@ public final class AppSession {
     /// The owner turned on UZee's Face ID lock (Siri then doesn't answer money questions).
     public var isAppLocked: Bool { AppLock.isOn }
 
+    /// RootView keeps this in step with the Face ID lock screen. While it is up, things started from
+    /// outside the app (Siri and Shortcuts, Control Center, the Lock Screen widget, uzee:// links,
+    /// notification actions) wait until the owner unlocks, instead of running under the curtain.
+    public private(set) var isScreenLocked = AppLock.isOn
+    @ObservationIgnored private var afterUnlock: [() -> Void] = []
+
+    public func setScreenLocked(_ locked: Bool) {
+        isScreenLocked = locked
+        guard !locked else { return }
+        let waiting = afterUnlock
+        afterUnlock = []
+        waiting.forEach { $0() }
+    }
+
+    private func whenUnlocked(_ action: @escaping () -> Void) {
+        if isScreenLocked, AppLock.isOn { afterUnlock.append(action) } else { action() }
+    }
+
     public init(info: AppInfo, isDatabaseReady: Bool, sampleData: SampleDataActions, ledger: LedgerClient = .unavailable,
                 activity: ActivityClient = .unavailable, budgets: BudgetClient = .unavailable, people: PeopleClient = .unavailable,
                 recurring: RecurringClient = .unavailable, smart: SmartClient = .unavailable, calendar: CalendarClient = .unavailable,
@@ -328,9 +346,12 @@ public final class AppSession {
 
     /// Opens Ask UZee, optionally with a sentence to handle right away.
     public func openVoice(_ request: String? = nil) {
-        isAddPresented = false
-        voiceRequest = request
-        isVoicePresented = true
+        whenUnlocked { [weak self] in
+            guard let self else { return }
+            isAddPresented = false
+            voiceRequest = request
+            isVoicePresented = true
+        }
     }
 
     /// Opens statement import, into `account` when given.
@@ -516,6 +537,11 @@ public final class AppSession {
     }
 
     public func markPaidFromReminder(item: UUID, scheduled: LocalDate) {
+        // With UZee's own lock on, a notification button doesn't post money until the owner unlocks.
+        guard !(isScreenLocked && AppLock.isOn) else {
+            whenUnlocked { [weak self] in self?.markPaidFromReminder(item: item, scheduled: scheduled) }
+            return
+        }
         reload()
         // Paid or skipped in the app meanwhile: never pay twice.
         if let done = record(item, scheduled), done.status == .paid || done.status == .skipped {

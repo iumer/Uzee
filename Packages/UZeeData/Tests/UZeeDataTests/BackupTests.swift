@@ -104,4 +104,47 @@ struct BackupTests {
         #expect(BackupService.unpack(packed) == ["a": Data([1, 2, 3]), "receipts/b.jpg": Data()])
         #expect(BackupService.unpack(packed.dropLast()) == nil)
     }
+
+    @Test("Attachment names with path parts never leave the attachments folder")
+    func unsafeAttachmentNames() throws {
+        let files = try AttachmentStore.temporary()
+        let outside = files.folder.deletingLastPathComponent().appendingPathComponent("UZeeOutside-\(UUID())")
+        try Data("keep me".utf8).write(to: outside)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        for bad in ["../\(outside.lastPathComponent)", "..", ".", "", "a/b", ".hidden"] {
+            #expect(!AttachmentStore.isSafeFileName(bad))
+            #expect(files.url(for: bad).deletingLastPathComponent().standardizedFileURL.path == files.folder.standardizedFileURL.path)
+        }
+        files.remove(["../\(outside.lastPathComponent)"])
+        files.removeOrphans(keeping: [])
+        #expect(FileManager.default.fileExists(atPath: outside.path))
+        #expect(AttachmentStore.isSafeFileName(UUID().uuidString + ".jpg"))
+    }
+
+    @Test("Restore drops triggers, views and tables the app didn't create")
+    func restoreStripsForeignSchema() throws {
+        let world = try world()
+        try SampleDataService(database: world.database).load()
+        try world.database.writer.write { db in
+            try db.execute(sql: "CREATE TABLE planted (x)")
+            try db.execute(sql: "CREATE VIEW planted_view AS SELECT 1")
+            try db.execute(sql: "CREATE TRIGGER planted_trigger AFTER INSERT ON txn BEGIN DELETE FROM account; END")
+        }
+        let file = try world.service.makeBackup(password: "correct horse", appVersion: "1.0 (1)")
+
+        let target = try self.world()
+        let safety = FileManager.default.temporaryDirectory.appendingPathComponent("UZeeSafety-\(UUID())")
+        try target.service.restore(file, password: "correct horse", safetyFolder: safety)
+        let names = try target.database.writer.read { db in
+            try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE name LIKE 'planted%'")
+        }
+        #expect(names.isEmpty)
+        let reference = try AppDatabase.inMemory()
+        let schema = { (database: AppDatabase) in
+            try database.writer.read { db in
+                try String.fetchAll(db, sql: "SELECT type || ':' || name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY 1")
+            }
+        }
+        #expect(try schema(target.database) == schema(reference))
+    }
 }

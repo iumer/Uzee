@@ -110,6 +110,8 @@ public struct RootView: View {
         .onChange(of: curtain, initial: true) { _, mode in
             LockCurtain.shared.show(mode, unlock: { unlock() }, unlockWithPasscode: { unlock(passcodeOnly: true) })
         }
+        // Voice and notification actions started from outside wait for this (SEC-01).
+        .onChange(of: isLocked, initial: true) { _, locked in session.setScreenLocked(locked) }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
             case .background:

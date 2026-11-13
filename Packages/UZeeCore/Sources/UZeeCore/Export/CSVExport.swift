@@ -36,7 +36,12 @@ public enum CSVExport {
     /// spreadsheet doesn't run it as a formula (amounts are numbers and stay as they are).
     static func escape(_ field: String, numeric: Bool = false) -> String {
         var value = field
-        if let first = value.first, "=+@\t\r".contains(first) || (first == "-" && !(numeric && Decimal(string: value) != nil)) {
+        // Spreadsheets also treat fullwidth ＝ ＋ － ＠ and leading spaces before them as formula starts.
+        let start = value.first(where: { $0 != " " && $0 != "\u{3000}" })
+        let formulaStarts: Set<Character> = ["=", "+", "@", "\t", "\r", "\n", "\u{FF1D}", "\u{FF0B}", "\u{FF20}", "\u{FF0D}"]
+        if let first = value.first, let start,
+           formulaStarts.contains(start) || formulaStarts.contains(first)
+            || ((start == "-" || first == "-") && !(numeric && Decimal(string: value) != nil)) {
             value = "'" + value
         }
         guard value.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" }) else { return value }

@@ -42,13 +42,34 @@ public struct AttachmentStore: Sendable {
         return name
     }
 
-    public func url(for fileName: String) -> URL {
-        folder.appendingPathComponent(fileName, isDirectory: false)
+    /// A stored name must be one plain file inside `folder`: no path separators, no `.`/`..`,
+    /// no hidden names. Names come from the database, which a restored backup can supply,
+    /// so they are never trusted as paths.
+    public static func isSafeFileName(_ fileName: String) -> Bool {
+        guard !fileName.isEmpty, fileName.count <= 255,
+              !fileName.hasPrefix("."),
+              !fileName.contains("/"), !fileName.contains("\\"), !fileName.contains("\0")
+        else { return false }
+        return true
     }
 
-    /// Deletes files; missing ones are ignored.
+    /// The file's location inside `folder`. An unsafe name maps to a path that is never written,
+    /// so reads find nothing and deletes do nothing.
+    public func url(for fileName: String) -> URL {
+        let name = Self.isSafeFileName(fileName) ? fileName : ".invalid-attachment-name"
+        let url = folder.appendingPathComponent(name, isDirectory: false)
+        // Belt and braces: the result must sit directly in `folder`.
+        guard url.standardizedFileURL.deletingLastPathComponent().path == folder.standardizedFileURL.path else {
+            return folder.appendingPathComponent(".invalid-attachment-name", isDirectory: false)
+        }
+        return url
+    }
+
+    /// Deletes files; missing ones and unsafe names are ignored.
     public func remove(_ fileNames: some Sequence<String>) {
-        for name in fileNames { try? FileManager.default.removeItem(at: url(for: name)) }
+        for name in fileNames where Self.isSafeFileName(name) {
+            try? FileManager.default.removeItem(at: url(for: name))
+        }
     }
 
     /// Deletes files the database no longer knows (left by a crash between the two writes).

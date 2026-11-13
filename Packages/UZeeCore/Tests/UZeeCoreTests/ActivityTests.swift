@@ -40,6 +40,16 @@ struct ActivityTests {
         return (rows, snapshot, cats)
     }
 
+    @Test("CSV formula guard covers fullwidth signs and leading spaces")
+    func csvFullwidthFormulas() {
+        #expect(CSVExport.escape("\u{FF1D}HYPERLINK(1)") == "'\u{FF1D}HYPERLINK(1)")
+        #expect(CSVExport.escape("\u{FF0B}1") == "'\u{FF0B}1")
+        #expect(CSVExport.escape("  =1+1") == "'  =1+1")
+        #expect(CSVExport.escape("-500", numeric: true) == "-500")
+        #expect(CSVExport.escape("-cmd") == "'-cmd")
+        #expect(CSVExport.escape("Milk") == "Milk")
+    }
+
     @Test("EXP-01 CSV export: oldest first, signed per account, quoted text, no formulas")
     func csvExport() {
         let (rows, snapshot, _) = fixture()
